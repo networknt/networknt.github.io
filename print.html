@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-fe7efb02.js";
+            window.path_to_searchindex_js = "searchindex-f4513364.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-c022006f.js"></script>
+        <script src="toc-c769522c.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -175,7 +175,98 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="chapter-1"><a class="header" href="#chapter-1">Chapter 1</a></h1>
+                        <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="architecture"><a class="header" href="#architecture">Architecture</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="design"><a class="header" href="#design">Design</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="mcp-rotuer"><a class="header" href="#mcp-rotuer">MCP Rotuer</a></h1>
+<p>Implementing an <strong>MCP (Model Context Protocol) Router</strong> inside <strong>light-4j</strong> gateway is a <strong>visionary and highly strategic idea</strong>.</p>
+<p>The industry is currently struggling with “Tool Sprawl”—where every microservice needs to be manually taught to an LLM. By placing an MCP Router at the gateway level, we effectively turn our entire microservice ecosystem into a <strong>single, searchable library of capabilities</strong> for AI agents.</p>
+<p>Here is a breakdown of why this is a good idea and how to design it for the light-4j ecosystem.</p>
+<hr>
+<h3 id="1-why-it-is-a-strategic-win"><a class="header" href="#1-why-it-is-a-strategic-win">1. Why it is a Strategic Win</a></h3>
+<ul>
+<li><strong>Discovery at Scale:</strong> Instead of configuring 50 tools for an agent, the agent connects to our gateway via MCP. The gateway then “advertises” the available tools based on the services it already knows.</li>
+<li><strong>Protocol Translation:</strong> Our backend services don’t need to know what MCP is. The gateway handles the conversion from <strong>MCP (JSON-RPC over SSE/HTTP)</strong> to <strong>REST (OpenAPI)</strong> or <strong>GraphQL</strong>.</li>
+<li><strong>Security &amp; Governance:</strong> We can apply light-4j’s existing JWT validation, rate limiting, and audit logging to AI interactions. We control which agents have access to which “tools” (APIs).</li>
+<li><strong>Schema Re-use:</strong> We already have OpenAPI specs or GraphQL schemas in light-4j. We can dynamically generate the MCP “Tool Definitions” from these existing schemas.</li>
+</ul>
+<hr>
+<h3 id="2-design-considerations"><a class="header" href="#2-design-considerations">2. Design Considerations</a></h3>
+<h4 id="a-the-transport-layer"><a class="header" href="#a-the-transport-layer">A. The Transport Layer</a></h4>
+<p>MCP supports two primary transports: <strong>Stdio</strong> (for local scripts) and <strong>HTTP with SSE (Server-Sent Events)</strong> (for remote services).</p>
+<ul>
+<li><strong>Decision:</strong> For a gateway, we <strong>must use the HTTP + SSE transport</strong>.</li>
+<li><strong>Implementation:</strong> Light-4j is built on Undertow, which has excellent support for SSE. We will need to implement an MCP endpoint (e.g., <code>/mcp/message</code>) and an SSE endpoint (e.g., <code>/mcp/sse</code>).</li>
+</ul>
+<h4 id="b-tool-discovery--dynamic-mapping"><a class="header" href="#b-tool-discovery--dynamic-mapping">B. Tool Discovery &amp; Dynamic Mapping</a></h4>
+<p>How does the Gateway decide which APIs to expose as MCP Tools?</p>
+<ul>
+<li><strong>Metadata Driven:</strong> Use light-4j configuration or annotations in the OpenAPI files to mark specific endpoints as “AI-enabled.”</li>
+<li><strong>The Mapper:</strong> Create a component that converts an <strong>OpenAPI Operation</strong> into an <strong>MCP Tool Definition</strong>.
+<ul>
+<li><code>description</code> in OpenAPI becomes the tool’s <code>description</code> (crucial for LLM reasoning).</li>
+<li><code>requestBody</code> schema becomes the tool’s <code>inputSchema</code>.</li>
+</ul>
+</li>
+</ul>
+<h4 id="c-authentication--context-pass-through"><a class="header" href="#c-authentication--context-pass-through">C. Authentication &amp; Context Pass-through</a></h4>
+<p>This is the hardest part.</p>
+<ul>
+<li><strong>The Problem:</strong> The LLM agent connects to the Gateway, but the Backend Microservice needs a user-specific JWT.</li>
+<li><strong>The Solution:</strong> The MCP Router must be able to take the identity from the MCP connection (initial handshake) and either pass it through or exchange it for a backend token (OAuth2 Token Exchange).</li>
+</ul>
+<h4 id="d-statefulness-vs-statelessness"><a class="header" href="#d-statefulness-vs-statelessness">D. Statefulness vs. Statelessness</a></h4>
+<p>MCP is often stateful (sessions).</p>
+<ul>
+<li><strong>Implementation:</strong> Since light-4j is designed for high performance and statelessness, we may need light-session-4j a small <strong>Session Manager</strong> (potentially backed by Redis or PostgresQL) to keep track of which MCP Client is mapped to which internal context during the SSE connection.</li>
+</ul>
+<hr>
+<h3 id="3-implementation-plan-for-light-4j"><a class="header" href="#3-implementation-plan-for-light-4j">3. Implementation Plan for light-4j</a></h3>
+<h4 id="step-1-create-the-mcphandler"><a class="header" href="#step-1-create-the-mcphandler">Step 1: Create the <code>McpHandler</code></a></h4>
+<p>Create a new middleware handler in light-4j that intercepts calls to <code>/mcp</code>.</p>
+<ul>
+<li>This handler must implement the MCP lifecycle: <code>initialize</code> -&gt; <code>list_tools</code> -&gt; <code>call_tool</code>.</li>
+</ul>
+<h4 id="step-2-tool-registry"><a class="header" href="#step-2-tool-registry">Step 2: Tool Registry</a></h4>
+<p>Implement a registry that scans our gateway’s internal routing table.</p>
+<ul>
+<li><strong>REST:</strong> For every path (e.g., <code>GET /customers/{id}</code>), generate an MCP tool named <code>get_customers_by_id</code>.</li>
+<li><strong>GraphQL:</strong> For every Query/Mutation, generate a corresponding MCP tool.</li>
+</ul>
+<h4 id="step-3-json-rpc-over-sse"><a class="header" href="#step-3-json-rpc-over-sse">Step 3: JSON-RPC over SSE</a></h4>
+<p>MCP uses JSON-RPC 2.0. We will need a simple parser that:</p>
+<ol>
+<li>Receives an MCP <code>call_tool</code> request.</li>
+<li>Identifies the internal REST/GraphQL route.</li>
+<li>Executes a <strong>local dispatch</strong> (internal call) to the existing light-4j handler for that service.</li>
+<li>Wraps the response in an MCP <code>content</code> object and sends it back via SSE.</li>
+</ol>
+<h4 id="step-4-governance-the-agentic-layer"><a class="header" href="#step-4-governance-the-agentic-layer">Step 4: Governance (The “Agentic” Layer)</a></h4>
+<p>Add a “Critique” or “Guardrail” check. Since this is at the gateway, we can inspect the tool output. If the LLM requested sensitive data, the Gateway can mask it before the agent sees it.</p>
+<hr>
+<h3 id="4-potential-challenges-to-watch"><a class="header" href="#4-potential-challenges-to-watch">4. Potential Challenges to Watch</a></h3>
+<ol>
+<li><strong>Context Window Overload:</strong> If our gateway has 500 APIs, sending 500 tool definitions to the LLM will crash its context window.
+<ul>
+<li><em>Solution:</em> Implement <strong>Categorization</strong>. When an agent connects, it should specify a “Scope” (e.g., <code>mcp?scope=accounting</code>), and the gateway only returns tools relevant to that scope.</li>
+</ul>
+</li>
+<li><strong>Latency:</strong> Adding a protocol translation layer at the gateway adds milliseconds.
+<ul>
+<li><em>Solution:</em> Light-4j’s native performance is our advantage here. Minimize JSON serialization/deserialization by using direct buffer access where possible.</li>
+</ul>
+</li>
+<li><strong>Complex Schemas:</strong> Some API payloads are too complex for an LLM to understand.
+<ul>
+<li><em>Solution:</em> Provide a “Summary” view. Allow our MCP router to transform a complex 100-field JSON response into a 5-field summary that the LLM can actually use.</li>
+</ul>
+</li>
+</ol>
+<h3 id="conclusion"><a class="header" href="#conclusion">Conclusion</a></h3>
+<p>Building an MCP Router for light-4j transforms our API Gateway from a “Traffic Cop” into an <strong>“AI Brain Center.”</strong> It allows our Java-based enterprise services to be “Agent-Ready” without touching the underlying microservice code.</p>
 
                     </main>
 
