@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8b2483cb.js";
+            window.path_to_searchindex_js = "../searchindex-f4e905e3.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-6effd268.js"></script>
@@ -303,6 +303,147 @@ return instance;
 </li>
 <li><strong>Subsequent Requests</strong>: Step 4d is skipped; data is served instantly from memory.</li>
 </ol>
+<h2 id="configuration-consistency-during-request-processing"><a class="header" href="#configuration-consistency-during-request-processing">Configuration Consistency During Request Processing</a></h2>
+<h3 id="can-config-objects-change-during-a-request"><a class="header" href="#can-config-objects-change-during-a-request">Can Config Objects Change During a Request?</a></h3>
+<p>A common question arises: <strong>Can the config object created in <code>handleRequest</code> be changed during the request/response exchange?</strong></p>
+<p><strong>Short Answer</strong>: Theoretically possible but extremely unlikely, and the design handles this correctly.</p>
+<h3 id="understanding-the-behavior"><a class="header" href="#understanding-the-behavior">Understanding the Behavior</a></h3>
+<p>When a handler processes a request using the recommended pattern:</p>
+<pre><code class="language-java">public void handleRequest(HttpServerExchange exchange) {
+    MyConfig config = MyConfig.load(); // Creates local reference
+    
+    // Use config throughout request processing
+    if (config.isEnabled()) {
+        // ... process request
+    }
+}
+</code></pre>
+<p>The <code>config</code> variable is a <strong>local reference</strong> to a configuration object. Here’s what happens:</p>
+<ol>
+<li><strong>Cache Hit</strong>: <code>MyConfig.load()</code> calls <code>Config.getJsonMapConfig(configName)</code> which returns a reference to the cached <code>Map&lt;String, Object&gt;</code>.</li>
+<li><strong>Object Construction</strong>: A new <code>MyConfig</code> object is created, wrapping this Map reference.</li>
+<li><strong>Local Scope</strong>: The <code>config</code> variable holds this reference for the duration of the request.</li>
+</ol>
+<h3 id="scenario-reload-during-request-processing"><a class="header" href="#scenario-reload-during-request-processing">Scenario: Reload During Request Processing</a></h3>
+<p>Consider this timeline:</p>
+<ol>
+<li><strong>T1</strong>: Request A starts, calls <code>MyConfig.load()</code>, gets reference to Config Object v1</li>
+<li><strong>T2</strong>: Admin calls <code>/adm/config-reload</code>, cache is cleared</li>
+<li><strong>T3</strong>: Request B starts, calls <code>MyConfig.load()</code>, triggers reload, gets reference to Config Object v2</li>
+<li><strong>T4</strong>: Request A continues processing with Config Object v1</li>
+<li><strong>T5</strong>: Request A completes successfully with Config Object v1</li>
+</ol>
+<p><strong>Key Points</strong>:</p>
+<ul>
+<li><strong>Request A</strong> maintains its reference to the original config object throughout its lifecycle</li>
+<li><strong>Request B</strong> gets a new config object with reloaded values</li>
+<li>Both requests process correctly with <strong>consistent</strong> configuration for their entire duration</li>
+<li>No race conditions or inconsistent state within a single request</li>
+</ul>
+<h3 id="why-this-design-is-safe"><a class="header" href="#why-this-design-is-safe">Why This Design is Safe</a></h3>
+<h4 id="1-immutable-config-objects"><a class="header" href="#1-immutable-config-objects">1. <strong>Immutable Config Objects</strong></a></h4>
+<p>Configuration objects are effectively immutable once constructed:</p>
+<pre><code class="language-java">private MyConfig(String configName) {
+    mappedConfig = Config.getInstance().getJsonMapConfig(configName);
+    setConfigData(); // Parses and sets final fields
+}
+</code></pre>
+<p>Fields are set during construction and never modified afterward.</p>
+<h4 id="2-local-variable-isolation"><a class="header" href="#2-local-variable-isolation">2. <strong>Local Variable Isolation</strong></a></h4>
+<p>Each request has its own local <code>config</code> variable:</p>
+<ul>
+<li>The reference is stored on the thread’s stack</li>
+<li>Even if the cache is cleared, the reference remains valid</li>
+<li>The underlying Map object continues to exist until no references remain (garbage collection)</li>
+</ul>
+<h4 id="3-per-request-consistency"><a class="header" href="#3-per-request-consistency">3. <strong>Per-Request Consistency</strong></a></h4>
+<p>This design ensures that each request has a <strong>consistent view</strong> of configuration from start to finish:</p>
+<ul>
+<li>No mid-request configuration changes</li>
+<li>Predictable behavior throughout request processing</li>
+<li>Easier debugging and reasoning about request flow</li>
+</ul>
+<h4 id="4-graceful-transition"><a class="header" href="#4-graceful-transition">4. <strong>Graceful Transition</strong></a></h4>
+<p>The architecture enables zero-downtime config updates:</p>
+<ul>
+<li><strong>In-flight requests</strong>: Complete with the config they started with</li>
+<li><strong>New requests</strong>: Use the updated configuration</li>
+<li><strong>No interruption</strong>: No requests fail due to config reload</li>
+</ul>
+<h3 id="edge-cases-and-considerations"><a class="header" href="#edge-cases-and-considerations">Edge Cases and Considerations</a></h3>
+<h4 id="long-running-requests"><a class="header" href="#long-running-requests">Long-Running Requests</a></h4>
+<p>For requests that take significant time to process (e.g., minutes):</p>
+<ul>
+<li>The request will complete with the configuration it started with</li>
+<li>If config is reloaded during processing, the request continues with “old” config</li>
+<li><strong>This is correct behavior</strong> - we want consistent config per request</li>
+</ul>
+<h4 id="high-concurrency-scenarios"><a class="header" href="#high-concurrency-scenarios">High-Concurrency Scenarios</a></h4>
+<p>During a config reload under heavy load:</p>
+<ul>
+<li>Multiple threads may simultaneously detect cache miss</li>
+<li>Double-checked locking ensures only one thread loads from disk</li>
+<li>All threads eventually get the same new config instance</li>
+<li>No duplicate file I/O or parsing overhead</li>
+</ul>
+<h3 id="memory-implications"><a class="header" href="#memory-implications">Memory Implications</a></h3>
+<p><strong>Question</strong>: If old config objects are still referenced by in-flight requests, do we have memory leaks?</p>
+<p><strong>Answer</strong>: No, this is handled by Java’s garbage collection:</p>
+<ol>
+<li>Request A holds reference to Config Object v1</li>
+<li>Cache is cleared and reloaded with Config Object v2</li>
+<li>Request A completes and goes out of scope</li>
+<li>Config Object v1 has no more references</li>
+<li>Garbage collector reclaims Config Object v1</li>
+</ol>
+<p>The memory overhead is minimal and temporary, lasting only as long as the longest in-flight request.</p>
+<h3 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h3>
+<p>To ensure optimal behavior with hot reload:</p>
+<ol>
+<li>
+<p><strong>Always Load Fresh</strong>: Call <code>MyConfig.load()</code> at the start of <code>handleRequest</code>, not in constructor</p>
+<pre><code class="language-java">// ✅ GOOD
+public void handleRequest(...) {
+    MyConfig config = MyConfig.load();
+}
+
+// ❌ BAD
+private static MyConfig config = MyConfig.load();
+</code></pre>
+</li>
+<li>
+<p><strong>Use Local Variables</strong>: Store config in local variables, not instance fields</p>
+<pre><code class="language-java">// ✅ GOOD
+MyConfig config = MyConfig.load();
+
+// ❌ BAD
+this.config = MyConfig.load();
+</code></pre>
+</li>
+<li>
+<p><strong>Don’t Cache in Handlers</strong>: Let the <code>Config</code> class handle caching</p>
+<pre><code class="language-java">// ✅ GOOD - Load on each request
+public void handleRequest(...) {
+    MyConfig config = MyConfig.load();
+}
+
+// ❌ BAD - Caching in handler
+private MyConfig cachedConfig;
+public void handleRequest(...) {
+    if (cachedConfig == null) cachedConfig = MyConfig.load();
+}
+</code></pre>
+</li>
+</ol>
+<h3 id="summary"><a class="header" href="#summary">Summary</a></h3>
+<p>The centralized cache design ensures:</p>
+<ul>
+<li><strong>Thread Safety</strong>: Multiple threads can safely reload and access config</li>
+<li><strong>Request Consistency</strong>: Each request has a stable config view from start to finish</li>
+<li><strong>Zero Downtime</strong>: Config updates don’t interrupt in-flight requests</li>
+<li><strong>Performance</strong>: HashMap lookups are extremely fast (O(1))</li>
+<li><strong>Simplicity</strong>: No complex synchronization needed in handlers</li>
+</ul>
 <h2 id="benefits"><a class="header" href="#benefits">Benefits</a></h2>
 <ol>
 <li><strong>Performance</strong>: Only one disk read per reload cycle. Subsequent accesses are Hash Map lookups.</li>
