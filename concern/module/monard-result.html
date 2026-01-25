@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Architecture - Light-4j Platform</title>
+        <title>Monard Result - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -12,33 +12,33 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon-de23e50b.svg">
-        <link rel="shortcut icon" href="favicon-8114d1fc.png">
-        <link rel="stylesheet" href="css/variables-8adf115d.css">
-        <link rel="stylesheet" href="css/general-2459343d.css">
-        <link rel="stylesheet" href="css/chrome-ae938929.css">
-        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+        <link rel="icon" href="../../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../../css/general-2459343d.css">
+        <link rel="stylesheet" href="../../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../../css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+        <link rel="stylesheet" href="../../fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
-        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
-        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../../ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "";
+            const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d580ad03.js";
+            window.path_to_searchindex_js = "../../searchindex-d580ad03.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-e9803f51.js"></script>
+        <script src="../../toc-e9803f51.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -105,7 +105,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -140,7 +140,7 @@
                     <h1 class="menu-title">Light-4j Platform</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
 
@@ -174,17 +174,84 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="architecture"><a class="header" href="#architecture">Architecture</a></h1>
+                        <h1 id="monad-result"><a class="header" href="#monad-result">Monad Result</a></h1>
+<p>The <code>monad-result</code> module provides a functional way to handle success and failure occurrences in your application logic. It is an implementation of a Result monad, similar to <code>Optional</code> in Java, but designed to carry failure information (error status) instead of just being empty.</p>
+<p>This approach promotes cleaner code by avoiding the use of exceptions for expected business logic failures, making the control flow more explicit and easier to follow.</p>
+<h2 id="core-components"><a class="header" href="#core-components">Core Components</a></h2>
+<p>The module consists of three main parts:</p>
+<h3 id="1-result"><a class="header" href="#1-result">1. Result<t></t></a></h3>
+<p>An interface that represents the result of an operation. It can be either a <code>Success</code> or a <code>Failure</code>.</p>
+<h3 id="2-success"><a class="header" href="#2-success">2. Success<t></t></a></h3>
+<p>An implementation of <code>Result</code> that holds the successful value.</p>
+<h3 id="3-failure"><a class="header" href="#3-failure">3. Failure<t></t></a></h3>
+<p>An implementation of <code>Result</code> that holds a <code>com.networknt.status.Status</code> object describing the error.</p>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<h3 id="creating-results"><a class="header" href="#creating-results">Creating Results</a></h3>
+<p>You can create success or failure results using the static factory methods:</p>
+<pre><code class="language-java">import com.networknt.monad.Result;
+import com.networknt.monad.Success;
+import com.networknt.monad.Failure;
+import com.networknt.status.Status;
+
+// Create a success result
+Result&lt;String&gt; success = Success.of("Hello World");
+
+// Create a failure result with a Status object
+Status status = new Status("ERR10001");
+Result&lt;String&gt; failure = Failure.of(status);
+</code></pre>
+<h3 id="transforming-results"><a class="header" href="#transforming-results">Transforming Results</a></h3>
+<p>The <code>Result</code> interface provides several monadic methods to work with the values without explicitly checking for success or failure:</p>
+<h4 id="map"><a class="header" href="#map">Map</a></h4>
+<p>Applies a function to the value if the result is a success. If it’s a failure, it returns the failure as-is.</p>
+<pre><code class="language-java">Result&lt;Integer&gt; length = success.map(String::length);
+</code></pre>
+<h4 id="flatmap"><a class="header" href="#flatmap">FlatMap</a></h4>
+<p>Similar to <code>map</code>, but the mapping function returns another <code>Result</code>. This is useful for chaining multiple operations that can fail.</p>
+<pre><code class="language-java">Result&lt;User&gt; user = idResult.flatMap(id -&gt; userService.getUser(id));
+</code></pre>
+<h4 id="fold"><a class="header" href="#fold">Fold</a></h4>
+<p>Reduces the <code>Result</code> to a single value by providing functions for both success and failure cases. This is often used at the end of a chain to convert the result into a response body or an external format.</p>
+<pre><code class="language-java">String message = result.fold(
+    val -&gt; "Success: " + val,
+    fail -&gt; "Error: " + fail.getError().getMessage()
+);
+</code></pre>
+<h4 id="lift"><a class="header" href="#lift">Lift</a></h4>
+<p>Allows combining two <code>Result</code> instances by applying a function to their internal values. If either result is a failure, it returns a failure.</p>
+<pre><code class="language-java">Result&lt;String&gt; result1 = Success.of("Hello");
+Result&lt;String&gt; result2 = Success.of("World");
+Result&lt;String&gt; combined = result1.lift(result2, (r1, r2) -&gt; r1 + " " + r2);
+</code></pre>
+<h3 id="conditional-execution"><a class="header" href="#conditional-execution">Conditional Execution</a></h3>
+<p>You can perform actions based on the state of the result using <code>ifSuccess</code> and <code>ifFailure</code>:</p>
+<pre><code class="language-java">result.ifSuccess(val -&gt; System.out.println("Got value: " + val))
+      .ifFailure(fail -&gt; System.err.println("Error Status: " + fail.getError()));
+</code></pre>
+<h2 id="why-use-monad-result"><a class="header" href="#why-use-monad-result">Why use Monad Result?</a></h2>
+<ol>
+<li><strong>Explicit Error Handling</strong>: Failures are part of the method signature and cannot be accidentally ignored like unchecked exceptions.</li>
+<li><strong>Improved Readability</strong>: Functional chaining (map, flatMap) leads to cleaner logic compared to deeply nested if-else blocks.</li>
+<li><strong>Composability</strong>: It is easy to combine multiple operations into a single result using <code>flatMap</code> and <code>lift</code>.</li>
+</ol>
+<h2 id="dependency"><a class="header" href="#dependency">Dependency</a></h2>
+<p>Add the following to your <code>pom.xml</code>:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;monad-result&lt;/artifactId&gt;
+    &lt;version&gt;${version.light-4j}&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="introduction.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/module/module.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="design.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/module/data-mask.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -194,11 +261,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="introduction.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/module/module.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="design.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/module/data-mask.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
@@ -218,17 +285,17 @@
         </script>
 
 
-        <script src="elasticlunr-ef4e11c1.min.js"></script>
-        <script src="mark-09e88c2c.min.js"></script>
-        <script src="searcher-c2a407aa.js"></script>
+        <script src="../../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../../mark-09e88c2c.min.js"></script>
+        <script src="../../searcher-c2a407aa.js"></script>
 
-        <script src="clipboard-1626706a.min.js"></script>
-        <script src="highlight-abc7f01d.js"></script>
-        <script src="book-a0b12cfe.js"></script>
+        <script src="../../clipboard-1626706a.min.js"></script>
+        <script src="../../highlight-abc7f01d.js"></script>
+        <script src="../../book-a0b12cfe.js"></script>
 
         <!-- Custom JS scripts -->
-        <script src="mermaid-eefea253.min.js"></script>
-        <script src="mermaid-init-ccf746f1.js"></script>
+        <script src="../../mermaid-eefea253.min.js"></script>
+        <script src="../../mermaid-init-ccf746f1.js"></script>
 
 
 

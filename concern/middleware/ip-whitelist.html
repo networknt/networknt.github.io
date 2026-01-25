@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Architecture - Light-4j Platform</title>
+        <title>IP Whitelist - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -12,33 +12,33 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon-de23e50b.svg">
-        <link rel="shortcut icon" href="favicon-8114d1fc.png">
-        <link rel="stylesheet" href="css/variables-8adf115d.css">
-        <link rel="stylesheet" href="css/general-2459343d.css">
-        <link rel="stylesheet" href="css/chrome-ae938929.css">
-        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+        <link rel="icon" href="../../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../../css/general-2459343d.css">
+        <link rel="stylesheet" href="../../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../../css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+        <link rel="stylesheet" href="../../fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
-        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
-        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../../ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "";
+            const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d580ad03.js";
+            window.path_to_searchindex_js = "../../searchindex-d580ad03.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-e9803f51.js"></script>
+        <script src="../../toc-e9803f51.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -105,7 +105,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -140,7 +140,7 @@
                     <h1 class="menu-title">Light-4j Platform</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
 
@@ -174,17 +174,118 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="architecture"><a class="header" href="#architecture">Architecture</a></h1>
+                        <h1 id="ip-whitelist"><a class="header" href="#ip-whitelist">IP Whitelist</a></h1>
+<p>The <code>ip-whitelist</code> middleware handler is designed to secure specific endpoints (e.g., health checks, metric endpoints, admin screens) by allowing access only from trusted IP addresses. This is often used for endpoints that cannot be easily secured via OAuth 2.0 or other standard authentication mechanisms, or as an additional layer of security.</p>
+<p>It serves as a critical component in scenarios where services like Consul, Prometheus, or internal orchestration tools need access to technical endpoints without user-level authentication.</p>
+<h2 id="requirements"><a class="header" href="#requirements">Requirements</a></h2>
+<p>The handler supports:</p>
+<ul>
+<li><strong>Per-Path Configuration:</strong> Rules are defined for specific url path prefixes.</li>
+<li><strong>IPv4 and IPv6:</strong> Full support for both IP versions.</li>
+<li><strong>Flexible matching:</strong>
+<ul>
+<li><strong>Exact match:</strong> e.g., <code>127.0.0.1</code> or <code>FE45:00:00:000:0:AAA:FFFF:0045</code></li>
+<li><strong>Wildcard match:</strong> e.g., <code>10.10.*.*</code> or <code>FE45:00:00:000:0:AAA:FFFF:*</code></li>
+<li><strong>CIDR Notation (Slash):</strong> e.g., <code>127.0.0.48/30</code> or <code>FE45:00:00:000:0:AAA:FFFF:01F4/127</code></li>
+</ul>
+</li>
+<li><strong>Default Policy:</strong> Configurable default behavior (allow or deny) when no specific rule is matched.</li>
+</ul>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>The configuration is managed via <code>whitelist.yml</code>.</p>
+<h3 id="configuration-options"><a class="header" href="#configuration-options">Configuration Options</a></h3>
+<ul>
+<li><strong><code>enabled</code></strong>: (boolean) Enable or disable the handler globally. Default <code>true</code>.</li>
+<li><strong><code>defaultAllow</code></strong>: (boolean) Determines the behavior for the IP addresses listed in the configuration.
+<ul>
+<li><strong><code>true</code> (Whitelist Mode - Most Common):</strong> If <code>defaultAllow</code> is true, the IPs listed for a path are <strong>ALLOWED</strong>. Any IP accessing that path that is <em>not</em> in the list is <strong>DENIED</strong>. If a path is <em>not</em> defined in the config, access is <strong>ALLOWED</strong> globally for that path.</li>
+<li><strong><code>false</code> (Blacklist Mode):</strong> If <code>defaultAllow</code> is false, the IPs listed for a path are <strong>DENIED</strong>. Any IP accessing that path that is <em>not</em> in the list is <strong>ALLOWED</strong>. If a path is <em>not</em> defined in the config, access is <strong>DENIED</strong> globally for that path.</li>
+</ul>
+</li>
+<li><strong><code>paths</code></strong>: A map where keys are request path prefixes and values are lists of IP patterns.</li>
+</ul>
+<h3 id="example-whitelistyml-template"><a class="header" href="#example-whitelistyml-template">Example <code>whitelist.yml</code> (Template)</a></h3>
+<pre><code class="language-yaml"># IP Whitelist configuration
+
+# Indicate if this handler is enabled or not.
+enabled: ${whitelist.enabled:true}
+
+# Default allowed or denied behavior.
+defaultAllow: ${whitelist.defaultAllow:true}
+
+# List of path prefixes and their access rules.
+paths: ${whitelist.paths:}
+</code></pre>
+<h3 id="configuring-via-valuesyml"><a class="header" href="#configuring-via-valuesyml">Configuring via <code>values.yml</code></a></h3>
+<p>You can define the rules in <code>values.yml</code> using either YAML or JSON format.</p>
+<h4 id="yaml-format"><a class="header" href="#yaml-format">YAML Format</a></h4>
+<p>Suitable for file-based configuration.</p>
+<pre><code class="language-yaml">whitelist.enabled: true
+whitelist.defaultAllow: true
+whitelist.paths:
+  /health:
+    - 127.0.0.1
+    - 10.10.*.*
+  /prometheus:
+    - 192.168.1.5
+    - 10.10.*.*
+  /admin:
+    - 127.0.0.1
+</code></pre>
+<h4 id="json-format"><a class="header" href="#json-format">JSON Format</a></h4>
+<p>Suitable for config servers or environment variables where a single string is required.</p>
+<pre><code class="language-yaml">whitelist.paths: {"/health":["127.0.0.1","10.10.*.*"],"/prometheus":["192.168.1.5"]," /admin":["127.0.0.1"]}
+</code></pre>
+<h2 id="logic-flow"><a class="header" href="#logic-flow">Logic Flow</a></h2>
+<ol>
+<li><strong>Extract IP:</strong> The handler extracts the source IP address from the request.</li>
+<li><strong>Match Path:</strong> It checks if the request path starts with any of the configured prefixes.</li>
+<li><strong>Find ACL:</strong> If a matching path prefix is found, it retrieves the corresponding Access Control List containing rules (IP patterns).</li>
+<li><strong>Evaluate Rules:</strong>
+<ul>
+<li>It iterates through the rules for the IP version (IPv4/IPv6).</li>
+<li>If a rule matches the source IP:
+<ul>
+<li>It returns <code>!rule.isDeny()</code>. (In <code>defaultAllow=true</code> mode, rules are allow rules, so <code>deny</code> is false, returning true).</li>
+</ul>
+</li>
+<li>If no rule matches the source IP:
+<ul>
+<li>It returns <code>!defaultAllow</code>. (In <code>defaultAllow=true</code> mode, if IP is not in the allow list, it returns false (deny)).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>No Path Match:</strong> If the request path is not configured:
+<ul>
+<li>It returns <code>defaultAllow</code>. (In <code>defaultAllow=true</code> mode, unknown paths are open).</li>
+</ul>
+</li>
+</ol>
+<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
+<p>If access is denied, the handler terminates the exchange and returns an error.</p>
+<ul>
+<li><strong>Status Code:</strong> 403 Forbidden</li>
+<li><strong>Error Code:</strong> <code>ERR10049</code></li>
+<li><strong>Message:</strong> <code>INVALID_IP_FOR_PATH</code></li>
+<li><strong>Description:</strong> <code>Peer IP %s is not in the whitelist for the endpoint %s</code></li>
+</ul>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<ol>
+<li>Add the <code>ip-whitelist</code> module dependency to your <code>pom.xml</code>.</li>
+<li>Add <code>com.networknt.whitelist.WhitelistHandler</code> to your <code>handler.yml</code> chain.</li>
+<li>Configure <code>whitelist.yml</code> (or <code>values.yml</code>) with your specific IP rules.</li>
+</ol>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="introduction.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/middleware/header-handler.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="design.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/middleware/rate-limit.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -194,11 +295,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="introduction.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/middleware/header-handler.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="design.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/middleware/rate-limit.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
@@ -218,17 +319,17 @@
         </script>
 
 
-        <script src="elasticlunr-ef4e11c1.min.js"></script>
-        <script src="mark-09e88c2c.min.js"></script>
-        <script src="searcher-c2a407aa.js"></script>
+        <script src="../../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../../mark-09e88c2c.min.js"></script>
+        <script src="../../searcher-c2a407aa.js"></script>
 
-        <script src="clipboard-1626706a.min.js"></script>
-        <script src="highlight-abc7f01d.js"></script>
-        <script src="book-a0b12cfe.js"></script>
+        <script src="../../clipboard-1626706a.min.js"></script>
+        <script src="../../highlight-abc7f01d.js"></script>
+        <script src="../../book-a0b12cfe.js"></script>
 
         <!-- Custom JS scripts -->
-        <script src="mermaid-eefea253.min.js"></script>
-        <script src="mermaid-init-ccf746f1.js"></script>
+        <script src="../../mermaid-eefea253.min.js"></script>
+        <script src="../../mermaid-init-ccf746f1.js"></script>
 
 
 

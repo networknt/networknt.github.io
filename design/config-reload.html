@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-f4e905e3.js";
+            window.path_to_searchindex_js = "../searchindex-d580ad03.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-6effd268.js"></script>
+        <script src="../toc-e9803f51.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -273,7 +273,108 @@ The <code>load()</code> method in configuration classes (e.g., <code>Correlation
 return instance;
 </code></pre>
 <p>}</p>
-<h3 id="5-thread-safety"><a class="header" href="#5-thread-safety">5. Thread Safety</a></h3>
+<h3 id="5-lazy-rebuild-on-config-change"><a class="header" href="#5-lazy-rebuild-on-config-change">5. Lazy Rebuild on Config Change</a></h3>
+<p>Some handlers (like <code>LightProxyHandler</code>) maintain expensive internal objects that depend on the configuration (e.g., <code>LoadBalancingProxyClient</code>, <code>ProxyHandler</code>). Recreating these on every request is not feasible due to performance. However, they must still react to configuration changes.</p>
+<p>For these cases, we use a <strong>Lazy Rebuild</strong> pattern:</p>
+<ol>
+<li><strong>Volatile Config Reference</strong>: The handler maintains a <code>volatile</code> reference to its configuration object.</li>
+<li><strong>Check on Request</strong>: At the start of <code>handleRequest</code>, it checks if the cached config object is the same as the one returned by <code>Config.load()</code>.</li>
+<li><strong>Rebuild if Changed</strong>: If the reference has changed (identity check), it synchronizes and rebuilds the internal components.</li>
+</ol>
+<p><strong>Example Implementation (<code>LightProxyHandler</code>):</strong></p>
+<pre><code class="language-java">public class LightProxyHandler implements HttpHandler {
+    private volatile ProxyConfig config;
+    private volatile ProxyHandler proxyHandler;
+
+    public LightProxyHandler() {
+        this.config = ProxyConfig.load();
+        buildProxy(); // Initial build
+    }
+
+    private void buildProxy() {
+        // Expensive object creation based on config
+        this.proxyHandler = ProxyHandler.builder()
+                .setProxyClient(new LoadBalancingProxyClient()...)
+                .build();
+    }
+
+    @Override
+    public void handleRequest(HttpServerExchange exchange) throws Exception {
+        ProxyConfig newConfig = ProxyConfig.load();
+        // Identity check: ultra-fast
+        if (newConfig != config) {
+            synchronized (this) {
+                newConfig = ProxyConfig.load(); // Double-check
+                if (newConfig != config) {
+                    config = newConfig;
+                    buildProxy(); // Rebuild internal components
+                }
+            }
+        }
+        // Use the (potentially new) proxyHandler
+        proxyHandler.handleRequest(exchange);
+    }
+}
+</code></pre>
+<p>This pattern ensures safe updates without the overhead of rebuilding on every request, and without requiring a manual <code>reload()</code> method.</p>
+<h3 id="6-config-class-implementation-pattern-singleton-with-caching"><a class="header" href="#6-config-class-implementation-pattern-singleton-with-caching">6. Config Class Implementation Pattern (Singleton with Caching)</a></h3>
+<p>For configuration classes that are frequently accessed (per request), instantiating a new object each time can be expensive. We recommend implementing a Singleton pattern that caches the configuration object and only invalidates it when the underlying configuration map changes.</p>
+<p><strong>Example Implementation (<code>ApiKeyConfig</code>):</strong></p>
+<pre><code class="language-java">public class ApiKeyConfig {
+    private static final String CONFIG_NAME = "apikey";
+    // Cache the instance
+    private static ApiKeyConfig instance;
+    private final Map&lt;String, Object&gt; mappedConfig;
+    
+    // Private constructor to force use of load()
+    private ApiKeyConfig(String configName) {
+        mappedConfig = Config.getInstance().getJsonMapConfig(configName);
+        setConfigData();
+    }
+
+    public static ApiKeyConfig load() {
+        return load(CONFIG_NAME);
+    }
+
+    public static ApiKeyConfig load(String configName) {
+        // optimistically check if we have a valid cached instance
+        Map&lt;String, Object&gt; mappedConfig = Config.getInstance().getJsonMapConfig(configName);
+        if (instance != null &amp;&amp; instance.getMappedConfig() == mappedConfig) {
+            return instance;
+        }
+        
+        // Double-checked locking for thread safety
+        synchronized (ApiKeyConfig.class) {
+            mappedConfig = Config.getInstance().getJsonMapConfig(configName);
+            if (instance != null &amp;&amp; instance.getMappedConfig() == mappedConfig) {
+                return instance;
+            }
+            instance = new ApiKeyConfig(configName);
+            // Register the module with the configuration. masking the apiKey property.
+            // As apiKeys are in the config file, we need to mask them.
+            List&lt;String&gt; masks = new ArrayList&lt;&gt;();
+            // if hashEnabled, there is no need to mask in the first place.
+            if(!instance.hashEnabled) {
+                masks.add("apiKey");
+            }
+            ModuleRegistry.registerModule(configName, ApiKeyConfig.class.getName(), Config.getNoneDecryptedInstance().getJsonMapConfigNoCache(configName), masks);
+
+            return instance;
+        }
+    }
+    
+    public Map&lt;String, Object&gt; getMappedConfig() {
+        return mappedConfig;
+    }
+}
+</code></pre>
+<p>This pattern ensures that:</p>
+<ol>
+<li><strong>Performance</strong>: Applications use the cached <code>instance</code> for the majority of requests (fast reference check).</li>
+<li><strong>Freshness</strong>: If <code>Config.getInstance().getJsonMapConfig(name)</code> returns a new Map object (due to a reload), the equality check fails, and a new <code>ApiKeyConfig</code> is created.</li>
+<li><strong>Consistency</strong>: The <code>handleRequest</code> method still calls <code>ApiKeyConfig.load()</code>, but receives the singleton instance transparently.</li>
+</ol>
+<h3 id="6-thread-safety"><a class="header" href="#6-thread-safety">6. Thread Safety</a></h3>
 <p>The <code>Config</code> class handles concurrent access using the <strong>Double-Checked Locking</strong> pattern to ensure that the configuration file is loaded <strong>exactly once</strong>, even if multiple threads request it simultaneously immediately after the cache is cleared.</p>
 <p><strong>Scenario:</strong></p>
 <ol>
@@ -459,6 +560,9 @@ public void handleRequest(...) {
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
+                            <a rel="next prefetch" href="../design/module-registry.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -470,6 +574,9 @@ public void handleRequest(...) {
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
+                    <a rel="next prefetch" href="../design/module-registry.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
             </nav>
 
         </div>
