@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Server Info - Light-4j Platform</title>
+        <title>Security Handler - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,126 +174,106 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="server-info"><a class="header" href="#server-info">Server Info</a></h1>
-<h3 id="introduction"><a class="header" href="#introduction">Introduction</a></h3>
-<p>The <code>ServerInfoGetHandler</code> is a middleware component in the light-4j framework that provides a comprehensive overview of the server’s runtime state. This includes:</p>
-<ul>
-<li><strong>Environment Info:</strong> Host IP, hostname, DNS, and runtime metrics (processors, memory).</li>
-<li><strong>System Properties:</strong> Java version, OS details, timezone.</li>
-<li><strong>Component Configuration:</strong> Configuration details for all registered modules.</li>
-<li><strong>Specification:</strong> The API specification (OpenAPI, etc.) if applicable.</li>
-</ul>
-<p>This handler is crucial for monitoring, debugging, and integration with the light-controller and light-portal for runtime dashboards.</p>
-<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
-<p>The handler is configured via <code>info.yml</code>.</p>
-<pre><code class="language-yaml"># Server info endpoint that can output environment and component along with configuration
+                        <h1 id="security-handler"><a class="header" href="#security-handler">Security Handler</a></h1>
+<p>The <code>SecurityHandler</code> (implemented as <code>JwtVerifyHandler</code> in REST, GraphQL, etc.) is responsible for verifying the security tokens (JWT or SWT) in the request header. It is a core component of the light-4j framework and provides distributed policy enforcement without relying on a centralized gateway.</p>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>The security configuration is usually defined in <code>security.yml</code>, but it can be overridden by framework-specific files like <code>openapi-security.yml</code> or <code>graphql-security.yml</code>.</p>
+<h3 id="example-securityyml"><a class="header" href="#example-securityyml">Example security.yml</a></h3>
+<pre><code class="language-yaml"># Security configuration for security module in light-4j.
+---
+# Enable JWT verification flag.
+enableVerifyJwt: ${security.enableVerifyJwt:true}
 
-# Indicate if the server info is enabled or not.
-enableServerInfo: ${info.enableServerInfo:true}
+# Enable SWT verification flag.
+enableVerifySwt: ${security.enableVerifySwt:true}
 
-# String list keys that should not be sorted in the normalized info output.
-keysToNotSort: ${info.keysToNotSort:["admin", "default", "defaultHandlers", "request", "response"]}
+# swt clientId header name.
+swtClientIdHeader: ${security.swtClientIdHeader:swt-client}
 
-# Downstream configuration (for gateways/sidecars)
-# Indicate if the server info needs to invoke downstream APIs.
-downstreamEnabled: ${info.downstreamEnabled:false}
-# Downstream API host.
-downstreamHost: ${info.downstreamHost:http://localhost:8081}
-# Downstream API server info path.
-downstreamPath: ${info.downstreamPath:/adm/server/info}
+# swt clientSecret header name. 
+swtClientSecretHeader: ${security.swtClientSecretHeader:swt-secret}
+
+# Extract JWT scope token from the X-Scope-Token header and validate the JWT token
+enableExtractScopeToken: ${security.enableExtractScopeToken:true}
+
+# Enable JWT scope verification. Only valid when enableVerifyJwt is true.
+enableVerifyScope: ${security.enableVerifyScope:true}
+
+# Skip scope verification if the endpoint specification is missing.
+skipVerifyScopeWithoutSpec: ${security.skipVerifyScopeWithoutSpec:false}
+
+# If set true, the JWT verifier handler will pass if the JWT token is expired already.
+ignoreJwtExpiry: ${security.ignoreJwtExpiry:false}
+
+# User for test only. should be always be false on official environment.
+enableMockJwt: ${security.enableMockJwt:false}
+
+# Enables relaxed verification for jwt. e.g. Disables key length requirements.
+enableRelaxedKeyValidation: ${security.enableRelaxedKeyValidation:false}
+
+# JWT signature public certificates. kid and certificate path mappings.
+jwt:
+  certificate: ${security.certificate:100=primary.crt&amp;101=secondary.crt}
+  clockSkewInSeconds: ${security.clockSkewInSeconds:60}
+  # Key distribution server standard: JsonWebKeySet for other OAuth 2.0 provider| X509Certificate for light-oauth2
+  keyResolver: ${security.keyResolver:JsonWebKeySet}
+
+# Enable or disable JWT token logging for audit.
+logJwtToken: ${security.logJwtToken:true}
+
+# Enable or disable client_id, user_id and scope logging.
+logClientUserScope: ${security.logClientUserScope:false}
+
+# Enable JWT token cache to speed up verification.
+enableJwtCache: ${security.enableJwtCache:true}
+
+# Max size of the JWT cache before a warning is logged.
+jwtCacheFullSize: ${security.jwtCacheFullSize:100}
+
+# Retrieve public keys dynamically from the OAuth2 provider.
+bootstrapFromKeyService: ${security.bootstrapFromKeyService:false}
+
+# Provider ID for federated deployment.
+providerId: ${security.providerId:}
+
+# Define a list of path prefixes to skip security.
+skipPathPrefixes: ${security.skipPathPrefixes:}
+
+# Pass specific claims from the token to the backend API via HTTP headers.
+passThroughClaims:
+  clientId: client_id
+  tokenType: token_type
 </code></pre>
-<p>If <code>enableServerInfo</code> is false, the endpoint will return an error <code>ERR10013 - SERVER_INFO_DISABLED</code>.</p>
-<h3 id="handler-registration"><a class="header" href="#handler-registration">Handler Registration</a></h3>
-<p>Unlike most middleware handlers, <code>ServerInfoGetHandler</code> is typically configured as a normal handler in <code>handler.yml</code> but mapped to a specific path like <code>/server/info</code>.</p>
-<pre><code class="language-yaml">handlers:
-  - com.networknt.info.ServerInfoGetHandler@info
-
-paths:
-  - path: '/server/info'
-    method: 'get'
-    exec:
-      - security
-      - info
-</code></pre>
-<p><strong>Security Note:</strong> The <code>/server/info</code> endpoint exposes sensitive configuration and system details. It <strong>must</strong> be protected by security handlers. In a typical light-4j deployment, this endpoint is secured requiring a special bootstrap token (e.g., from light-controller).</p>
-<h3 id="module-registration"><a class="header" href="#module-registration">Module Registration</a></h3>
-<p>Modules in light-4j can register themselves to be included in the server info output. This allows the info endpoint to display configuration for custom or contributed modules.</p>
-<p>To register a module:</p>
-<pre><code class="language-java">import com.networknt.utility.ModuleRegistry;
-import com.networknt.config.Config;
-
-// Registering a module
-ModuleRegistry.registerModule(
-    MyHandler.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(MyHandler.CONFIG_NAME), 
-    null
-);
-</code></pre>
-<h3 id="masking-sensitive-data"><a class="header" href="#masking-sensitive-data">Masking Sensitive Data</a></h3>
-<p>Configuration files often contain sensitive data (passwords, secrets). When registering a module, you can provide a list of keys to mask in the output.</p>
-<pre><code class="language-java">List&lt;String&gt; masks = new ArrayList&lt;&gt;();
-masks.add("trustPass");
-masks.add("keyPass");
-masks.add("clientSecret");
-
-ModuleRegistry.registerModule(
-    Client.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(clientConfigName), 
-    masks
-);
-</code></pre>
-<h3 id="downstream-info-aggregation"><a class="header" href="#downstream-info-aggregation">Downstream Info Aggregation</a></h3>
-<p>For components like <code>light-gateway</code>, <code>http-sidecar</code>, or <code>light-proxy</code>, the server info endpoint can be configured to aggregate information from a downstream service.</p>
-<ul>
-<li><strong><code>downstreamEnabled</code></strong>: When set to true, the handler will attempt to fetch server info from the configured downstream service.</li>
-<li><strong><code>downstreamHost</code></strong>: The base URL of the downstream service.</li>
-<li><strong><code>downstreamPath</code></strong>: The path to the server info endpoint on the downstream service.</li>
-</ul>
-<p>If the downstream service does not implement the info endpoint, the handler usually fails gracefully or returns its own info depending on the implementation specifics (e.g., in light-proxy scenarios).</p>
-<h3 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h3>
-<p>The output is a JSON object structured as follows:</p>
-<pre><code class="language-json">{
-  "environment": {
-    "host": {
-      "ip": "10.0.0.5",
-      "hostname": "service-pod-1",
-      "dns": "localhost"
-    },
-    "runtime": {
-      "availableProcessors": 4,
-      "freeMemory": 12345678,
-      "totalMemory": 23456789,
-      "maxMemory": 1234567890
-    },
-    "system": {
-      "javaVendor": "Oracle Corporation",
-      "javaVersion": "17.0.1",
-      "osName": "Linux",
-      "osVersion": "5.4.0",
-      "userTimezone": "UTC"
-    }
-  },
-  "specification": { ... }, 
-  "component": {
-      "com.networknt.info.ServerInfoConfig": {
-          "enableServerInfo": true,
-          "downstreamEnabled": false,
-          ...
-      },
-      ... other modules ...
-  }
-}
-</code></pre>
+<h2 id="key-features"><a class="header" href="#key-features">Key Features</a></h2>
+<h3 id="jwt-verification"><a class="header" href="#jwt-verification">JWT Verification</a></h3>
+<p>Verification includes signature check, expiration check, and scope verification. The handler uses the <code>JwtVerifier</code> to perform these checks.</p>
+<h3 id="swt-verification"><a class="header" href="#swt-verification">SWT Verification</a></h3>
+<p>The handler also supports Shared Secret Token (SWT) verification. When enabled, it checks the token using client ID and secret, which can be passed in headers specified by <code>swtClientIdHeader</code> and <code>swtClientSecretHeader</code>.</p>
+<h3 id="scope-verification"><a class="header" href="#scope-verification">Scope Verification</a></h3>
+<p>If <code>enableVerifyScope</code> is true, the handler compares the scopes in the JWT against the scopes defined in the API specification (e.g., <code>openapi.yaml</code>). If the specification is missing and <code>skipVerifyScopeWithoutSpec</code> is true, scope verification is skipped.</p>
+<h3 id="token-caching"><a class="header" href="#token-caching">Token Caching</a></h3>
+<p>To improve performance, verified tokens can be cached. This avoids expensive signature verification for subsequent requests with the same token. The cache size can be monitored using <code>jwtCacheFullSize</code>.</p>
+<h3 id="dynamic-key-loading"><a class="header" href="#dynamic-key-loading">Dynamic Key Loading</a></h3>
+<p>By setting <code>bootstrapFromKeyService</code> to true, the handler can pull public keys (JWK) from the OAuth2 provider’s key service based on the <code>kid</code> (Key ID) in the JWT header.</p>
+<h3 id="path-skipping"><a class="header" href="#path-skipping">Path Skipping</a></h3>
+<p>You can bypass security for specific endpoints by adding their prefixes to <code>skipPathPrefixes</code>.</p>
+<h3 id="claim-pass-through"><a class="header" href="#claim-pass-through">Claim Pass-through</a></h3>
+<p>Claims from the JWT or SWT can be mapped to HTTP headers and passed to the backend service using <code>passThroughClaims</code>. This is useful for passing user information or client details without the backend having to parse the token again.</p>
+<h2 id="security-attacks-mitigation"><a class="header" href="#security-attacks-mitigation">Security Attacks Mitigation</a></h2>
+<h3 id="alg-header-attacks"><a class="header" href="#alg-header-attacks">alg header attacks</a></h3>
+<p>The light-4j implementation is opinionated and primarily uses <code>RS256</code>. It prevents “alg: none” attacks and HMAC-RSA confusion attacks by explicitly specifying the expected algorithm.</p>
+<h3 id="kid-and-key-rotation"><a class="header" href="#kid-and-key-rotation">kid and Key Rotation</a></h3>
+<p>The use of <code>kid</code> allows the framework to support multiple keys simultaneously, which is essential for seamless key rotation.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/admin-endpoint.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/middleware/sanitizer-handler.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/middleware/unified-security.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -303,11 +283,11 @@ ModuleRegistry.registerModule(
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/admin-endpoint.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/middleware/sanitizer-handler.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/middleware/unified-security.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

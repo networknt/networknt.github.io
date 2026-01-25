@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Server Info - Light-4j Platform</title>
+        <title>Sidecar Handler - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,126 +174,65 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="server-info"><a class="header" href="#server-info">Server Info</a></h1>
-<h3 id="introduction"><a class="header" href="#introduction">Introduction</a></h3>
-<p>The <code>ServerInfoGetHandler</code> is a middleware component in the light-4j framework that provides a comprehensive overview of the server’s runtime state. This includes:</p>
+                        <h1 id="sidecar-handler"><a class="header" href="#sidecar-handler">Sidecar Handler</a></h1>
+<p>The <code>sidecar</code> module provides a set of middleware handlers designed to operate in a sidecar or gateway environment. It enables the separation of cross-cutting concerns from business logic, allowing the light-sidecar to act as a micro-gateway for both incoming (ingress) and outgoing (egress) traffic.</p>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>In a sidecar deployment (typically within a Kubernetes Pod), the <code>sidecar</code> module manages traffic between the backend service and the external network. It allows the backend service—regardless of the language or framework it’s built with—to benefit from light-4j features like security, discovery, and observability.</p>
+<h2 id="configuration-sidecaryml"><a class="header" href="#configuration-sidecaryml">Configuration (sidecar.yml)</a></h2>
+<p>The behavior of the sidecar handlers is controlled via <code>sidecar.yml</code>. This configuration is mapped to the <code>SidecarConfig</code> class.</p>
+<h3 id="example-sidecaryml"><a class="header" href="#example-sidecaryml">Example sidecar.yml</a></h3>
+<pre><code class="language-yaml"># Light http sidecar configuration
+---
+# Indicator used to determine the condition for router traffic.
+# Valid values: 'header' (default), 'protocol', or other custom indicators.
+# If 'header', it looks for service_id or service_url in the request headers.
+# If 'protocol', it treats HTTP traffic as egress and HTTPS as ingress (or vice versa depending on setup).
+egressIngressIndicator: ${sidecar.egressIngressIndicator:header}
+</code></pre>
+<h3 id="parameters"><a class="header" href="#parameters">Parameters</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>egressIngressIndicator</code></td><td><code>header</code></td><td>Determines if a request is Ingress or Egress.</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="ingress-vs-egress-logic"><a class="header" href="#ingress-vs-egress-logic">Ingress vs. Egress Logic</a></h2>
+<p>The <code>SidecarRouterHandler</code> and related middleware use the <code>egressIngressIndicator</code> to decide how to process a request:</p>
+<ol>
+<li><strong>Ingress (Incoming)</strong>: Traffic coming from external clients to the backend API. The sidecar applies security (Token validation), logging, and then proxies the request to the backend API.</li>
+<li><strong>Egress (Outgoing)</strong>: Traffic initiated by the backend API to call another service. The sidecar handles service discovery, load balancing, and token injection (via SAML or OAuth2) before forwarding the request to the target service.</li>
+</ol>
+<h2 id="sidecar-middleware-handlers"><a class="header" href="#sidecar-middleware-handlers">Sidecar Middleware Handlers</a></h2>
+<p>The sidecar module includes specialized versions of standard middleware that are aware of the traffic direction.</p>
+<h3 id="sidecartokenhandler"><a class="header" href="#sidecartokenhandler">SidecarTokenHandler</a></h3>
+<p>Validates tokens for <strong>Ingress</strong> traffic. If the request is identified as <strong>Egress</strong> (based on the indicator), it skips validation to allow the request to proceed to the external service.</p>
+<h3 id="sidecarsamltokenhandler"><a class="header" href="#sidecarsamltokenhandler">SidecarSAMLTokenHandler</a></h3>
+<p>Similar to the Token Handler, it handles SAML token validation for <strong>Ingress</strong> traffic and skips for <strong>Egress</strong>.</p>
+<h3 id="sidecarservicedicthandler"><a class="header" href="#sidecarservicedicthandler">SidecarServiceDictHandler</a></h3>
+<p>Applies service dictionary mapping for <strong>Egress</strong> traffic, ensuring the outgoing request is correctly mapped to a target service definition.</p>
+<h3 id="sidecarpathprefixservicehandler"><a class="header" href="#sidecarpathprefixservicehandler">SidecarPathPrefixServiceHandler</a></h3>
+<p>Identifies the target service ID based on the path prefix for <strong>Egress</strong> traffic. For <strong>Ingress</strong> traffic, it populates audit attachments and passes the request to the proxy.</p>
+<h2 id="implementation-details"><a class="header" href="#implementation-details">Implementation Details</a></h2>
+<p>The <code>sidecar</code> module follows the standard light-4j implementation patterns:</p>
 <ul>
-<li><strong>Environment Info:</strong> Host IP, hostname, DNS, and runtime metrics (processors, memory).</li>
-<li><strong>System Properties:</strong> Java version, OS details, timezone.</li>
-<li><strong>Component Configuration:</strong> Configuration details for all registered modules.</li>
-<li><strong>Specification:</strong> The API specification (OpenAPI, etc.) if applicable.</li>
+<li><strong>Singleton + Caching</strong>: <code>SidecarConfig</code> uses a cached singleton instance for performance, loaded via <code>SidecarConfig.load()</code>.</li>
+<li><strong>Hot Reload</strong>: Supports runtime configuration updates via the <code>reload()</code> method, which re-registers the module in the <code>ModuleRegistry</code>.</li>
+<li><strong>Module Registry Integration</strong>: Automatically registers itself with <code>/server/info</code> to provide visibility into the active sidecar configuration.</li>
 </ul>
-<p>This handler is crucial for monitoring, debugging, and integration with the light-controller and light-portal for runtime dashboards.</p>
-<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
-<p>The handler is configured via <code>info.yml</code>.</p>
-<pre><code class="language-yaml"># Server info endpoint that can output environment and component along with configuration
-
-# Indicate if the server info is enabled or not.
-enableServerInfo: ${info.enableServerInfo:true}
-
-# String list keys that should not be sorted in the normalized info output.
-keysToNotSort: ${info.keysToNotSort:["admin", "default", "defaultHandlers", "request", "response"]}
-
-# Downstream configuration (for gateways/sidecars)
-# Indicate if the server info needs to invoke downstream APIs.
-downstreamEnabled: ${info.downstreamEnabled:false}
-# Downstream API host.
-downstreamHost: ${info.downstreamHost:http://localhost:8081}
-# Downstream API server info path.
-downstreamPath: ${info.downstreamPath:/adm/server/info}
-</code></pre>
-<p>If <code>enableServerInfo</code> is false, the endpoint will return an error <code>ERR10013 - SERVER_INFO_DISABLED</code>.</p>
-<h3 id="handler-registration"><a class="header" href="#handler-registration">Handler Registration</a></h3>
-<p>Unlike most middleware handlers, <code>ServerInfoGetHandler</code> is typically configured as a normal handler in <code>handler.yml</code> but mapped to a specific path like <code>/server/info</code>.</p>
-<pre><code class="language-yaml">handlers:
-  - com.networknt.info.ServerInfoGetHandler@info
-
-paths:
-  - path: '/server/info'
-    method: 'get'
-    exec:
-      - security
-      - info
-</code></pre>
-<p><strong>Security Note:</strong> The <code>/server/info</code> endpoint exposes sensitive configuration and system details. It <strong>must</strong> be protected by security handlers. In a typical light-4j deployment, this endpoint is secured requiring a special bootstrap token (e.g., from light-controller).</p>
-<h3 id="module-registration"><a class="header" href="#module-registration">Module Registration</a></h3>
-<p>Modules in light-4j can register themselves to be included in the server info output. This allows the info endpoint to display configuration for custom or contributed modules.</p>
-<p>To register a module:</p>
-<pre><code class="language-java">import com.networknt.utility.ModuleRegistry;
-import com.networknt.config.Config;
-
-// Registering a module
-ModuleRegistry.registerModule(
-    MyHandler.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(MyHandler.CONFIG_NAME), 
-    null
-);
-</code></pre>
-<h3 id="masking-sensitive-data"><a class="header" href="#masking-sensitive-data">Masking Sensitive Data</a></h3>
-<p>Configuration files often contain sensitive data (passwords, secrets). When registering a module, you can provide a list of keys to mask in the output.</p>
-<pre><code class="language-java">List&lt;String&gt; masks = new ArrayList&lt;&gt;();
-masks.add("trustPass");
-masks.add("keyPass");
-masks.add("clientSecret");
-
-ModuleRegistry.registerModule(
-    Client.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(clientConfigName), 
-    masks
-);
-</code></pre>
-<h3 id="downstream-info-aggregation"><a class="header" href="#downstream-info-aggregation">Downstream Info Aggregation</a></h3>
-<p>For components like <code>light-gateway</code>, <code>http-sidecar</code>, or <code>light-proxy</code>, the server info endpoint can be configured to aggregate information from a downstream service.</p>
-<ul>
-<li><strong><code>downstreamEnabled</code></strong>: When set to true, the handler will attempt to fetch server info from the configured downstream service.</li>
-<li><strong><code>downstreamHost</code></strong>: The base URL of the downstream service.</li>
-<li><strong><code>downstreamPath</code></strong>: The path to the server info endpoint on the downstream service.</li>
-</ul>
-<p>If the downstream service does not implement the info endpoint, the handler usually fails gracefully or returns its own info depending on the implementation specifics (e.g., in light-proxy scenarios).</p>
-<h3 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h3>
-<p>The output is a JSON object structured as follows:</p>
-<pre><code class="language-json">{
-  "environment": {
-    "host": {
-      "ip": "10.0.0.5",
-      "hostname": "service-pod-1",
-      "dns": "localhost"
-    },
-    "runtime": {
-      "availableProcessors": 4,
-      "freeMemory": 12345678,
-      "totalMemory": 23456789,
-      "maxMemory": 1234567890
-    },
-    "system": {
-      "javaVendor": "Oracle Corporation",
-      "javaVersion": "17.0.1",
-      "osName": "Linux",
-      "osVersion": "5.4.0",
-      "userTimezone": "UTC"
-    }
-  },
-  "specification": { ... }, 
-  "component": {
-      "com.networknt.info.ServerInfoConfig": {
-          "enableServerInfo": true,
-          "downstreamEnabled": false,
-          ...
-      },
-      ... other modules ...
-  }
-}
-</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/admin-endpoint.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/middleware/unified-security.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/interceptor.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -303,11 +242,11 @@ ModuleRegistry.registerModule(
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/admin-endpoint.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/middleware/unified-security.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/interceptor.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

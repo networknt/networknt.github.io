@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Server Info - Light-4j Platform</title>
+        <title>Direct Registry - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,126 +174,98 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="server-info"><a class="header" href="#server-info">Server Info</a></h1>
-<h3 id="introduction"><a class="header" href="#introduction">Introduction</a></h3>
-<p>The <code>ServerInfoGetHandler</code> is a middleware component in the light-4j framework that provides a comprehensive overview of the server’s runtime state. This includes:</p>
-<ul>
-<li><strong>Environment Info:</strong> Host IP, hostname, DNS, and runtime metrics (processors, memory).</li>
-<li><strong>System Properties:</strong> Java version, OS details, timezone.</li>
-<li><strong>Component Configuration:</strong> Configuration details for all registered modules.</li>
-<li><strong>Specification:</strong> The API specification (OpenAPI, etc.) if applicable.</li>
-</ul>
-<p>This handler is crucial for monitoring, debugging, and integration with the light-controller and light-portal for runtime dashboards.</p>
-<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
-<p>The handler is configured via <code>info.yml</code>.</p>
-<pre><code class="language-yaml"># Server info endpoint that can output environment and component along with configuration
-
-# Indicate if the server info is enabled or not.
-enableServerInfo: ${info.enableServerInfo:true}
-
-# String list keys that should not be sorted in the normalized info output.
-keysToNotSort: ${info.keysToNotSort:["admin", "default", "defaultHandlers", "request", "response"]}
-
-# Downstream configuration (for gateways/sidecars)
-# Indicate if the server info needs to invoke downstream APIs.
-downstreamEnabled: ${info.downstreamEnabled:false}
-# Downstream API host.
-downstreamHost: ${info.downstreamHost:http://localhost:8081}
-# Downstream API server info path.
-downstreamPath: ${info.downstreamPath:/adm/server/info}
+                        <h1 id="direct-registry"><a class="header" href="#direct-registry">Direct Registry</a></h1>
+<p>If you don’t have Consul or the Light Portal deployed for service registry and discovery, you can use the built-in <code>DirectRegistry</code> as a temporary solution. It provides a simple way to define service-to-host mappings and allows for an easy transition to more robust enterprise registry solutions later.</p>
+<p>There are two main ways to define the mapping between a <code>serviceId</code> and its corresponding hosts:</p>
+<ol>
+<li><strong>service.yml</strong>: The original method, defined as part of the <code>URLImpl</code> parameters.</li>
+<li><strong>direct-registry.yml</strong>: The recommended method for dynamic environments like <code>http-sidecar</code> or <code>light-gateway</code>.</li>
+</ol>
+<hr>
+<h3 id="1-configuration-via-serviceyml"><a class="header" href="#1-configuration-via-serviceyml">1. Configuration via service.yml</a></h3>
+<p>Defining mappings in <code>service.yml</code> is straightforward but comes with a significant limitation: the configuration cannot be reloaded without restarting the server.</p>
+<h4 id="single-url-mapping"><a class="header" href="#single-url-mapping">Single URL Mapping</a></h4>
+<p>A simple mapping from one <code>serviceId</code> to exactly one service instance.</p>
+<pre><code class="language-yaml">singletons:
+- com.networknt.registry.URL:
+  - com.networknt.registry.URLImpl:
+      protocol: https
+      host: localhost
+      port: 8080
+      path: direct
+      parameters:
+        com.networknt.apib-1.0.0: http://localhost:7002
+        com.networknt.apic-1.0.0: http://localhost:7003
+- com.networknt.registry.Registry:
+  - com.networknt.registry.support.DirectRegistry
+- com.networknt.balance.LoadBalance:
+  - com.networknt.balance.RoundRobinLoadBalance
+- com.networknt.cluster.Cluster:
+  - com.networknt.cluster.LightCluster
 </code></pre>
-<p>If <code>enableServerInfo</code> is false, the endpoint will return an error <code>ERR10013 - SERVER_INFO_DISABLED</code>.</p>
-<h3 id="handler-registration"><a class="header" href="#handler-registration">Handler Registration</a></h3>
-<p>Unlike most middleware handlers, <code>ServerInfoGetHandler</code> is typically configured as a normal handler in <code>handler.yml</code> but mapped to a specific path like <code>/server/info</code>.</p>
-<pre><code class="language-yaml">handlers:
-  - com.networknt.info.ServerInfoGetHandler@info
-
-paths:
-  - path: '/server/info'
-    method: 'get'
-    exec:
-      - security
-      - info
+<h4 id="multiple-url-mapping"><a class="header" href="#multiple-url-mapping">Multiple URL Mapping</a></h4>
+<p>For a service with multiple instances, provide a comma-separated list of URLs.</p>
+<pre><code class="language-yaml">      parameters:
+        com.networknt.apib-1.0.0: http://localhost:7002,http://localhost:7005
 </code></pre>
-<p><strong>Security Note:</strong> The <code>/server/info</code> endpoint exposes sensitive configuration and system details. It <strong>must</strong> be protected by security handlers. In a typical light-4j deployment, this endpoint is secured requiring a special bootstrap token (e.g., from light-controller).</p>
-<h3 id="module-registration"><a class="header" href="#module-registration">Module Registration</a></h3>
-<p>Modules in light-4j can register themselves to be included in the server info output. This allows the info endpoint to display configuration for custom or contributed modules.</p>
-<p>To register a module:</p>
-<pre><code class="language-java">import com.networknt.utility.ModuleRegistry;
-import com.networknt.config.Config;
-
-// Registering a module
-ModuleRegistry.registerModule(
-    MyHandler.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(MyHandler.CONFIG_NAME), 
-    null
-);
+<h4 id="using-environment-tags"><a class="header" href="#using-environment-tags">Using Environment Tags</a></h4>
+<p>To support <a href="/design/multi-tenancy/">multi-tenancy</a>, you can pass tags (e.g., environment) into the registered URLs.</p>
+<pre><code class="language-yaml">      parameters:
+        com.networknt.portal.command-1.0.0: https://localhost:8440?environment=0000,https://localhost:8441?environment=0001
 </code></pre>
-<h3 id="masking-sensitive-data"><a class="header" href="#masking-sensitive-data">Masking Sensitive Data</a></h3>
-<p>Configuration files often contain sensitive data (passwords, secrets). When registering a module, you can provide a list of keys to mask in the output.</p>
-<pre><code class="language-java">List&lt;String&gt; masks = new ArrayList&lt;&gt;();
-masks.add("trustPass");
-masks.add("keyPass");
-masks.add("clientSecret");
-
-ModuleRegistry.registerModule(
-    Client.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(clientConfigName), 
-    masks
-);
+<hr>
+<h3 id="2-configuration-via-direct-registryyml-recommended"><a class="header" href="#2-configuration-via-direct-registryyml-recommended">2. Configuration via direct-registry.yml (Recommended)</a></h3>
+<p>When using <code>DirectRegistry</code> in <code>http-sidecar</code> or <code>light-gateway</code>, it is highly recommended to use <code>direct-registry.yml</code>. This file supports the <strong>config-reload</strong> feature, allowing you to update service mappings without downtime.</p>
+<p>To use this method, ensure that the <code>parameters</code> section in the <code>URLImpl</code> configuration within <code>service.yml</code> is either empty or commented out.</p>
+<h4 id="example-direct-registryyml"><a class="header" href="#example-direct-registryyml">Example direct-registry.yml</a></h4>
+<p>This file maps <code>serviceId</code> (optionally with an environment tag) to host URLs.</p>
+<pre><code class="language-yaml">---
+# direct-registry.yml
+# Mapping between serviceId and hosts (comma-separated).
+# If a tag is used, separate it from serviceId using a vertical bar |
+directUrls:
+  code: http://192.168.1.100:6881,http://192.168.1.101:6881
+  token: http://192.168.1.100:6882
+  com.networknt.test-1.0.0: http://localhost,https://localhost
+  command|0000: https://192.168.1.142:8440
+  command|0001: https://192.168.1.142:8441
 </code></pre>
-<h3 id="downstream-info-aggregation"><a class="header" href="#downstream-info-aggregation">Downstream Info Aggregation</a></h3>
-<p>For components like <code>light-gateway</code>, <code>http-sidecar</code>, or <code>light-proxy</code>, the server info endpoint can be configured to aggregate information from a downstream service.</p>
-<ul>
-<li><strong><code>downstreamEnabled</code></strong>: When set to true, the handler will attempt to fetch server info from the configured downstream service.</li>
-<li><strong><code>downstreamHost</code></strong>: The base URL of the downstream service.</li>
-<li><strong><code>downstreamPath</code></strong>: The path to the server info endpoint on the downstream service.</li>
-</ul>
-<p>If the downstream service does not implement the info endpoint, the handler usually fails gracefully or returns its own info depending on the implementation specifics (e.g., in light-proxy scenarios).</p>
-<h3 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h3>
-<p>The output is a JSON object structured as follows:</p>
-<pre><code class="language-json">{
-  "environment": {
-    "host": {
-      "ip": "10.0.0.5",
-      "hostname": "service-pod-1",
-      "dns": "localhost"
-    },
-    "runtime": {
-      "availableProcessors": 4,
-      "freeMemory": 12345678,
-      "totalMemory": 23456789,
-      "maxMemory": 1234567890
-    },
-    "system": {
-      "javaVendor": "Oracle Corporation",
-      "javaVersion": "17.0.1",
-      "osName": "Linux",
-      "osVersion": "5.4.0",
-      "userTimezone": "UTC"
-    }
-  },
-  "specification": { ... }, 
-  "component": {
-      "com.networknt.info.ServerInfoConfig": {
-          "enableServerInfo": true,
-          "downstreamEnabled": false,
-          ...
-      },
-      ... other modules ...
-  }
-}
+<p>Mappings can also be provided in <strong>JSON</strong> or <strong>Map String</strong> formats via environment variables or the config server within <code>values.yml</code>.</p>
+<hr>
+<h3 id="reloading-configuration"><a class="header" href="#reloading-configuration">Reloading Configuration</a></h3>
+<p>When <code>DirectRegistry</code> initializes, it automatically registers its configuration with the <code>ModuleRegistry</code>. You can use the <a href="/concern/config-reload/">config-reload</a> API to trigger a reload of <code>direct-registry.yml</code> from the local filesystem or a config server.</p>
+<h4 id="simultaneous-reloads"><a class="header" href="#simultaneous-reloads">Simultaneous Reloads</a></h4>
+<p>Because components like <code>RouterHandler</code> site on top of the registry and cache their own mappings, you must reload the related modules simultaneously to ensure consistency.</p>
+<p><strong>Example Reload Request:</strong></p>
+<pre><code class="language-bash">curl --location --request POST 'https://localhost:8443/adm/modules' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Bearer &lt;TOKEN&gt;' \
+--data-raw '[
+    "com.networknt.router.middleware.PathPrefixServiceHandler",
+    "com.networknt.router.RouterHandler",
+    "com.networknt.registry.support.DirectRegistry"
+]'
+</code></pre>
+<h3 id="auto-registration--visibility"><a class="header" href="#auto-registration--visibility">Auto-Registration &amp; Visibility</a></h3>
+<p>The <code>direct-registry</code> module now implements auto-registration via the <code>DirectRegistryConfig</code> singleton. The current active mappings and configuration parameters can be inspected at runtime via the <a href="/concern/admin/server-info.html">Server Info</a> endpoint.</p>
+<h3 id="dependency"><a class="header" href="#dependency">Dependency</a></h3>
+<p>Add the following to your <code>pom.xml</code>:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;registry&lt;/artifactId&gt;
+    &lt;version&gt;${version.light-4j}&lt;/version&gt;
+&lt;/dependency&gt;
 </code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/admin-endpoint.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/module/portal-registry.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/module/rule-loader.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -303,11 +275,11 @@ ModuleRegistry.registerModule(
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/admin-endpoint.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/module/portal-registry.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/module/rule-loader.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

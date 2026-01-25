@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Server Info - Light-4j Platform</title>
+        <title>Request Transformer - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,126 +174,125 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="server-info"><a class="header" href="#server-info">Server Info</a></h1>
-<h3 id="introduction"><a class="header" href="#introduction">Introduction</a></h3>
-<p>The <code>ServerInfoGetHandler</code> is a middleware component in the light-4j framework that provides a comprehensive overview of the server’s runtime state. This includes:</p>
+                        <h1 id="request-transformer-interceptor"><a class="header" href="#request-transformer-interceptor">Request Transformer Interceptor</a></h1>
+<p>The <code>request-transformer</code> is a powerful middleware interceptor that allows for dynamic modification of incoming requests using the <code>light-4j</code> rule engine. It provides a highly flexible way to manipulate request metadata (headers, query parameters, path) and the request body based on custom business logic defined in rules.</p>
+<h3 id="features"><a class="header" href="#features">Features</a></h3>
 <ul>
-<li><strong>Environment Info:</strong> Host IP, hostname, DNS, and runtime metrics (processors, memory).</li>
-<li><strong>System Properties:</strong> Java version, OS details, timezone.</li>
-<li><strong>Component Configuration:</strong> Configuration details for all registered modules.</li>
-<li><strong>Specification:</strong> The API specification (OpenAPI, etc.) if applicable.</li>
+<li><strong>Dynamic Transformation</strong>: Modify request elements at runtime without changing application code.</li>
+<li><strong>Rule-Based</strong>: Leverage the <code>light-4j</code> rule engine to define complex transformation logic.</li>
+<li><strong>Path-Based Activation</strong>: Target specific request paths using the <code>appliedPathPrefixes</code> configuration.</li>
+<li><strong>Metadata Manipulation</strong>: Add, update, or remove request headers, query parameters, path, and URI.</li>
+<li><strong>Body Transformation</strong>: Overwrite the request body (supports JSON, XML, and other text-based formats).</li>
+<li><strong>Short-Circuiting</strong>: Generate an immediate response body or validation error to return to the caller, stopping the handler chain.</li>
+<li><strong>Encoding Support</strong>: Configurable body encoding per path prefix for legacy API compatibility.</li>
+<li><strong>Auto-Registration</strong>: Automatically registers with the <code>ModuleRegistry</code> for administrative visibility.</li>
 </ul>
-<p>This handler is crucial for monitoring, debugging, and integration with the light-controller and light-portal for runtime dashboards.</p>
-<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
-<p>The handler is configured via <code>info.yml</code>.</p>
-<pre><code class="language-yaml"># Server info endpoint that can output environment and component along with configuration
+<h3 id="configuration-request-transformeryml"><a class="header" href="#configuration-request-transformeryml">Configuration (request-transformer.yml)</a></h3>
+<p>The interceptor is configured via <code>request-transformer.yml</code>.</p>
+<pre><code class="language-yaml"># Request Transformer Configuration
+---
+# Indicate if this interceptor is enabled or not. Default is true.
+enabled: ${request-transformer.enabled:true}
 
-# Indicate if the server info is enabled or not.
-enableServerInfo: ${info.enableServerInfo:true}
+# Indicate if the transform interceptor needs to change the request body. Default is true.
+requiredContent: ${request-transformer.requiredContent:true}
 
-# String list keys that should not be sorted in the normalized info output.
-keysToNotSort: ${info.keysToNotSort:["admin", "default", "defaultHandlers", "request", "response"]}
+# Default body encoding for the request body. Default is UTF-8.
+defaultBodyEncoding: ${request-transformer.defaultBodyEncoding:UTF-8}
 
-# Downstream configuration (for gateways/sidecars)
-# Indicate if the server info needs to invoke downstream APIs.
-downstreamEnabled: ${info.downstreamEnabled:false}
-# Downstream API host.
-downstreamHost: ${info.downstreamHost:http://localhost:8081}
-# Downstream API server info path.
-downstreamPath: ${info.downstreamPath:/adm/server/info}
+# A list of applied request path prefixes. Only requests matching these prefixes will be processed.
+# This can be a single string or a list of strings.
+appliedPathPrefixes: ${request-transformer.appliedPathPrefixes:}
+
+# Customized encoding for specific path prefixes.
+# This is useful for legacy APIs that require non-UTF-8 encoding (e.g., ISO-8859-1).
+# pathPrefixEncoding:
+#   /v1/pets: ISO-8859-1
+#   /v1/party/info: ISO-8859-1
 </code></pre>
-<p>If <code>enableServerInfo</code> is false, the endpoint will return an error <code>ERR10013 - SERVER_INFO_DISABLED</code>.</p>
-<h3 id="handler-registration"><a class="header" href="#handler-registration">Handler Registration</a></h3>
-<p>Unlike most middleware handlers, <code>ServerInfoGetHandler</code> is typically configured as a normal handler in <code>handler.yml</code> but mapped to a specific path like <code>/server/info</code>.</p>
+<h3 id="setup"><a class="header" href="#setup">Setup</a></h3>
+<h4 id="1-add-dependency"><a class="header" href="#1-add-dependency">1. Add Dependency</a></h4>
+<p>Add the following dependency to your <code>pom.xml</code>:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;request-transformer&lt;/artifactId&gt;
+    &lt;version&gt;${version.light-4j}&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<h4 id="2-register-interceptor"><a class="header" href="#2-register-interceptor">2. Register Interceptor</a></h4>
+<p>In your <code>handler.yml</code>, add the <code>RequestTransformerInterceptor</code> to the interceptors list and include it in the appropriate handler chains.</p>
 <pre><code class="language-yaml">handlers:
-  - com.networknt.info.ServerInfoGetHandler@info
+  - com.networknt.reqtrans.RequestTransformerInterceptor@requestTransformer
 
-paths:
-  - path: '/server/info'
-    method: 'get'
-    exec:
-      - security
-      - info
+chains:
+  default:
+    - ...
+    - requestTransformer
+    - ...
 </code></pre>
-<p><strong>Security Note:</strong> The <code>/server/info</code> endpoint exposes sensitive configuration and system details. It <strong>must</strong> be protected by security handlers. In a typical light-4j deployment, this endpoint is secured requiring a special bootstrap token (e.g., from light-controller).</p>
-<h3 id="module-registration"><a class="header" href="#module-registration">Module Registration</a></h3>
-<p>Modules in light-4j can register themselves to be included in the server info output. This allows the info endpoint to display configuration for custom or contributed modules.</p>
-<p>To register a module:</p>
-<pre><code class="language-java">import com.networknt.utility.ModuleRegistry;
-import com.networknt.config.Config;
-
-// Registering a module
-ModuleRegistry.registerModule(
-    MyHandler.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(MyHandler.CONFIG_NAME), 
-    null
-);
-</code></pre>
-<h3 id="masking-sensitive-data"><a class="header" href="#masking-sensitive-data">Masking Sensitive Data</a></h3>
-<p>Configuration files often contain sensitive data (passwords, secrets). When registering a module, you can provide a list of keys to mask in the output.</p>
-<pre><code class="language-java">List&lt;String&gt; masks = new ArrayList&lt;&gt;();
-masks.add("trustPass");
-masks.add("keyPass");
-masks.add("clientSecret");
-
-ModuleRegistry.registerModule(
-    Client.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(clientConfigName), 
-    masks
-);
-</code></pre>
-<h3 id="downstream-info-aggregation"><a class="header" href="#downstream-info-aggregation">Downstream Info Aggregation</a></h3>
-<p>For components like <code>light-gateway</code>, <code>http-sidecar</code>, or <code>light-proxy</code>, the server info endpoint can be configured to aggregate information from a downstream service.</p>
+<h3 id="transformation-rules"><a class="header" href="#transformation-rules">Transformation Rules</a></h3>
+<p>The interceptor passes a context map (<code>objMap</code>) to the rule engine. Your rules can inspect these values and return a result map to trigger specific modifications.</p>
+<h4 id="rule-input-map-objmap"><a class="header" href="#rule-input-map-objmap">Rule Input Map (<code>objMap</code>)</a></h4>
 <ul>
-<li><strong><code>downstreamEnabled</code></strong>: When set to true, the handler will attempt to fetch server info from the configured downstream service.</li>
-<li><strong><code>downstreamHost</code></strong>: The base URL of the downstream service.</li>
-<li><strong><code>downstreamPath</code></strong>: The path to the server info endpoint on the downstream service.</li>
+<li><code>auditInfo</code>: Map of audit information (e.g., clientId, endpoint).</li>
+<li><code>requestHeaders</code>: Map of current request headers.</li>
+<li><code>queryParameters</code>: Map of current query parameters.</li>
+<li><code>pathParameters</code>: Map of current path parameters.</li>
+<li><code>method</code>: HTTP method (e.g., “POST”, “GET”).</li>
+<li><code>requestURL</code>: The full request URL.</li>
+<li><code>requestURI</code>: The request URI.</li>
+<li><code>requestPath</code>: The request path.</li>
+<li><code>requestBody</code>: The request body string (only if <code>requiredContent</code> is true).</li>
 </ul>
-<p>If the downstream service does not implement the info endpoint, the handler usually fails gracefully or returns its own info depending on the implementation specifics (e.g., in light-proxy scenarios).</p>
-<h3 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h3>
-<p>The output is a JSON object structured as follows:</p>
+<h4 id="rule-output-result-map"><a class="header" href="#rule-output-result-map">Rule Output Result Map</a></h4>
+<p>To perform a transformation, your rule must return a map containing one or more of the following keys:</p>
+<ul>
+<li><strong><code>requestPath</code></strong>: <code>String</code> - Overwrites the exchange request path.</li>
+<li><strong><code>requestURI</code></strong>: <code>String</code> - Overwrites the exchange request URI.</li>
+<li><strong><code>queryString</code></strong>: <code>String</code> - Overwrites the exchange query string.</li>
+<li><strong><code>requestHeaders</code></strong>: <code>Map</code> - Contains two sub-keys:
+<ul>
+<li><code>remove</code>: <code>List&lt;String&gt;</code> - List of header names to remove.</li>
+<li><code>update</code>: <code>Map&lt;String, String&gt;</code> - Map of header names and values to add or update.</li>
+</ul>
+</li>
+<li><strong><code>requestBody</code></strong>: <code>String</code> - Overwrites the request body buffer with the provided string.</li>
+<li><strong><code>responseBody</code></strong>: <code>String</code> - Immediately returns this string as the response body, bypassing the rest of the chain.
+<ul>
+<li>Also supports <code>statusCode</code> (Integer) and <code>contentType</code> (String) in the result map.</li>
+</ul>
+</li>
+<li><strong><code>validationError</code></strong>: <code>Map</code> - Short-circuits the request with a validation error.
+<ul>
+<li>Requires <code>errorMessage</code> (String), <code>contentType</code> (String), and <code>statusCode</code> (Integer).</li>
+</ul>
+</li>
+</ul>
+<h3 id="example-transformation-logic"><a class="header" href="#example-transformation-logic">Example Transformation Logic</a></h3>
+<p>If a rule decides to update a header and the request path, the result map returned from the rule engine might look like this:</p>
 <pre><code class="language-json">{
-  "environment": {
-    "host": {
-      "ip": "10.0.0.5",
-      "hostname": "service-pod-1",
-      "dns": "localhost"
+  "result": true,
+  "requestPath": "/v2/new-endpoint",
+  "requestHeaders": {
+    "update": {
+      "X-Transformation-Status": "transformed"
     },
-    "runtime": {
-      "availableProcessors": 4,
-      "freeMemory": 12345678,
-      "totalMemory": 23456789,
-      "maxMemory": 1234567890
-    },
-    "system": {
-      "javaVendor": "Oracle Corporation",
-      "javaVersion": "17.0.1",
-      "osName": "Linux",
-      "osVersion": "5.4.0",
-      "userTimezone": "UTC"
-    }
-  },
-  "specification": { ... }, 
-  "component": {
-      "com.networknt.info.ServerInfoConfig": {
-          "enableServerInfo": true,
-          "downstreamEnabled": false,
-          ...
-      },
-      ... other modules ...
+    "remove": ["X-Old-Header"]
   }
 }
 </code></pre>
+<h3 id="operational-visibility"><a class="header" href="#operational-visibility">Operational Visibility</a></h3>
+<p>The <code>request-transformer</code> module automatically registers itself with the <code>ModuleRegistry</code> during configuration loading. You can inspect its current status and configuration parameters at runtime via the <a href="/concern/admin/server-info.html">Server Info</a> endpoint.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/admin-endpoint.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/interceptor.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/interceptor/response-transformer.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -303,11 +302,11 @@ ModuleRegistry.registerModule(
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/admin-endpoint.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/interceptor.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/interceptor/response-transformer.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Server Info - Light-4j Platform</title>
+        <title>Http Server - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,128 +174,109 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="server-info"><a class="header" href="#server-info">Server Info</a></h1>
-<h3 id="introduction"><a class="header" href="#introduction">Introduction</a></h3>
-<p>The <code>ServerInfoGetHandler</code> is a middleware component in the light-4j framework that provides a comprehensive overview of the server’s runtime state. This includes:</p>
-<ul>
-<li><strong>Environment Info:</strong> Host IP, hostname, DNS, and runtime metrics (processors, memory).</li>
-<li><strong>System Properties:</strong> Java version, OS details, timezone.</li>
-<li><strong>Component Configuration:</strong> Configuration details for all registered modules.</li>
-<li><strong>Specification:</strong> The API specification (OpenAPI, etc.) if applicable.</li>
-</ul>
-<p>This handler is crucial for monitoring, debugging, and integration with the light-controller and light-portal for runtime dashboards.</p>
-<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
-<p>The handler is configured via <code>info.yml</code>.</p>
-<pre><code class="language-yaml"># Server info endpoint that can output environment and component along with configuration
-
-# Indicate if the server info is enabled or not.
-enableServerInfo: ${info.enableServerInfo:true}
-
-# String list keys that should not be sorted in the normalized info output.
-keysToNotSort: ${info.keysToNotSort:["admin", "default", "defaultHandlers", "request", "response"]}
-
-# Downstream configuration (for gateways/sidecars)
-# Indicate if the server info needs to invoke downstream APIs.
-downstreamEnabled: ${info.downstreamEnabled:false}
-# Downstream API host.
-downstreamHost: ${info.downstreamHost:http://localhost:8081}
-# Downstream API server info path.
-downstreamPath: ${info.downstreamPath:/adm/server/info}
+                        <h1 id="http-server"><a class="header" href="#http-server">HTTP Server</a></h1>
+<p>The <code>server</code> module is the entry point of the light-4j framework. It wraps the <a href="http://undertow.io/">Undertow</a> core HTTP server and manages its entire lifecycle. This includes initializing configuration loaders, merging status codes, registering the server with the module registry, and orchestrating the request/response handler chain.</p>
+<h2 id="core-responsibilities"><a class="header" href="#core-responsibilities">Core Responsibilities</a></h2>
+<ol>
+<li><strong>Lifecycle Management</strong>: Controls server startup, initialization, and graceful shutdown.</li>
+<li><strong>Configuration Injection</strong>: Orchestrates the loading of configurations from local files or the <a href="https://doc.networknt.com/concerns/config-server/">light-config-server</a>.</li>
+<li><strong>Handler Orchestration</strong>: Wires together the middleware handler chain and the final business logic handler.</li>
+<li><strong>Service Registration</strong>: Automatically registers the service instance with registries like Consul or Zookeeper when enabled.</li>
+<li><strong>Distributed Security</strong>: Integrates with TLS and distributed policy enforcement at the edge.</li>
+</ol>
+<h2 id="server-configuration-serveryml"><a class="header" href="#server-configuration-serveryml">Server Configuration (server.yml)</a></h2>
+<p>The behavior of the server is primarily controlled through <code>server.yml</code>. This configuration is mapped to the <code>ServerConfig</code> class.</p>
+<h3 id="example-serveryml"><a class="header" href="#example-serveryml">Example server.yml</a></h3>
+<pre><code class="language-yaml"># Server configuration
+---
+ip: ${server.ip:0.0.0.0}
+httpPort: ${server.httpPort:8080}
+enableHttp: ${server.enableHttp:false}
+httpsPort: ${server.httpsPort:8443}
+enableHttps: ${server.enableHttps:true}
+enableHttp2: ${server.enableHttp2:true}
+keystoreName: ${server.keystoreName:server.keystore}
+keystorePass: ${server.keystorePass:password}
+keyPass: ${server.keyPass:password}
+enableTwoWayTls: ${server.enableTwoWayTls:false}
+truststoreName: ${server.truststoreName:server.truststore}
+truststorePass: ${server.truststorePass:password}
+serviceId: ${server.serviceId:com.networknt.petstore-1.0.0}
+enableRegistry: ${server.enableRegistry:false}
+dynamicPort: ${server.dynamicPort:false}
+minPort: ${server.minPort:2400}
+maxPort: ${server.maxPort:2500}
+environment: ${server.environment:dev}
+buildNumber: ${server.buildNumber:latest}
+shutdownGracefulPeriod: ${server.shutdownGracefulPeriod:2000}
+bufferSize: ${server.bufferSize:16384}
+ioThreads: ${server.ioThreads:4}
+workerThreads: ${server.workerThreads:200}
+backlog: ${server.backlog:10000}
+alwaysSetDate: ${server.alwaysSetDate:true}
+serverString: ${server.serverString:L}
+allowUnescapedCharactersInUrl: ${server.allowUnescapedCharactersInUrl:false}
+maxTransferFileSize: ${server.maxTransferFileSize:1000000}
+maskConfigProperties: ${server.maskConfigProperties:true}
 </code></pre>
-<p>If <code>enableServerInfo</code> is false, the endpoint will return an error <code>ERR10013 - SERVER_INFO_DISABLED</code>.</p>
-<h3 id="handler-registration"><a class="header" href="#handler-registration">Handler Registration</a></h3>
-<p>Unlike most middleware handlers, <code>ServerInfoGetHandler</code> is typically configured as a normal handler in <code>handler.yml</code> but mapped to a specific path like <code>/server/info</code>.</p>
-<pre><code class="language-yaml">handlers:
-  - com.networknt.info.ServerInfoGetHandler@info
-
-paths:
-  - path: '/server/info'
-    method: 'get'
-    exec:
-      - security
-      - info
-</code></pre>
-<p><strong>Security Note:</strong> The <code>/server/info</code> endpoint exposes sensitive configuration and system details. It <strong>must</strong> be protected by security handlers. In a typical light-4j deployment, this endpoint is secured requiring a special bootstrap token (e.g., from light-controller).</p>
-<h3 id="module-registration"><a class="header" href="#module-registration">Module Registration</a></h3>
-<p>Modules in light-4j can register themselves to be included in the server info output. This allows the info endpoint to display configuration for custom or contributed modules.</p>
-<p>To register a module:</p>
-<pre><code class="language-java">import com.networknt.utility.ModuleRegistry;
-import com.networknt.config.Config;
-
-// Registering a module
-ModuleRegistry.registerModule(
-    MyHandler.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(MyHandler.CONFIG_NAME), 
-    null
-);
-</code></pre>
-<h3 id="masking-sensitive-data"><a class="header" href="#masking-sensitive-data">Masking Sensitive Data</a></h3>
-<p>Configuration files often contain sensitive data (passwords, secrets). When registering a module, you can provide a list of keys to mask in the output.</p>
-<pre><code class="language-java">List&lt;String&gt; masks = new ArrayList&lt;&gt;();
-masks.add("trustPass");
-masks.add("keyPass");
-masks.add("clientSecret");
-
-ModuleRegistry.registerModule(
-    Client.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(clientConfigName), 
-    masks
-);
-</code></pre>
-<h3 id="downstream-info-aggregation"><a class="header" href="#downstream-info-aggregation">Downstream Info Aggregation</a></h3>
-<p>For components like <code>light-gateway</code>, <code>http-sidecar</code>, or <code>light-proxy</code>, the server info endpoint can be configured to aggregate information from a downstream service.</p>
-<ul>
-<li><strong><code>downstreamEnabled</code></strong>: When set to true, the handler will attempt to fetch server info from the configured downstream service.</li>
-<li><strong><code>downstreamHost</code></strong>: The base URL of the downstream service.</li>
-<li><strong><code>downstreamPath</code></strong>: The path to the server info endpoint on the downstream service.</li>
-</ul>
-<p>If the downstream service does not implement the info endpoint, the handler usually fails gracefully or returns its own info depending on the implementation specifics (e.g., in light-proxy scenarios).</p>
-<h3 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h3>
-<p>The output is a JSON object structured as follows:</p>
-<pre><code class="language-json">{
-  "environment": {
-    "host": {
-      "ip": "10.0.0.5",
-      "hostname": "service-pod-1",
-      "dns": "localhost"
-    },
-    "runtime": {
-      "availableProcessors": 4,
-      "freeMemory": 12345678,
-      "totalMemory": 23456789,
-      "maxMemory": 1234567890
-    },
-    "system": {
-      "javaVendor": "Oracle Corporation",
-      "javaVersion": "17.0.1",
-      "osName": "Linux",
-      "osVersion": "5.4.0",
-      "userTimezone": "UTC"
-    }
-  },
-  "specification": { ... }, 
-  "component": {
-      "com.networknt.info.ServerInfoConfig": {
-          "enableServerInfo": true,
-          "downstreamEnabled": false,
-          ...
-      },
-      ... other modules ...
-  }
-}
-</code></pre>
+<h3 id="configuration-parameters"><a class="header" href="#configuration-parameters">Configuration Parameters</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ip</code></td><td>0.0.0.0</td><td>Binding address for the server.</td></tr>
+<tr><td><code>httpPort</code></td><td>8080</td><td>Port for HTTP connections (if enabled).</td></tr>
+<tr><td><code>enableHttp</code></td><td>false</td><td>Flag to enable HTTP. Recommended only for local testing.</td></tr>
+<tr><td><code>httpsPort</code></td><td>8443</td><td>Port for HTTPS connections.</td></tr>
+<tr><td><code>enableHttps</code></td><td>true</td><td>Flag to enable HTTPS.</td></tr>
+<tr><td><code>enableHttp2</code></td><td>true</td><td>Flag to enable HTTP/2 (requires HTTPS).</td></tr>
+<tr><td><code>keystoreName</code></td><td>server.keystore</td><td>Name of the server keystore file.</td></tr>
+<tr><td><code>serviceId</code></td><td></td><td>Unique identifier for the service.</td></tr>
+<tr><td><code>dynamicPort</code></td><td>false</td><td>If true, the server binds to an available port in the [minPort, maxPort] range.</td></tr>
+<tr><td><code>bufferSize</code></td><td>16384</td><td>Undertow buffer size.</td></tr>
+<tr><td><code>ioThreads</code></td><td>(CPU * 2)</td><td>Number of IO threads for the XNIO worker.</td></tr>
+<tr><td><code>workerThreads</code></td><td>200</td><td>Number of worker threads for blocking tasks.</td></tr>
+<tr><td><code>shutdownGracefulPeriod</code></td><td>2000</td><td>Wait period in ms for in-flight requests during shutdown.</td></tr>
+<tr><td><code>maskConfigProperties</code></td><td>true</td><td>If true, sensitive properties are masked in the <code>/server/info</code> response.</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="hooks"><a class="header" href="#hooks">Hooks</a></h2>
+<p>The server provides a plugin mechanism via hooks, allowing developers to execute custom logic during the startup and shutdown phases.</p>
+<h3 id="startup-hooks"><a class="header" href="#startup-hooks">Startup Hooks</a></h3>
+<p>Used for initialization tasks such as setting up database connection pools, warming up caches, or initializing third-party clients.
+Implement <code>com.networknt.server.StartupHookProvider</code> and register via <code>service.yml</code>.</p>
+<h3 id="shutdown-hooks"><a class="header" href="#shutdown-hooks">Shutdown Hooks</a></h3>
+<p>Used for cleanup tasks such as closing connections, releasing resources, or deregistering from a control plane.
+Implement <code>com.networknt.server.ShutdownHookProvider</code> and register via <code>service.yml</code>.</p>
+<h2 id="advanced-features"><a class="header" href="#advanced-features">Advanced Features</a></h2>
+<h3 id="dynamic-configuration-loading"><a class="header" href="#dynamic-configuration-loading">Dynamic Configuration Loading</a></h3>
+<p>Using <code>IConfigLoader</code> (and implementations like <code>DefaultConfigLoader</code>), the server can fetch configurations and secret values from a centralized config server or even a URL on startup.</p>
+<h3 id="performance-tuning"><a class="header" href="#performance-tuning">Performance Tuning</a></h3>
+<p>The server exposes low-level Undertow options like <code>backlog</code>, <code>ioThreads</code>, and <code>workerThreads</code>. The light-4j framework is highly optimized for performance and can handle thousands of concurrent requests with minimal memory footprint.</p>
+<h3 id="graceful-shutdown"><a class="header" href="#graceful-shutdown">Graceful Shutdown</a></h3>
+<p>When a shutdown signal (like SIGTERM) is received, the server:</p>
+<ol>
+<li>Unregisters itself from the service registry.</li>
+<li>Stops accepting new connections.</li>
+<li>Waits for the <code>shutdownGracefulPeriod</code> to allow in-flight requests to complete.</li>
+<li>Executes all registered shutdown hooks.</li>
+</ol>
+<h3 id="server-info-registry"><a class="header" href="#server-info-registry">Server Info Registry</a></h3>
+<p>The server automatically registers itself and its configuration (sensitive values masked) into the <code>ModuleRegistry</code>. This information is typically exposed via the <code>/server/info</code> endpoint if the <code>InfoHandler</code> is in the chain.</p>
+<h2 id="registry-integration"><a class="header" href="#registry-integration">Registry Integration</a></h2>
+<p>When <code>enableRegistry</code> is true, the server uses the <code>serviceId</code>, <code>ip</code>, and the bound port to register its location. If <code>dynamicPort</code> is active, it explores the port range until it finds an available one, then uses that specific port for registration, enabling seamless scaling in container orchestrators.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/admin-endpoint.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/module/rule-loader.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -303,13 +284,10 @@ ModuleRegistry.registerModule(
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/admin-endpoint.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/module/rule-loader.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                    </a>
             </nav>
 
         </div>

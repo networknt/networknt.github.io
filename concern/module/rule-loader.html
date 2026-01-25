@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Server Info - Light-4j Platform</title>
+        <title>Rule Loader - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,126 +174,79 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="server-info"><a class="header" href="#server-info">Server Info</a></h1>
-<h3 id="introduction"><a class="header" href="#introduction">Introduction</a></h3>
-<p>The <code>ServerInfoGetHandler</code> is a middleware component in the light-4j framework that provides a comprehensive overview of the server’s runtime state. This includes:</p>
+                        <h1 id="rule-loader"><a class="header" href="#rule-loader">Rule Loader</a></h1>
+<p>The <code>rule-loader</code> is a vital infrastructure module in <code>light-4j</code> that enables services to dynamically load and manage business logic rules during startup. It serves as the bridge between the <a href="/library/yaml-rule/">YAML Rule Engine</a> and the specific service endpoints, allowing for flexible, rule-based request and response processing.</p>
+<h3 id="overview"><a class="header" href="#overview">Overview</a></h3>
+<p>Rules in the <code>light-4j</code> ecosystem are often shared across multiple lines of business or organizations. By centralizing these rules in the <code>light-portal</code>, applications can subscribe to them and have them automatically fetched and instantiated at runtime.</p>
+<h3 id="features"><a class="header" href="#features">Features</a></h3>
 <ul>
-<li><strong>Environment Info:</strong> Host IP, hostname, DNS, and runtime metrics (processors, memory).</li>
-<li><strong>System Properties:</strong> Java version, OS details, timezone.</li>
-<li><strong>Component Configuration:</strong> Configuration details for all registered modules.</li>
-<li><strong>Specification:</strong> The API specification (OpenAPI, etc.) if applicable.</li>
+<li><strong>Dual Rule Sources</strong>: Fetch rules from the <code>light-portal</code> for production environments or load them from a local <code>rules.yml</code> file for offline testing.</li>
+<li><strong>Startup Integration</strong>: Uses a standard <code>StartupHookProvider</code> to ensuring all rules are ready before the server starts accepting traffic.</li>
+<li><strong>Endpoint-to-Rule Mapping</strong>: Flexible mapping of endpoints to specific rule sets (e.g., access control, request transformation, response filtering).</li>
+<li><strong>Service Dependency Enrichment</strong>: Automatically fetches service-specific permissions and enriches rule contexts.</li>
+<li><strong>Dynamic Action Loading</strong>: Automatically discovery and instantiates action classes defined within the rules to prevent runtime errors.</li>
+<li><strong>Auto-Registration</strong>: Automatically registers with <code>ModuleRegistry</code> for runtime configuration inspection.</li>
 </ul>
-<p>This handler is crucial for monitoring, debugging, and integration with the light-controller and light-portal for runtime dashboards.</p>
-<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
-<p>The handler is configured via <code>info.yml</code>.</p>
-<pre><code class="language-yaml"># Server info endpoint that can output environment and component along with configuration
+<h3 id="configuration-rule-loaderyml"><a class="header" href="#configuration-rule-loaderyml">Configuration (rule-loader.yml)</a></h3>
+<p>The <code>rule-loader.yml</code> file defines how and where the rules are fetched.</p>
+<pre><code class="language-yaml"># Rule Loader Configuration
+---
+# A flag to enable the rule loader. Default is true.
+enabled: ${rule-loader.enabled:true}
 
-# Indicate if the server info is enabled or not.
-enableServerInfo: ${info.enableServerInfo:true}
+# Source of the rules: 'light-portal' or 'config-folder'.
+# 'light-portal' fetches from a remote server.
+# 'config-folder' expects a rules.yml file in the externalized config directory.
+ruleSource: ${rule-loader.ruleSource:light-portal}
 
-# String list keys that should not be sorted in the normalized info output.
-keysToNotSort: ${info.keysToNotSort:["admin", "default", "defaultHandlers", "request", "response"]}
+# The portal host URL (used when ruleSource is light-portal).
+portalHost: ${rule-loader.portalHost:https://localhost}
 
-# Downstream configuration (for gateways/sidecars)
-# Indicate if the server info needs to invoke downstream APIs.
-downstreamEnabled: ${info.downstreamEnabled:false}
-# Downstream API host.
-downstreamHost: ${info.downstreamHost:http://localhost:8081}
-# Downstream API server info path.
-downstreamPath: ${info.downstreamPath:/adm/server/info}
+# The authorization token for connecting to the light-portal.
+portalHost: ${rule-loader.portalToken:}
+
+# Endpoint to rules mapping (used when ruleSource is config-folder).
+# endpointRules:
+#   /v1/pets@get:
+#     res-tra:
+#       - ruleId: transform-pet-response
+#   /v1/orders@post:
+#     access-control:
+#       - ruleId: check-order-permission
 </code></pre>
-<p>If <code>enableServerInfo</code> is false, the endpoint will return an error <code>ERR10013 - SERVER_INFO_DISABLED</code>.</p>
-<h3 id="handler-registration"><a class="header" href="#handler-registration">Handler Registration</a></h3>
-<p>Unlike most middleware handlers, <code>ServerInfoGetHandler</code> is typically configured as a normal handler in <code>handler.yml</code> but mapped to a specific path like <code>/server/info</code>.</p>
-<pre><code class="language-yaml">handlers:
-  - com.networknt.info.ServerInfoGetHandler@info
-
-paths:
-  - path: '/server/info'
-    method: 'get'
-    exec:
-      - security
-      - info
+<h3 id="rule-sources"><a class="header" href="#rule-sources">Rule Sources</a></h3>
+<h4 id="1-light-portal-light-portal"><a class="header" href="#1-light-portal-light-portal">1. Light Portal (<code>light-portal</code>)</a></h4>
+<p>In this mode, the loader interacts with the portal API to fetch the latest rules authorized for the service based on the <code>hostId</code>, <code>apiId</code>, and <code>apiVersion</code> defined in <code>values.yml</code> or <code>server.yml</code>. The fetched rules are cached locally in the target configuration directory as <code>rules.yml</code> for resilience.</p>
+<h4 id="2-config-folder-config-folder"><a class="header" href="#2-config-folder-config-folder">2. Config Folder (<code>config-folder</code>)</a></h4>
+<p>This mode is ideal for local development or air-gapped environments. The loader looks for a <code>rules.yml</code> file in the configuration directory and uses the <code>endpointRules</code> map defined in <code>rule-loader.yml</code> to link endpoints to rule IDs.</p>
+<h3 id="setup"><a class="header" href="#setup">Setup</a></h3>
+<h4 id="1-add-dependency"><a class="header" href="#1-add-dependency">1. Add Dependency</a></h4>
+<p>Include the <code>rule-loader</code> in your <code>pom.xml</code>:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;rule-loader&lt;/artifactId&gt;
+    &lt;version&gt;${version.light-4j}&lt;/version&gt;
+&lt;/dependency&gt;
 </code></pre>
-<p><strong>Security Note:</strong> The <code>/server/info</code> endpoint exposes sensitive configuration and system details. It <strong>must</strong> be protected by security handlers. In a typical light-4j deployment, this endpoint is secured requiring a special bootstrap token (e.g., from light-controller).</p>
-<h3 id="module-registration"><a class="header" href="#module-registration">Module Registration</a></h3>
-<p>Modules in light-4j can register themselves to be included in the server info output. This allows the info endpoint to display configuration for custom or contributed modules.</p>
-<p>To register a module:</p>
-<pre><code class="language-java">import com.networknt.utility.ModuleRegistry;
-import com.networknt.config.Config;
-
-// Registering a module
-ModuleRegistry.registerModule(
-    MyHandler.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(MyHandler.CONFIG_NAME), 
-    null
-);
+<h4 id="2-configure-startup-hook"><a class="header" href="#2-configure-startup-hook">2. Configure Startup Hook</a></h4>
+<p>The <code>RuleLoaderStartupHook</code> must be registered in your <code>service.yml</code> or <code>handler.yml</code> under the startup hooks section.</p>
+<pre><code class="language-yaml">- com.networknt.server.StartupHookProvider:
+  - com.networknt.rule.RuleLoaderStartupHook
 </code></pre>
-<h3 id="masking-sensitive-data"><a class="header" href="#masking-sensitive-data">Masking Sensitive Data</a></h3>
-<p>Configuration files often contain sensitive data (passwords, secrets). When registering a module, you can provide a list of keys to mask in the output.</p>
-<pre><code class="language-java">List&lt;String&gt; masks = new ArrayList&lt;&gt;();
-masks.add("trustPass");
-masks.add("keyPass");
-masks.add("clientSecret");
-
-ModuleRegistry.registerModule(
-    Client.class.getName(), 
-    Config.getInstance().getJsonMapConfigNoCache(clientConfigName), 
-    masks
-);
-</code></pre>
-<h3 id="downstream-info-aggregation"><a class="header" href="#downstream-info-aggregation">Downstream Info Aggregation</a></h3>
-<p>For components like <code>light-gateway</code>, <code>http-sidecar</code>, or <code>light-proxy</code>, the server info endpoint can be configured to aggregate information from a downstream service.</p>
-<ul>
-<li><strong><code>downstreamEnabled</code></strong>: When set to true, the handler will attempt to fetch server info from the configured downstream service.</li>
-<li><strong><code>downstreamHost</code></strong>: The base URL of the downstream service.</li>
-<li><strong><code>downstreamPath</code></strong>: The path to the server info endpoint on the downstream service.</li>
-</ul>
-<p>If the downstream service does not implement the info endpoint, the handler usually fails gracefully or returns its own info depending on the implementation specifics (e.g., in light-proxy scenarios).</p>
-<h3 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h3>
-<p>The output is a JSON object structured as follows:</p>
-<pre><code class="language-json">{
-  "environment": {
-    "host": {
-      "ip": "10.0.0.5",
-      "hostname": "service-pod-1",
-      "dns": "localhost"
-    },
-    "runtime": {
-      "availableProcessors": 4,
-      "freeMemory": 12345678,
-      "totalMemory": 23456789,
-      "maxMemory": 1234567890
-    },
-    "system": {
-      "javaVendor": "Oracle Corporation",
-      "javaVersion": "17.0.1",
-      "osName": "Linux",
-      "osVersion": "5.4.0",
-      "userTimezone": "UTC"
-    }
-  },
-  "specification": { ... }, 
-  "component": {
-      "com.networknt.info.ServerInfoConfig": {
-          "enableServerInfo": true,
-          "downstreamEnabled": false,
-          ...
-      },
-      ... other modules ...
-  }
-}
-</code></pre>
+<h3 id="operational-visibility"><a class="header" href="#operational-visibility">Operational Visibility</a></h3>
+<p>The <code>rule-loader</code> module utilizes the Singleton pattern for its configuration and automatically registers itself with the <code>ModuleRegistry</code>. You can inspect the current <code>ruleSource</code>, <code>portalHost</code>, and active <code>endpointRules</code> mappings at runtime via the <a href="/concern/admin/server-info.html">Server Info</a> endpoint.</p>
+<h3 id="action-class-discovery"><a class="header" href="#action-class-discovery">Action Class discovery</a></h3>
+<p>During the initialization phase, the loader iterates through all actions defined in the loaded rules and attempts to instantiate their associated Java classes. This proactive step ensures that all required JAR files are present on the classpath and that the classes are correctly configured before the first request arrives.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/admin-endpoint.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/module/direct-registry.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/module/http-server.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -303,11 +256,11 @@ ModuleRegistry.registerModule(
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/admin-endpoint.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/module/direct-registry.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/admin/logger-handler.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/module/http-server.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
