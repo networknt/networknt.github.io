@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-eacccf98.js";
+            window.path_to_searchindex_js = "searchindex-9a63e2e6.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1d7043e1.js"></script>
+        <script src="toc-d01916f9.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -2517,6 +2517,952 @@ Implement <code>com.networknt.server.ShutdownHookProvider</code> and register vi
 <p>The server automatically registers itself and its configuration (sensitive values masked) into the <code>ModuleRegistry</code>. This information is typically exposed via the <code>/server/info</code> endpoint if the <code>InfoHandler</code> is in the chain.</p>
 <h2 id="registry-integration"><a class="header" href="#registry-integration">Registry Integration</a></h2>
 <p>When <code>enableRegistry</code> is true, the server uses the <code>serviceId</code>, <code>ip</code>, and the bound port to register its location. If <code>dynamicPort</code> is active, it explores the port range until it finds an available one, then uses that specific port for registration, enabling seamless scaling in container orchestrators.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-rest-4j"><a class="header" href="#light-rest-4j">Light-rest-4j</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="access-control"><a class="header" href="#access-control">Access Control</a></h1>
+<p>The <code>AccessControlHandler</code> is a business middleware handler designed for the <code>light-rest-4j</code> framework. It provides fine-grained, rule-based authorization at the endpoint level, allowing developers to define complex access policies that go beyond simple scope-based security.</p>
+<h2 id="overview-2"><a class="header" href="#overview-2">Overview</a></h2>
+<p>Unlike standard security handlers that verify tokens and scopes, the Access Control handler interacts with the <strong>Rule Engine</strong> to evaluate business-specific logic. It typically runs late in the middleware chain, after technical concerns like security and validation are handled, and right before the request reaches the business logic or proxy.</p>
+<h3 id="key-features-1"><a class="header" href="#key-features-1">Key Features</a></h3>
+<ul>
+<li><strong>Rule-Based Evaluation</strong>: Leverage the Power of the YAML-based Rule Engine.</li>
+<li><strong>Dynamic Configuration</strong>: Supports hot-reloading of both configuration and rules.</li>
+<li><strong>Flexible Logic</strong>: Choose between <code>any</code> or <code>all</code> logic when multiple rules are applied to an endpoint.</li>
+<li><strong>Path Skipping</strong>: Easily bypass checks for specific path prefixes.</li>
+</ul>
+<h2 id="configuration-access-controlyml"><a class="header" href="#configuration-access-controlyml">Configuration (access-control.yml)</a></h2>
+<p>The handler is configured via <code>access-control.yml</code>, which is mapped to the <code>AccessControlConfig</code> class.</p>
+<pre><code class="language-yaml"># Access Control Handler Configuration
+---
+# Enable or disable the handler
+enabled: ${access-control.enabled:true}
+
+# If there are multiple rules for an endpoint, how to combine them.
+# any: access is granted if any rule passes.
+# all: access is granted only if all rules pass.
+accessRuleLogic: ${access-control.accessRuleLogic:any}
+
+# If no rules are defined for an endpoint, should access be denied?
+defaultDeny: ${access-control.defaultDeny:true}
+
+# List of path prefixes to skip access control checks.
+skipPathPrefixes:
+  - /health
+  - /server/info
+</code></pre>
+<h3 id="configuration-parameters-2"><a class="header" href="#configuration-parameters-2">Configuration Parameters</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>enabled</code></td><td><code>true</code></td><td>Globally enables or disables the handler.</td></tr>
+<tr><td><code>accessRuleLogic</code></td><td><code>any</code></td><td>Determines evaluation logic for multiple rules (<code>any</code> | <code>all</code>).</td></tr>
+<tr><td><code>defaultDeny</code></td><td><code>true</code></td><td>If <code>true</code>, endpoints without defined rules will return an error.</td></tr>
+<tr><td><code>skipPathPrefixes</code></td><td><code>[]</code></td><td>Requests to these paths skip authorization checks entirely.</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="how-it-works-2"><a class="header" href="#how-it-works-2">How it Works</a></h2>
+<h3 id="1-rule-loading"><a class="header" href="#1-rule-loading">1. Rule Loading</a></h3>
+<p>Rules are loaded during server startup via the <code>RuleLoaderStartupHook</code>. This hook caches the rules in memory for high-performance evaluation.</p>
+<h3 id="2-request-context"><a class="header" href="#2-request-context">2. Request Context</a></h3>
+<p>When a request arrives, the handler extracts context to build a <strong>Rule Engine Payload</strong>:</p>
+<ul>
+<li><strong>Audit Info</strong>: User information, client ID, and the resolved OpenApi endpoint.</li>
+<li><strong>Request Headers</strong>: Full map of HTTP headers.</li>
+<li><strong>Parameters</strong>: Combined query and path parameters.</li>
+<li><strong>Request Body</strong>: If a body handler is present and the method is POST/PUT/PATCH.</li>
+</ul>
+<h3 id="3-evaluation"><a class="header" href="#3-evaluation">3. Evaluation</a></h3>
+<p>The handler looks up the rules associated with the current OpenApi endpoint.</p>
+<ul>
+<li>If rules exist, it iterates through them using the configured <code>accessRuleLogic</code>.</li>
+<li>Rules are executed by the <code>RuleEngine</code>, which returns a <code>result</code> (true/false) and optional error details.</li>
+</ul>
+<h3 id="4-enforcement"><a class="header" href="#4-enforcement">4. Enforcement</a></h3>
+<ul>
+<li>If the result is <strong>Success</strong>, the request proceeds to the next handler.</li>
+<li>If the result is <strong>Failure</strong>, the handler sets an error status (default <code>ERR10067</code>) and stops the chain.</li>
+</ul>
+<h2 id="hot-reload"><a class="header" href="#hot-reload">Hot Reload</a></h2>
+<p>The implementation supports hot-reloading through the standardized <code>AccessControlConfig.reload()</code> mechanism.</p>
+<ul>
+<li>When a configuration change is detected at runtime, the singleton <code>AccessControlConfig</code> instance is updated.</li>
+<li>The <code>AccessControlHandler</code> loads the latest configuration at the start of every request, ensuring zero-downtime updates to authorization policies.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="openapi-meta"><a class="header" href="#openapi-meta">OpenAPI Meta</a></h1>
+<p>The <code>OpenApiHandler</code> is a core middleware handler in the <code>light-rest-4j</code> framework. It is responsible for parsing the OpenAPI specification, matching the incoming request to a specific operation defined in the spec, and attaching that metadata to the request context.</p>
+<h2 id="overview-3"><a class="header" href="#overview-3">Overview</a></h2>
+<p>The <code>OpenApiHandler</code> acts as the “brain” for RESTful services. By identifying the exact endpoint and operation (e.g., <code>GET /pets/{petId}</code>) at the start of the request chain, it enables subsequent handlers—such as Security, Validator, and Metrics—to perform their tasks efficiently without re-parsing the request or the specification.</p>
+<h3 id="key-features-2"><a class="header" href="#key-features-2">Key Features</a></h3>
+<ul>
+<li><strong>Operation Identification</strong>: Matches URI and HTTP method to OpenAPI operations.</li>
+<li><strong>Support for Multiple Specs</strong>: Can host multiple OpenAPI specifications in a single instance using path-based routing.</li>
+<li><strong>Parameter Deserialization</strong>: Correctly parses query, path, header, and cookie parameters according to the OpenAPI 3.0 styles.</li>
+<li><strong>Specification Injection</strong>: Supports merging a common “inject” specification (e.g., for administrative endpoints) into the main spec.</li>
+<li><strong>Hot Reload</strong>: Automatically detects and applies changes to its configuration without downtime.</li>
+</ul>
+<h2 id="configuration-openapi-handleryml"><a class="header" href="#configuration-openapi-handleryml">Configuration (openapi-handler.yml)</a></h2>
+<p>The handler’s behavior is governed by the <code>openapi-handler.yml</code> file, which maps to <code>OpenApiHandlerConfig</code>.</p>
+<pre><code class="language-yaml"># OpenAPI Handler Configuration
+---
+# An indicator to allow multiple openapi specifications.
+# Default to false which only allow one spec named openapi.yml/yaml/json.
+multipleSpec: ${openapi-handler.multipleSpec:false}
+
+# To allow the call to pass through the handler even if the path is not found in the spec.
+# Useful for gateways where some APIs might not have specs deployed.
+ignoreInvalidPath: ${openapi-handler.ignoreInvalidPath:false}
+
+# Path to spec mapping. Required if multipleSpec is true.
+# The key is the base path and the value is the specification name.
+pathSpecMapping:
+  v1: openapi-v1
+  v2: openapi-v2
+</code></pre>
+<h3 id="configuration-parameters-3"><a class="header" href="#configuration-parameters-3">Configuration Parameters</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>multipleSpec</code></td><td><code>false</code></td><td>When <code>true</code>, the handler uses <code>pathSpecMapping</code> to support multiple APIs.</td></tr>
+<tr><td><code>ignoreInvalidPath</code></td><td><code>false</code></td><td>If <code>true</code>, requests with no matching path in the spec proceed to the next handler instead of returning an error.</td></tr>
+<tr><td><code>pathSpecMapping</code></td><td><code>{}</code></td><td>A map where keys are URI base paths and values are the names of the corresponding spec files.</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="how-it-works-3"><a class="header" href="#how-it-works-3">How it Works</a></h2>
+<h3 id="1-specification-loading"><a class="header" href="#1-specification-loading">1. Specification Loading</a></h3>
+<p>At startup, the handler loads the specification(s). If <code>multipleSpec</code> is disabled, it looks for <code>openapi.yml</code>. If enabled, it loads all specs defined in <code>pathSpecMapping</code>. It also checks for <code>openapi-inject.yml</code> to merge common definitions.</p>
+<h3 id="2-request-matching"><a class="header" href="#2-request-matching">2. Request Matching</a></h3>
+<p>For every incoming request, the handler:</p>
+<ol>
+<li>Normalizes the request path.</li>
+<li>If <code>multipleSpec</code> is on, it determines which specification to use based on the path prefix.</li>
+<li>Finds the matching template in the OpenAPI paths (e.g., matching <code>/pets/123</code> to <code>/pets/{petId}</code>).</li>
+<li>Resolves the HTTP method to the specific <code>Operation</code> object.</li>
+</ol>
+<h3 id="3-parameter-deserialization"><a class="header" href="#3-parameter-deserialization">3. Parameter Deserialization</a></h3>
+<p>The handler uses the <code>ParameterDeserializer</code> to extract values from the request according to the styles defined in the OpenAPI spec (e.g., <code>matrix</code>, <code>label</code>, <code>form</code>). These deserialized values are attached to the exchange using specific attachment keys.</p>
+<h3 id="4-audit-info-integration"><a class="header" href="#4-audit-info-integration">4. Audit Info Integration</a></h3>
+<p>The handler attaches the following to the <code>auditInfo</code> object:</p>
+<ul>
+<li><code>endpoint</code>: The resolved endpoint string (e.g., <code>/pets/{petId}@get</code>).</li>
+<li><code>openapi_operation</code>: The full <code>OpenApiOperation</code> object, containing the path, method, and operation metadata.</li>
+</ul>
+<h2 id="hot-reload-1"><a class="header" href="#hot-reload-1">Hot Reload</a></h2>
+<p>The <code>OpenApiHandler</code> supports hot-reloading through a thread-safe check in its <code>handleRequest</code> method.</p>
+<ul>
+<li>It leverages <code>OpenApiHandlerConfig.load()</code> which returns a cached singleton.</li>
+<li>If the configuration is updated (e.g., via a config server or manual trigger), the handler detects the change, re-initializes its internal <code>OpenApiHelper</code> state, and builds the new mapping logic immediately.</li>
+</ul>
+<h2 id="performance-optimization"><a class="header" href="#performance-optimization">Performance Optimization</a></h2>
+<p>For the most common use case (99%) where a service has only one specification, the handler bypasses the mapping logic and uses a high-performance direct reference to the <code>OpenApiHelper</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="openapi-security-1"><a href="#openapi-security-1" class="header">OpenAPI Security</a></h1>
+<hr>
+<h2 id="description-openapi-security-module"><a class="header" href="#description-openapi-security-module">description: OpenAPI Security Module</a></h2>
+<h1 id="openapi-security"><a class="header" href="#openapi-security">OpenAPI Security</a></h1>
+<p>The <code>openapi-security</code> module is a fundamental component of the <code>light-rest-4j</code> framework, specifically designed to protect RESTful APIs defined with OpenAPI Specification 3.0. It provides several middleware handlers that integrate with the framework’s security infrastructure to ensure that only authorized requests reach your business logic.</p>
+<h2 id="overview-4"><a class="header" href="#overview-4">Overview</a></h2>
+<p>Modern web services often require robust security mechanisms such as OAuth 2.0. The <code>openapi-security</code> module simplifies the implementation of these standards by providing out-of-the-box handlers for token verification and authorization based on the OpenAPI specification.</p>
+<h2 id="core-handlers"><a class="header" href="#core-handlers">Core Handlers</a></h2>
+<h3 id="jwtverifyhandler"><a class="header" href="#jwtverifyhandler">JwtVerifyHandler</a></h3>
+<p>The <code>JwtVerifyHandler</code> is the most commonly used handler in this module. It performs the following tasks:</p>
+<ul>
+<li><strong>Token Verification</strong>: Validates the signature and expiration of the OAuth 2.0 JWT access token.</li>
+<li><strong>Scope Authorization</strong>: Automatically checks the <code>scope</code> or <code>scp</code> claim in the JWT against the required scopes defined for each operation in the OpenAPI specification.</li>
+<li><strong>Integration</strong>: Works seamlessly with <code>openapi-meta</code> to identify the current operation and its security requirements.</li>
+</ul>
+<h3 id="simplejwtverifyhandler"><a class="header" href="#simplejwtverifyhandler">SimpleJwtVerifyHandler</a></h3>
+<p>The <code>SimpleJwtVerifyHandler</code> is a lightweight alternative to the standard <code>JwtVerifyHandler</code>. It is used when scope validation is not required. It still verifies the JWT signature and expiration but skips the complex authorization checks against the OpenAPI spec.</p>
+<h3 id="swtverifyhandler"><a class="header" href="#swtverifyhandler">SwtVerifyHandler</a></h3>
+<p>The <code>SwtVerifyHandler</code> is designed for Simple Web Tokens (SWT). Unlike JWTs, which are self-contained, SWTs often require token introspection against an OAuth 2.0 provider. This handler manages the introspection process and validates the token’s validity and associated scopes.</p>
+<h2 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h2>
+<p>The security handlers are primarily configured via <code>security.yml</code>. Key configuration options include:</p>
+<ul>
+<li><strong>enableVerifyJwt</strong>: Toggle for JWT verification.</li>
+<li><strong>enableVerifyScope</strong>: Toggle for scope-based authorization.</li>
+<li><strong>jwt</strong>: Configuration for JWT verification (JWK URLs, certificates, etc.).</li>
+<li><strong>swt</strong>: Configuration for SWT introspection.</li>
+<li><strong>skipPathPrefixes</strong>: A list of path prefixes that should bypass security checks (e.g., <code>/health</code>, <code>/info</code>).</li>
+<li><strong>passThroughClaims</strong>: Enables passing specific claims from the token into request headers for downstream use.</li>
+</ul>
+<h2 id="unified-security-1"><a class="header" href="#unified-security-1">Unified Security</a></h2>
+<p>For complex scenarios where multiple security methods (Bearer, Basic, ApiKey) need to be supported simultaneously within a single gateway or service, the <code>UnifiedSecurityHandler</code> (from the <code>unified-security</code> module) can be used to coordinate these different handlers based on the request path and headers.</p>
+<h2 id="hot-reload-support"><a class="header" href="#hot-reload-support">Hot Reload Support</a></h2>
+<p>All handlers in the <code>openapi-security</code> module support hot-reloading of their configurations. If the <code>security.yml</code> or related configuration files are updated on the file system, the handlers will automatically detect the changes and re-initialize their verifiers without requiring a server restart.</p>
+<h2 id="integration-with-openapi-meta"><a class="header" href="#integration-with-openapi-meta">Integration with OpenAPI Meta</a></h2>
+<p>The <code>openapi-security</code> handlers depend on the <code>OpenApiHandler</code> (from the <code>openapi-meta</code> module) being placed earlier in the request chain. The <code>OpenApiHandler</code> identifies the matching operation in the specification and attaches it to the request, which the security handlers then use for validation.</p>
+<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
+<ol>
+<li><strong>Enable Scope Verification</strong>: Always define required scopes in your OpenAPI specification and ensure <code>enableVerifyScope</code> is set to <code>true</code>.</li>
+<li><strong>Use Skip Paths Sparingly</strong>: Only skip security for public-facing informational endpoints.</li>
+<li><strong>Secure Configuration</strong>: Use the encrypted configuration feature of <code>light-4j</code> to protect sensitive information like client secrets or certificate passwords.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="openapi-validator-1"><a href="#openapi-validator-1" class="header">OpenAPI Validator</a></h1>
+<hr>
+<h2 id="description-openapi-validator-module"><a class="header" href="#description-openapi-validator-module">description: OpenAPI Validator Module</a></h2>
+<h1 id="openapi-validator"><a class="header" href="#openapi-validator">OpenAPI Validator</a></h1>
+<p>The <code>openapi-validator</code> module provides comprehensive request and response validation against an OpenAPI Specification 3.0. It ensures that incoming requests and outgoing responses adhere to the schemas, parameters, and constraints defined in your API specification.</p>
+<h2 id="overview-5"><a class="header" href="#overview-5">Overview</a></h2>
+<p>In a contract-first development approach, the OpenAPI specification serves as the “source of truth.” The <code>openapi-validator</code> middleware automates the enforcement of this contract, reducing the need for manual validation logic in your business handlers and improving API reliability.</p>
+<h2 id="core-components-1"><a class="header" href="#core-components-1">Core Components</a></h2>
+<h3 id="validatorhandler"><a class="header" href="#validatorhandler">ValidatorHandler</a></h3>
+<p>The main middleware entry point. It identifies whether validation is required for the current request and coordinates the <code>RequestValidator</code> and <code>ResponseValidator</code>.</p>
+<h3 id="requestvalidator"><a class="header" href="#requestvalidator">RequestValidator</a></h3>
+<p>Validates all aspects of an incoming HTTP request:</p>
+<ul>
+<li><strong>Path Parameters</strong>: Checks if path variables match the spec.</li>
+<li><strong>Query Parameters</strong>: Validates presence, type, and constraints of query strings.</li>
+<li><strong>Header Parameters</strong>: Validates required headers and their values.</li>
+<li><strong>Cookie Parameters</strong>: Validates cookie values if defined.</li>
+<li><strong>Request Body</strong>: Validates the JSON payload against the operation’s requestBody schema.</li>
+</ul>
+<h3 id="responsevalidator"><a class="header" href="#responsevalidator">ResponseValidator</a></h3>
+<p>Validates the outgoing response from the server. This is typically disabled in production for performance reasons but is invaluable during development and testing to ensure the server respects its own contract.</p>
+<h3 id="schemavalidator"><a class="header" href="#schemavalidator">SchemaValidator</a></h3>
+<p>The underlying engine (built on <code>networknt/json-schema-validator</code>) that performs the actual JSON Schema validation for bodies and complex parameters.</p>
+<h2 id="configuration-6"><a class="header" href="#configuration-6">Configuration</a></h2>
+<p>The module is configured via <code>openapi-validator.yml</code>.</p>
+<h3 id="key-properties"><a class="header" href="#key-properties">Key Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Property</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>enabled</code></td><td><code>true</code></td><td>Globally enables or disables the validator.</td></tr>
+<tr><td><code>logError</code></td><td><code>true</code></td><td>If true, validation errors are logged to the console/file.</td></tr>
+<tr><td><code>legacyPathType</code></td><td><code>false</code></td><td>If true, uses the legacy dot-separated path format in error messages instead of JSON Pointers.</td></tr>
+<tr><td><code>skipBodyValidation</code></td><td><code>false</code></td><td>Useful for gateways or proxies that want to validate headers/parameters but pass the body through without parsing.</td></tr>
+<tr><td><code>validateResponse</code></td><td><code>false</code></td><td>Enables validation of outgoing responses.</td></tr>
+<tr><td><code>handleNullableField</code></td><td><code>true</code></td><td>If true, treats fields explicitly marked as <code>nullable: true</code> in the spec correctly.</td></tr>
+<tr><td><code>skipPathPrefixes</code></td><td><code>[]</code></td><td>A list of path prefixes to skip validation for (e.g., <code>/health</code>, <code>/info</code>).</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="features-8"><a class="header" href="#features-8">Features</a></h2>
+<h3 id="hot-reload-support-1"><a class="header" href="#hot-reload-support-1">Hot Reload Support</a></h3>
+<p>The validator supports hot-reloading. If the <code>openapi-validator.yml</code> or the underlying <code>openapi.yml</code> specification is updated on the filesystem, the handler will automatically detect the change and re-initialize the internal validators without a server restart.</p>
+<h3 id="multiple-specification-support"><a class="header" href="#multiple-specification-support">Multiple Specification Support</a></h3>
+<p>For gateway use cases where a single server might handle multiple APIs, the validator can maintain separate validation contexts for different path prefixes, each associated with its own OpenAPI specification.</p>
+<h3 id="integration-with-bodyhandler"><a class="header" href="#integration-with-bodyhandler">Integration with BodyHandler</a></h3>
+<p>The <code>RequestValidator</code> automatically retrieves the parsed body from the <code>BodyHandler</code>. To validate the request body, ensure that <code>BodyHandler</code> is placed before <code>ValidatorHandler</code> in your handler chain.</p>
+<h2 id="error-handling-1"><a class="header" href="#error-handling-1">Error Handling</a></h2>
+<p>When validation fails, the handler returns a standardized error response with a <code>400 Bad Request</code> status (for requests) or logs an error (for responses). The error body follows the standard <code>light-4j</code> status format, including a unique error code and a descriptive message pointing to the specific field that failed validation.</p>
+<h2 id="best-practices-2"><a class="header" href="#best-practices-2">Best Practices</a></h2>
+<ol>
+<li><strong>Development vs. Production</strong>: Always enable <code>validateResponse</code> during development and CI/CD testing, but consider disabling it in production for high-throughput services.</li>
+<li><strong>Contract-First</strong>: Keep your <code>openapi.yml</code> accurate. The validator is only as good as the specification it follows.</li>
+<li><strong>Gateway Optimization</strong>: Use <code>skipBodyValidation: true</code> in gateways if the backend service is also performing validation, to save on CPU cycles spent parsing large JSON payloads twice.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="specification"><a href="#specification" class="header">Specification</a></h1>
+<hr>
+<h2 id="description-specification-module"><a class="header" href="#description-specification-module">description: Specification Module</a></h2>
+<h1 id="specification-module"><a class="header" href="#specification-module">Specification Module</a></h1>
+<p>The <code>specification</code> module in <code>light-rest-4j</code> provides a set of handlers to serve and display the API specification (Swagger/OpenAPI) of the service. This is particularly useful for exposing documentation endpoints directly from the running service.</p>
+<h2 id="overview-6"><a class="header" href="#overview-6">Overview</a></h2>
+<p>Exposing the API contract via the service itself ensures that the documentation is always in sync with the deployed version. The <code>specification</code> module provides handlers for:</p>
+<ul>
+<li>Serving the raw specification file (e.g., <code>openapi.yaml</code>).</li>
+<li>Rendering a Swagger UI instance to interact with the API.</li>
+<li>Serving a favicon for the UI.</li>
+</ul>
+<h2 id="components"><a class="header" href="#components">Components</a></h2>
+<h3 id="specdisplayhandler"><a class="header" href="#specdisplayhandler">SpecDisplayHandler</a></h3>
+<p>Serves the raw content of the specification file. It supports different content types (defaulting to <code>text/yaml</code>) and loads the file directly from the filesystem or configuration folder.</p>
+<h3 id="specswaggeruihandler"><a class="header" href="#specswaggeruihandler">SpecSwaggerUIHandler</a></h3>
+<p>Renders a simple HTML page that embeds Swagger UI (via CDN). It is pre-configured to point to the <code>/spec.yaml</code> endpoint (served by <code>SpecDisplayHandler</code>) to load the API definition.</p>
+<h3 id="faviconhandler"><a class="header" href="#faviconhandler">FaviconHandler</a></h3>
+<p>A utility handler that serves a <code>favicon.ico</code> file, commonly requested by browsers when accessing the Swagger UI.</p>
+<h2 id="configuration-7"><a class="header" href="#configuration-7">Configuration</a></h2>
+<p>The module is configured via <code>specification.yml</code>.</p>
+<h3 id="properties"><a class="header" href="#properties">Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Property</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>fileName</code></td><td><code>openapi.yaml</code></td><td>The path and name of the specification file to be served.</td></tr>
+<tr><td><code>contentType</code></td><td><code>text/yaml</code></td><td>The MIME type to be used when serving the specification file.</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="features-9"><a class="header" href="#features-9">Features</a></h2>
+<h3 id="hot-reload-support-2"><a class="header" href="#hot-reload-support-2">Hot Reload support</a></h3>
+<p>The <code>specification</code> module fully supports standardized hot-reloading. If the <code>specification.yml</code> is updated, the handlers will automatically refresh their internal configuration without requiring a server restart.</p>
+<h3 id="integration-with-moduleregistry"><a class="header" href="#integration-with-moduleregistry">Integration with ModuleRegistry</a></h3>
+<p>All handlers in this module register themselves with the <code>ModuleRegistry</code> on startup. This allows administrators to verify the loaded configuration via the <code>/server/info</code> endpoint.</p>
+<h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
+<p>To use these handlers, you need to register them in your <code>handler.yml</code>.</p>
+<h3 id="example-handleryml-registration"><a class="header" href="#example-handleryml-registration">Example <code>handler.yml</code> registration:</a></h3>
+<pre><code class="language-yaml">handlers:
+  - com.networknt.specification.SpecDisplayHandler@spec
+  - com.networknt.specification.SpecSwaggerUIHandler@swagger
+  - com.networknt.specification.FaviconHandler@favicon
+
+paths:
+  - path: '/spec.yaml'
+    method: 'get'
+    handler:
+      - spec
+  - path: '/specui'
+    method: 'get'
+    handler:
+      - swagger
+  - path: '/favicon.ico'
+    method: 'get'
+    handler:
+      - favicon
+</code></pre>
+<h2 id="security-note"><a class="header" href="#security-note">Security Note</a></h2>
+<p>Since the specification handlers expose internal API details, it is recommended to protect these endpoints using the <code>AccessControlHandler</code> or similar security mechanisms if the documentation should not be publicly accessible.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-hybrid-4j"><a class="header" href="#light-hybrid-4j">Light-hybrid-4j</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="rpc-router"><a class="header" href="#rpc-router">RPC Router</a></h1>
+<p>The <code>rpc-router</code> is a core module of the <code>light-hybrid-4j</code> framework. It provides a high-performance routing and validation mechanism that enables a single server instance to host multiple, independent service handlers (RPC-style).</p>
+<h2 id="overview-7"><a class="header" href="#overview-7">Overview</a></h2>
+<p>In the <code>light-hybrid-4j</code> architecture, the <code>rpc-router</code> serves as the primary dispatcher for incoming requests. Unlike traditional RESTful routing based on URL paths and HTTP verbs, the RPC router typically uses a single endpoint (e.g., <code>/api/json</code>) and determines the target logic based on a <code>serviceId</code> (or <code>cmd</code>) specified in the request payload.</p>
+<h3 id="key-responsibilities"><a class="header" href="#key-responsibilities">Key Responsibilities:</a></h3>
+<ul>
+<li><strong>Service Discovery</strong>: Dynamically discovering handlers annotated with <code>@ServiceHandler</code> at startup.</li>
+<li><strong>Request Dispatching</strong>: Mapping incoming JSON or Form payloads to the correct <code>HybridHandler</code>.</li>
+<li><strong>Schema Validation</strong>: Validating request payloads against JSON schemas defined in <code>spec.yaml</code> files.</li>
+<li><strong>Specification Management</strong>: Merging multiple <code>spec.yaml</code> files from various service JARs into a single runtime context.</li>
+<li><strong>Configuration Management</strong>: Providing a standardized, hot-reloadable configuration via <code>rpc-router.yml</code>.</li>
+</ul>
+<h2 id="core-components-2"><a class="header" href="#core-components-2">Core Components</a></h2>
+<h3 id="1-schemahandler"><a class="header" href="#1-schemahandler">1. <code>SchemaHandler</code></a></h3>
+<p>The <code>SchemaHandler</code> is a middleware handler that performs the initial processing of RPC requests.</p>
+<ul>
+<li><strong>Spec Loading</strong>: At startup, it scans the classpath for all instances of <code>spec.yaml</code> and merges them.</li>
+<li><strong>Validation</strong>: For every request, it identifies the <code>serviceId</code>, retrieves the associated schema, and validates the <code>data</code> portion of the payload.</li>
+<li><strong>Hot Reload</strong>: Supports refreshing the merged specifications at runtime without a server restart.</li>
+</ul>
+<h3 id="2-jsonhandler"><a class="header" href="#2-jsonhandler">2. <code>JsonHandler</code></a></h3>
+<p>The <code>JsonHandler</code> is the final dispatcher in the chain for JSON-based RPC calls.</p>
+<ul>
+<li><strong>Service Execution</strong>: It retrieves the pre-parsed <code>serviceId</code> and <code>data</code> from the exchange attachments (populated by <code>SchemaHandler</code>) and invokes the corresponding <code>HybridHandler.handle()</code> method.</li>
+</ul>
+<h3 id="3-rpcrouterconfig"><a class="header" href="#3-rpcrouterconfig">3. <code>RpcRouterConfig</code></a></h3>
+<p>This class manages the configuration found in <code>rpc-router.yml</code>. It supports:</p>
+<ul>
+<li><strong>Standardized Loading</strong>: Singleton-based access via <code>RpcRouterConfig.load()</code>.</li>
+<li><strong>Hot Reload</strong>: Thread-safe configuration refreshing via <code>RpcRouterConfig.reload()</code>.</li>
+<li><strong>Module Info</strong>: Automatic registration with the <code>ModuleRegistry</code> for runtime monitoring.</li>
+</ul>
+<h3 id="4-rpcstartuphookprovider"><a class="header" href="#4-rpcstartuphookprovider">4. <code>RpcStartupHookProvider</code></a></h3>
+<p>A startup hook that uses <strong>ClassGraph</strong> to scan configured packages for any class implementing <code>HybridHandler</code> and bearing the <code>@ServiceHandler</code> annotation.</p>
+<h2 id="configuration-rpc-routeryml"><a class="header" href="#configuration-rpc-routeryml">Configuration (<code>rpc-router.yml</code>)</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Property</th><th>Default</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>handlerPackages</code></td><td><code>[]</code></td><td>List of package prefixes to scan for service handlers.</td></tr>
+<tr><td><code>jsonPath</code></td><td><code>/api/json</code></td><td>The endpoint for JSON-based RPC requests.</td></tr>
+<tr><td><code>formPath</code></td><td><code>/api/form</code></td><td>The endpoint for Form-based RPC requests.</td></tr>
+<tr><td><code>registerService</code></td><td><code>false</code></td><td>If enabled, registers each discovered service ID with the discovery registry (e.g., Consul).</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="request-structure"><a class="header" href="#request-structure">Request Structure</a></h2>
+<p>A typical RPC request to the <code>rpc-router</code> looks as follows:</p>
+<pre><code class="language-json">{
+  "host": "lightapi.net",
+  "service": "petstore",
+  "action": "getPetById",
+  "version": "1.0.0",
+  "data": {
+    "id": 123
+  }
+}
+</code></pre>
+<p>The router constructs the internal <code>serviceId</code> as <code>host/service/action/version</code> (e.g., <code>lightapi.net/petstore/getPetById/1.0.0</code>) to locate the handler.</p>
+<h2 id="implementation-example"><a class="header" href="#implementation-example">Implementation Example</a></h2>
+<h3 id="1-the-service-handler"><a class="header" href="#1-the-service-handler">1. The Service Handler</a></h3>
+<pre><code class="language-java">@ServiceHandler(id = "lightapi.net/petstore/getPetById/1.0.0")
+public class GetPetById implements HybridHandler {
+    @Override
+    public ByteBuffer handle(HttpServerExchange exchange, Object data) {
+        Map&lt;String, Object&gt; params = (Map&lt;String, Object&gt;) data;
+        // Business logic...
+        return NioUtils.toByteBuffer("{\"id\": 123, \"name\": \"Fluffy\"}");
+    }
+}
+</code></pre>
+<h3 id="2-the-specification-specyaml"><a class="header" href="#2-the-specification-specyaml">2. The Specification (<code>spec.yaml</code>)</a></h3>
+<p>Place this in <code>src/main/resources</code> of your service module:</p>
+<pre><code class="language-yaml">host: lightapi.net
+service: petstore
+action:
+  - name: getPetById
+    version: 1.0.0
+    handler: getPetById
+    request:
+      schema:
+        type: object
+        properties:
+          id: { type: integer }
+        required: [id]
+</code></pre>
+<h2 id="best-practices-3"><a class="header" href="#best-practices-3">Best Practices</a></h2>
+<ol>
+<li><strong>Restrict Scanning</strong>: Always specify <code>handlerPackages</code> in <code>rpc-router.yml</code> to minimize startup time.</li>
+<li><strong>Contract-First</strong>: Define your <code>spec.yaml</code> rigorously. The router uses these schemas to protect your handlers from invalid data.</li>
+<li><strong>Hot Reload</strong>: Use the <code>/server/info</code> endpoint to verify that your configuration and specifications have been updated correctly after a reload.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="rpc-security"><a class="header" href="#rpc-security">RPC Security</a></h1>
+<p>The <code>rpc-security</code> module in <code>light-hybrid-4j</code> provides security handlers specifically designed for the hybrid framework’s routing mechanism. It extends the core security capabilities of <code>light-4j</code> to work seamlessly with the <code>rpc-router</code>’s service dispatching model.</p>
+<h2 id="overview-8"><a class="header" href="#overview-8">Overview</a></h2>
+<p>In <code>light-hybrid-4j</code>, requests are routed based on a service ID in the payload (e.g., <code>lightapi.net/petstore/getPetById/1.0.0</code>) rather than URL paths. This difference requires specialized security handlers that can:</p>
+<ol>
+<li>Verify JWT tokens protecting the RPC endpoint.</li>
+<li>Extract required scopes from the target service’s schema (specifically the <code>spec.yaml</code> loaded by the <code>rpc-router</code>).</li>
+<li>Authorize the request by comparing the token’s scopes against the service’s required scopes.</li>
+</ol>
+<h2 id="core-components-3"><a class="header" href="#core-components-3">Core Components</a></h2>
+<h3 id="1-hybridjwtverifyhandler"><a class="header" href="#1-hybridjwtverifyhandler">1. <code>HybridJwtVerifyHandler</code></a></h3>
+<p>This handler extends <code>AbstractJwtVerifyHandler</code> to provide JWT validation for hybrid services.</p>
+<ul>
+<li><strong>Audit Info Integration</strong>: It expects the <code>SchemaHandler</code> (from <code>rpc-router</code>) to have already parsed the request and populated the <code>auditInfo</code> attachment map with the <code>HYBRID_SERVICE_MAP</code>.</li>
+<li><strong>Dynamic Scope Resolution</strong>: Instead of hardcoding scopes or using Swagger endpoints, it retrieves the required scopes directly from the <code>scope</code> property defined in the service’s <code>spec.yaml</code>.</li>
+<li><strong>Skip Auth Support</strong>: It respects the <code>skipAuth</code> flag in the service specification, allowing individual handlers to be public while others remain protected.</li>
+</ul>
+<h3 id="2-accesscontrolhandler"><a class="header" href="#2-accesscontrolhandler">2. <code>AccessControlHandler</code></a></h3>
+<p>Provides fine-grained access control based on rule definitions.</p>
+<ul>
+<li><strong>Rule-Based Access</strong>: Can enforce complex authorization rules (e.g., “deny if IP is X” or “allow if time is Y”) beyond simple RBAC.</li>
+<li><strong>Runtime Configuration</strong>: Supports hot-reloading of access control rules and settings via <code>access-control.yml</code>.</li>
+</ul>
+<h2 id="configuration-8"><a class="header" href="#configuration-8">Configuration</a></h2>
+<p>This module relies on <code>security.yml</code> (shared with the core framework) and specific service definitions in <code>spec.yaml</code>.</p>
+<h3 id="securityyml"><a class="header" href="#securityyml"><code>security.yml</code></a></h3>
+<p>Standard configuration for JWT verification:</p>
+<pre><code class="language-yaml">enableVerifyJwt: true
+enableVerifyScope: true
+enableJwtCache: true
+</code></pre>
+<h3 id="access-controlyml"><a class="header" href="#access-controlyml"><code>access-control.yml</code></a></h3>
+<p>Configuration for the <code>AccessControlHandler</code>:</p>
+<pre><code class="language-yaml">enabled: true
+accessRuleLogic: 'any' # or 'all'
+defaultDeny: true
+</code></pre>
+<h2 id="usage-example"><a class="header" href="#usage-example">Usage Example</a></h2>
+<h3 id="1-register-handlers"><a class="header" href="#1-register-handlers">1. Register Handlers</a></h3>
+<p>In your <code>handler.yml</code>, add the security handlers to your chain <em>after</em> the <code>SchemaHandler</code> but <em>before</em> the <code>JsonHandler</code>. The <code>SchemaHandler</code> is required first to resolve the service definition.</p>
+<pre><code class="language-yaml">handlers:
+  - com.networknt.rpc.router.SchemaHandler@schema
+  - com.networknt.rpc.security.HybridJwtVerifyHandler@jwt
+  - com.networknt.rpc.router.JsonHandler@json
+
+paths:
+  - path: '/api/json'
+    method: 'post'
+    handler:
+      - schema
+      - jwt
+      - json
+</code></pre>
+<h3 id="2-define-security-in-specyaml"><a class="header" href="#2-define-security-in-specyaml">2. Define Security in <code>spec.yaml</code></a></h3>
+<p>In your hybrid service’s <code>spec.yaml</code> file, define the <code>scope</code> required to access the action, or set <code>skipAuth</code> to true for public endpoints.</p>
+<p><strong>Example: Protected Endpoint</strong></p>
+<pre><code class="language-yaml">service: petstore
+action:
+  - name: getPetById
+    version: 1.0.0
+    handler: getPetById
+    scope: "petstore.r" 
+    request: ...
+</code></pre>
+<ul>
+<li>The <code>HybridJwtVerifyHandler</code> will extract <code>petstore.r</code> and ensure the caller’s JWT has this scope.</li>
+</ul>
+<p><strong>Example: Public Endpoint</strong></p>
+<pre><code class="language-yaml">service: petstore
+action:
+  - name: login
+    version: 1.0.0
+    handler: loginHandler
+    skipAuth: true
+    request: ...
+</code></pre>
+<ul>
+<li>The handler will skip JWT verification for this action.</li>
+</ul>
+<h2 id="hot-reload-2"><a class="header" href="#hot-reload-2">Hot Reload</a></h2>
+<p>The handlers in this module support hot-reloading. If <code>security.yml</code> or <code>access-control.yml</code> are updated via the config server, the changes will be applied dynamically without restarting the server.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-graphql-4j"><a class="header" href="#light-graphql-4j">Light-Graphql-4j</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="graphql-common"><a class="header" href="#graphql-common">Graphql Common</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="graphql-validator"><a class="header" href="#graphql-validator">Graphql Validator</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="graphql-security"><a class="header" href="#graphql-security">Graphql Security</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="graphql-router"><a class="header" href="#graphql-router">Graphql Router</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-kafka"><a class="header" href="#light-kafka">Light-Kafka</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="kafka-common"><a class="header" href="#kafka-common">Kafka Common</a></h1>
+<p>The <code>kafka-common</code> module is a core shared library for <code>light-kafka</code> and its related microservices (like the kafka-sidecar). It encapsulates common configuration management, serialization/deserialization utilities, and shared constants.</p>
+<h2 id="key-features-3"><a class="header" href="#key-features-3">Key Features</a></h2>
+<ul>
+<li><strong>Centralized Configuration</strong>:
+<ul>
+<li><code>KafkaProducerConfig</code>: Manages configuration for Kafka producers (topic defaults, serialization formats, audit settings).</li>
+<li><strong>Hot Reload</strong>: Supports dynamic configuration updates for <code>kafka-producer.yml</code> and others via <code>Config.reload()</code>.</li>
+<li><strong>Module Registry</strong>: Automatically registers configuration modules with the server’s <code>ModuleRegistry</code> for runtime observability.</li>
+</ul>
+</li>
+<li><strong>Shared Utilities</strong>:
+<ul>
+<li><code>LightSchemaRegistryClient</code>: A lightweight client for interacting with the Confluent Schema Registry.</li>
+<li><code>AvroConverter</code> &amp; <code>AvroDeserializer</code>: Helpers for handling Avro data formats.</li>
+<li><code>KafkaConfigUtils</code>: Utilities for parsing and mapping configuration properties.</li>
+</ul>
+</li>
+</ul>
+<h2 id="configuration-classes"><a class="header" href="#configuration-classes">Configuration Classes</a></h2>
+<h3 id="kafkaproducerconfig"><a class="header" href="#kafkaproducerconfig">KafkaProducerConfig</a></h3>
+<p>Responsible for loading <code>kafka-producer.yml</code>. Key properties include:</p>
+<ul>
+<li><code>topic</code>: Default topic name.</li>
+<li><code>auditEnabled</code>: Whether to send audit logs.</li>
+<li><code>auditTarget</code>: Topic or logfile for audit data.</li>
+<li><code>injectOpenTracing</code>: Whether to inject OpenTracing headers.</li>
+</ul>
+<h3 id="kafkaconsumerconfig"><a class="header" href="#kafkaconsumerconfig">KafkaConsumerConfig</a></h3>
+<p>Responsible for loading <code>kafka-consumer.yml</code>.</p>
+<ul>
+<li><code>maxConsumerThreads</code>: Concurrency settings.</li>
+<li><code>topic</code>: List of topics to subscribe to.</li>
+<li><code>deadLetterEnabled</code>: DLQ configuration.</li>
+</ul>
+<h3 id="kafkastreamsconfig"><a class="header" href="#kafkastreamsconfig">KafkaStreamsConfig</a></h3>
+<p>Responsible for loading <code>kafka-streams.yml</code>.</p>
+<ul>
+<li><code>cleanUp</code>: State store cleanup settings.</li>
+<li><code>applicationId</code>: Streams application ID.</li>
+</ul>
+<h2 id="integration"><a class="header" href="#integration">Integration</a></h2>
+<p>Include <code>kafka-common</code> in your service to leverage shared Kafka capabilities:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;kafka-common&lt;/artifactId&gt;
+    &lt;version&gt;${version.light-kafka}&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<h2 id="hot-reload-3"><a class="header" href="#hot-reload-3">Hot Reload</a></h2>
+<p>Configurations in this module invoke <code>ModuleRegistry.registerModule</code> upon load and reload. This ensures that any changes pushed from the config server are immediately reflected in the application state and visible via the server’s info endpoints.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="kafka-consumer"><a class="header" href="#kafka-consumer">Kafka Consumer</a></h1>
+<p>The <code>kafka-consumer</code> module provides a RESTful interface for consuming records from Kafka topics. It abstracts the complexity of the native Kafka Consumer API, handling instance management, thread pooling, and record serialization/deserialization.</p>
+<h2 id="core-components-4"><a class="header" href="#core-components-4">Core Components</a></h2>
+<h3 id="kafkaconsumermanager"><a class="header" href="#kafkaconsumermanager">KafkaConsumerManager</a></h3>
+<p>Manages the lifecycle of Kafka consumers.</p>
+<ul>
+<li><strong>Instance Management</strong>: Creates and caches <code>KafkaConsumer</code> instances based on configuration.</li>
+<li><strong>Threading</strong>: Uses <code>KafkaConsumerThreadPoolExecutor</code> to handle concurrent read operations.</li>
+<li><strong>Task Scheduling</strong>: Manages long-polling read tasks using a <code>DelayQueue</code> and <code>ReadTaskSchedulerThread</code> to efficiently handle <code>poll()</code> operations without blocking threads unnecessarily.</li>
+<li><strong>Auto-Cleanup</strong>: A background thread (<code>ExpirationThread</code>) automatically closes idle consumers to reclaim resources.</li>
+</ul>
+<h3 id="lightconsumer"><a class="header" href="#lightconsumer">LightConsumer</a></h3>
+<p>An interface defining the contract for consumer implementations, potentially allowing for different underlying consumer strategies (though <code>KafkaConsumerManager</code> is the primary implementation).</p>
+<h3 id="kafkaconsumerreadtask"><a class="header" href="#kafkaconsumerreadtask">KafkaConsumerReadTask</a></h3>
+<p>Encapsulates a single read request. It iterates over the Kafka consumer records, buffering them until the response size criteria (min/max bytes) are met or a timeout occurs.</p>
+<h2 id="configuration-9"><a class="header" href="#configuration-9">Configuration</a></h2>
+<p>This module relies on <code>kafka-consumer.yml</code>, managed by <code>KafkaConsumerConfig</code> (from the <code>kafka-common</code> module).</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>maxConsumerThreads</code>: Controls the thread pool size for consumer operations.</li>
+<li><code>server.id</code>: Unique identifier for the server instance, used for consumer naming.</li>
+<li><code>consumer.instance.timeout.ms</code>: Idle timeout for consumer instances.</li>
+</ul>
+<h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
+<p>This module is typically used by the <code>kafka-sidecar</code> or other microservices that need to expose Kafka consumption over HTTP/REST.</p>
+<p>The <code>KafkaConsumerManager</code> is usually initialized at application startup:</p>
+<pre><code class="language-java">KafkaConsumerConfig config = KafkaConsumerConfig.load();
+KafkaConsumerManager manager = new KafkaConsumerManager(config);
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="kafka-producer-1"><a href="#kafka-producer-1" class="header">Kafka Producer</a></h1>
+<hr>
+<h2 id="description-kafka-producer-module"><a class="header" href="#description-kafka-producer-module">description: Kafka Producer Module</a></h2>
+<h1 id="kafka-producer"><a class="header" href="#kafka-producer">Kafka Producer</a></h1>
+<p>The <code>kafka-producer</code> module provides an abstraction for key features of the <code>light-kafka</code> ecosystem, including auditing, schema validation, and header injection. It supports publishing to Kafka with both key and value serialization via Confluent Schema Registry (Avro, JSON Schema, Protobuf).</p>
+<h2 id="core-components-5"><a class="header" href="#core-components-5">Core Components</a></h2>
+<h3 id="sidecarproducer"><a class="header" href="#sidecarproducer">SidecarProducer</a></h3>
+<p>The primary producer implementation.</p>
+<ul>
+<li><strong>Schema Integration</strong>: Integrated with <code>SchemaRegistryClient</code> to handle serialization of keys and values. Caches schema lookups for performance.</li>
+<li><strong>Audit Integration</strong>: Automatically generates and sends audit records (success/failure) for each produced message if configured.</li>
+<li><strong>Asynchronous</strong>: Returns <code>CompletableFuture&lt;ProduceResponse&gt;</code> for non-blocking operation.</li>
+<li><strong>Headers</strong>: Propagates <code>traceabilityId</code> and <code>correlationId</code> into Kafka message headers for end-to-end tracing.</li>
+</ul>
+<h3 id="nativelightproducer"><a class="header" href="#nativelightproducer">NativeLightProducer</a></h3>
+<p>An interface extension which exposes the underlying <code>KafkaProducer</code> instance.</p>
+<h3 id="serializedkeyandvalue"><a class="header" href="#serializedkeyandvalue">SerializedKeyAndValue</a></h3>
+<p>Helper class that holds the serialized bytes for key and value along with target partition and headers.</p>
+<h2 id="configuration-10"><a class="header" href="#configuration-10">Configuration</a></h2>
+<p>This module relies on <code>kafka-producer.yml</code>, managed by <code>KafkaProducerConfig</code> (from the <code>kafka-common</code> module).</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>topic</code>: Default target topic.</li>
+<li><code>keyFormat</code> / <code>valueFormat</code>: Serialization format (e.g., <code>jsonschema</code>, <code>avro</code>, <code>string</code>).</li>
+<li><code>auditEnabled</code>: Toggle for audit logging.</li>
+<li><code>injectOpenTracing</code>: Optional integration with OpenTracing.</li>
+</ul>
+<h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
+<p>Initialize <code>SidecarProducer</code> at application startup. It automatically loads configuration and registers itself.</p>
+<pre><code class="language-java">NativeLightProducer producer = new SidecarProducer();
+producer.open();
+
+// Usage
+ProduceRequest request = ...;
+producer.produceWithSchema(topic, serviceId, partition, request, headers, auditList);
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="kafka-streams"><a class="header" href="#kafka-streams">Kafka Streams</a></h1>
+<p>The <code>kafka-streams</code> module provides a lightweight wrapper around the Kafka Streams API, simplifying common tasks such as configuration loading, audit logging, and Dead Letter Queue (DLQ) integration.</p>
+<h2 id="core-components-6"><a class="header" href="#core-components-6">Core Components</a></h2>
+<h3 id="lightstreams"><a class="header" href="#lightstreams">LightStreams</a></h3>
+<p>An interface that helps bootstrap a Kafka Streams application. It typically includes:</p>
+<ul>
+<li><strong>startStream()</strong>: Initializes the <code>KafkaStreams</code> instance with the provided topology and configuration. It automatically adds audit and exception handling sinks to the topology if configured.</li>
+<li><strong>getKafkaValueByKey()</strong>: A utility to query state stores (interactive queries) with retry logic for handling rebalances.</li>
+<li><strong>getAllKafkaValue()</strong>: Queries all values from a state store.</li>
+</ul>
+<h2 id="configuration-11"><a class="header" href="#configuration-11">Configuration</a></h2>
+<p>This module relies on <code>kafka-streams.yml</code>, managed by <code>KafkaStreamsConfig</code> (from the <code>kafka-common</code> module).</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>application.id</code>: The unique identifier for the streams application.</li>
+<li><code>bootstrap.servers</code>: Kafka cluster connection string.</li>
+<li><code>cleanUp</code>: If set to <code>true</code>, the application usually performs a local state store cleanup on startup (useful for resetting state).</li>
+<li><code>auditEnabled</code>: When true, an “AuditSink” is added to the topology to capture audit events.</li>
+<li><code>deadLetterEnabled</code>: When true, automatically configures DLQ sinks for error handling based on provided metadata.</li>
+</ul>
+<h2 id="usage-8"><a class="header" href="#usage-8">Usage</a></h2>
+<p>To use this module, implement <code>LightStreams</code> or call its default methods from your startup logic:</p>
+<pre><code class="language-java">// Load config
+KafkaStreamsConfig config = KafkaStreamsConfig.load();
+
+// Build Topology
+Topology topology = ...;
+
+// Start Stream
+KafkaStreams streams = startStream(ip, port, topology, config, dlqMap, auditParentNames);
+</code></pre>
+<p>The module automatically handles the registration of the configuration module with the server for runtime observability.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-spa-4j"><a class="header" href="#light-spa-4j">Light-spa-4j</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="msal-exchange-handler"><a class="header" href="#msal-exchange-handler">MSAL Exchange Handler</a></h1>
+<p>The <code>msal-exchange</code> module in <code>light-spa-4j</code> provides a handler to exchange Microsoft Authentication Library (MSAL) tokens for internal application session cookies. This mechanism effectively serves as a Backend-For-Frontend (BFF) authentication layer for Single Page Applications (SPAs).</p>
+<h2 id="core-components-7"><a class="header" href="#core-components-7">Core Components</a></h2>
+<h3 id="msaltokenexchangehandler"><a class="header" href="#msaltokenexchangehandler">MsalTokenExchangeHandler</a></h3>
+<p>This middleware handler intercepts requests to specific paths (configured via <code>msal-exchange.yml</code>) to perform token exchange or logout operations.</p>
+<ul>
+<li><strong>Token Exchange</strong>: Validates the incoming Microsoft Bearer token, performs a token exchange via the OAuth provider, and sets secure, HTTP-only session cookies (<code>accessToken</code>, <code>refreshToken</code>, <code>csrf</code>, etc.) for subsequent requests.</li>
+<li><strong>Logout</strong>: Clears all session cookies to securely log the user out.</li>
+<li><strong>Session Management</strong>: On subsequent requests, it validates the JWT in the cookie, checks for CSRF token consistency, and handles automatic token renewal if the session is nearing expiration.</li>
+</ul>
+<h3 id="msalexchangeconfig"><a class="header" href="#msalexchangeconfig">MsalExchangeConfig</a></h3>
+<p>Configuration class that loads settings from <code>msal-exchange.yml</code>. It supports hot reloading and module registration.</p>
+<h2 id="configuration-12"><a class="header" href="#configuration-12">Configuration</a></h2>
+<p>The module is configured via <code>msal-exchange.yml</code>.</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>enabled</code>: Enable or disable the handler.</li>
+<li><code>exchangePath</code>: Partial path for triggering token exchange (default: <code>/auth/ms/exchange</code>).</li>
+<li><code>logoutPath</code>: Partial path for triggering logout (default: <code>/auth/ms/logout</code>).</li>
+<li><code>cookieDomain</code> / <code>cookiePath</code>: Scope configuration for the session cookies.</li>
+<li><code>cookieSecure</code>: Whether to mark cookies as Secure (HTTPS only).</li>
+<li><code>sessionTimeout</code>: Max age for the session cookies.</li>
+</ul>
+<p><strong>Example Configuration:</strong></p>
+<pre><code class="language-yaml">enabled: true
+exchangePath: /auth/ms/exchange
+logoutPath: /auth/ms/logout
+cookieDomain: localhost
+cookiePath: /
+cookieSecure: false
+sessionTimeout: 3600
+rememberMeTimeout: 604800
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="stateless-auth-handler"><a class="header" href="#stateless-auth-handler">Stateless Auth Handler</a></h1>
+<p>The <code>stateless-auth</code> module in <code>light-spa-4j</code> provides a robust, stateless authentication mechanism for Single Page Applications (SPAs). It handles the OAuth 2.0 Authorization Code flow and manages the resulting tokens using secure, HTTP-only cookies, eliminating the need for client-side storage (like <code>localStorage</code>).</p>
+<h2 id="core-components-8"><a class="header" href="#core-components-8">Core Components</a></h2>
+<h3 id="statelessauthhandler"><a class="header" href="#statelessauthhandler">StatelessAuthHandler</a></h3>
+<p>This middleware implements the Backend-For-Frontend (BFF) pattern:</p>
+<ul>
+<li><strong>Authorization</strong>: Intercepts requests to <code>/authorization</code>, exchanges the authorization code for access and refresh tokens from the OAuth 2.0 provider.</li>
+<li><strong>Cookie Management</strong>: Stores tokens in secure, HTTP-only cookies (<code>accessToken</code>, <code>refreshToken</code>) and exposes non-sensitive user info (id, roles) in JavaScript-readable cookies.</li>
+<li><strong>CSRF Protection</strong>: Generates and validates Double Submit Cookies (CSRF token in header vs. JWT claim) to prevent Cross-Site Request Forgery.</li>
+<li><strong>Token Renewal</strong>: Automatically renews expiring access tokens using the refresh token when the session is nearing timeout (default check at &lt; 1.5 minutes remaining).</li>
+<li><strong>Logout</strong>: Handles requests to <code>/logout</code> by invalidating all session cookies.</li>
+</ul>
+<h3 id="statelessauthconfig"><a class="header" href="#statelessauthconfig">StatelessAuthConfig</a></h3>
+<p>Configuration class that loads settings from <code>statelessAuth.yml</code>. Supports hot reloading and module registration.</p>
+<h2 id="configuration-13"><a class="header" href="#configuration-13">Configuration</a></h2>
+<p>The module is configured via <code>statelessAuth.yml</code>.</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>enabled</code>: Enable or disable the handler.</li>
+<li><code>authPath</code>: Path to handle the authorization code callback (default: <code>/authorization</code>).</li>
+<li><code>cookieDomain</code>: Domain for the session cookies (e.g., <code>localhost</code> or your domain).</li>
+<li><code>cookiePath</code>: Path scope for cookies (default: <code>/</code>).</li>
+<li><code>cookieSecure</code>: Set to <code>true</code> for HTTPS environments.</li>
+<li><code>sessionTimeout</code>: Expiration time for session cookies.</li>
+<li><code>redirectUri</code>: Where to redirect the SPA after successful login.</li>
+<li><code>enableHttp2</code>: Whether to use HTTP/2 for backend token calls.</li>
+</ul>
+<p><strong>Social Login Support:</strong>
+The configuration also includes sections for configuring social login providers directly if not federating through a central IdP:</p>
+<ul>
+<li><code>googlePath</code>, <code>googleClientId</code>, <code>googleRedirectUri</code></li>
+<li><code>facebookPath</code>, <code>facebookClientId</code></li>
+<li><code>githubPath</code>, <code>githubClientId</code></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-chaos-monkey"><a class="header" href="#light-chaos-monkey">Light-chaos-monkey</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="chaos-monkey-1"><a href="#chaos-monkey-1" class="header">Chaos Monkey</a></h1>
+<hr>
+<h2 id="description-chaos-monkey-module"><a class="header" href="#description-chaos-monkey-module">description: Chaos Monkey Module</a></h2>
+<h1 id="chaos-monkey"><a class="header" href="#chaos-monkey">Chaos Monkey</a></h1>
+<p>The <code>chaos-monkey</code> module in <code>light-chaos-monkey</code> allows developers and operators to inject various types of failures (assaults) into a running service to test its resilience. It provides API endpoints to query and update assault configurations dynamically at runtime.</p>
+<h2 id="core-components-9"><a class="header" href="#core-components-9">Core Components</a></h2>
+<h3 id="chaosmonkeyconfig"><a class="header" href="#chaosmonkeyconfig">ChaosMonkeyConfig</a></h3>
+<p>Configuration class that loads settings from <code>chaos-monkey.yml</code>. It defines whether the chaos monkey capability is enabled globally.</p>
+<h3 id="chaosmonkeygethandler"><a class="header" href="#chaosmonkeygethandler">ChaosMonkeyGetHandler</a></h3>
+<p>A <code>LightHttpHandler</code> that retrieves the current configuration of all registered assault handlers.</p>
+<ul>
+<li><strong>Endpoint</strong>: <code>GET /chaosmonkey</code> (typically configured via <code>openapi.yaml</code> or <code>handler.yml</code>)</li>
+<li><strong>Response</strong>: A JSON object containing the current configurations for Exception, KillApp, Latency, and Memory assaults.</li>
+</ul>
+<h3 id="chaosmonkeyposthandler"><a class="header" href="#chaosmonkeyposthandler">ChaosMonkeyPostHandler</a></h3>
+<p>A <code>LightHttpHandler</code> that allows updating a specific assault configuration on the fly.</p>
+<ul>
+<li><strong>Endpoint</strong>: <code>POST /chaosmonkey?assault={handlerClassName}</code></li>
+<li><strong>Request</strong>: <code>assault</code> query parameter specifying the target handler class (e.g., <code>com.networknt.chaos.LatencyAssaultHandler</code>), and a JSON body matching that handler’s configuration structure.</li>
+<li><strong>Behavior</strong>: Updates the static configuration of the specified assault handler and triggers a re-registration of the module config.</li>
+</ul>
+<h2 id="assault-types"><a class="header" href="#assault-types">Assault Types</a></h2>
+<ul>
+<li><strong>ExceptionAssault</strong>: Injects exceptions into request handling.</li>
+<li><strong>KillappAssault</strong>: Terminates the application instance (use with caution!).</li>
+<li><strong>LatencyAssault</strong>: Injects artificial delays (latency) into requests.</li>
+<li><strong>MemoryAssault</strong>: Consumes heaps memory to simulate memory pressure/leaks.</li>
+</ul>
+<h2 id="configuration-14"><a class="header" href="#configuration-14">Configuration</a></h2>
+<p>The module itself is configured via <code>chaos-monkey.yml</code>.</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>enabled</code>: Global switch to enable or disable the chaos monkey endpoints (default: <code>false</code>).</li>
+</ul>
+<p><strong>Example Configuration:</strong></p>
+<pre><code class="language-yaml">enabled: true
+</code></pre>
+<p>Each assault type has its own specific configuration (e.g., <code>latency-assault.yml</code>, <code>exception-assault.yml</code>) which controls the probability and specifics of that attack.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="exception-assault-1"><a href="#exception-assault-1" class="header">Exception Assault</a></h1>
+<hr>
+<h2 id="description-exception-assault-handler"><a class="header" href="#description-exception-assault-handler">description: Exception Assault Handler</a></h2>
+<h1 id="exception-assault"><a class="header" href="#exception-assault">Exception Assault</a></h1>
+<p>The <code>exception-assault</code> module in <code>light-chaos-monkey</code> allows you to inject random exceptions into your application’s request processing pipeline. This helps verify that your application and its consumers gracefully handle unexpected failures.</p>
+<h2 id="core-components-10"><a class="header" href="#core-components-10">Core Components</a></h2>
+<h3 id="exceptionassaulthandler"><a class="header" href="#exceptionassaulthandler">ExceptionAssaultHandler</a></h3>
+<p>The middleware handler responsible for injecting exceptions.</p>
+<ul>
+<li><strong>Behavior</strong>: When enabled and triggered (based on the <code>level</code> configuration), it throws an <code>AssaultException</code>. This exception disrupts the normal request flow, simulating an internal server error or unexpected crash.</li>
+<li><strong>Bypass</strong>: Can be configured to bypass the assault logic (e.g., for specific requests or globally until ready).</li>
+</ul>
+<h3 id="exceptionassaultconfig"><a class="header" href="#exceptionassaultconfig">ExceptionAssaultConfig</a></h3>
+<p>Configuration class that loads settings from <code>exception-assault.yml</code>.</p>
+<h2 id="configuration-15"><a class="header" href="#configuration-15">Configuration</a></h2>
+<p>The module is configured via <code>exception-assault.yml</code>.</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>enabled</code>: Enable or disable the handler (default: <code>false</code>).</li>
+<li><code>bypass</code>: If <code>true</code>, the assault is skipped even if enabled (default: <code>true</code>). Use this to deploy the handler but keep it inactive until needed.</li>
+<li><code>level</code>: The probability of an attack, defined as “1 out of N requests”.
+<ul>
+<li><code>level: 5</code> means approximately 1 in 5 requests (20%) will be attacked.</li>
+<li><code>level: 1</code> means every request is attacked.</li>
+</ul>
+</li>
+</ul>
+<p><strong>Example Configuration:</strong></p>
+<pre><code class="language-yaml">enabled: true
+bypass: false
+level: 5
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="killapp-assault"><a class="header" href="#killapp-assault">Killapp Assault</a></h1>
+<p>The <code>killapp-assault</code> module in <code>light-chaos-monkey</code> allows you to inject a termination assault into your application. When triggered, it gracefully shuts down the server and then terminates the JVM process. This is the most destructive type of assault and should be used with extreme caution.</p>
+<h2 id="core-components-11"><a class="header" href="#core-components-11">Core Components</a></h2>
+<h3 id="killappassaulthandler"><a class="header" href="#killappassaulthandler">KillappAssaultHandler</a></h3>
+<p>The middleware handler responsible for killing the application.</p>
+<ul>
+<li><strong>Behavior</strong>: When enabled and triggered (based on the <code>level</code> configuration), it calls <code>Server.shutdown()</code> to stop the light-4j server and then <code>System.exit(0)</code> to terminate the process.</li>
+<li><strong>Safety</strong>: Ensure that your deployment environment (e.g., Kubernetes, Docker Swarm) is configured to automatically restart the application after it terminates, otherwise the service will remain down.</li>
+</ul>
+<h3 id="killappassaultconfig"><a class="header" href="#killappassaultconfig">KillappAssaultConfig</a></h3>
+<p>Configuration class that loads settings from <code>killapp-assault.yml</code>.</p>
+<h2 id="configuration-16"><a class="header" href="#configuration-16">Configuration</a></h2>
+<p>The module is configured via <code>killapp-assault.yml</code>.</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>enabled</code>: Enable or disable the handler (default: <code>false</code>).</li>
+<li><code>bypass</code>: If <code>true</code>, the assault is skipped even if enabled (default: <code>true</code>).</li>
+<li><code>level</code>: The probability of an attack, defined as “1 out of N requests”.
+<ul>
+<li><code>level: 10</code> means approximately 1 in 10 requests (10%) will trigger a shutdown.</li>
+<li><code>level: 1</code> means the first request will terminate the app.</li>
+</ul>
+</li>
+</ul>
+<p><strong>Example Configuration:</strong></p>
+<pre><code class="language-yaml">enabled: true
+bypass: false
+level: 100
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="latency-assault"><a class="header" href="#latency-assault">Latency Assault</a></h1>
+<p>The <code>latency-assault</code> module in <code>light-chaos-monkey</code> allows you to inject artificial delays (latency) into your application’s request processing. This is useful for testing how your application and its downstream consumers handle slow responses and potential timeouts.</p>
+<h2 id="core-components-12"><a class="header" href="#core-components-12">Core Components</a></h2>
+<h3 id="latencyassaulthandler"><a class="header" href="#latencyassaulthandler">LatencyAssaultHandler</a></h3>
+<p>The middleware handler responsible for injecting latency.</p>
+<ul>
+<li><strong>Behavior</strong>: When enabled and triggered (based on the <code>level</code> configuration), it calculates a random sleep duration within the configured range and puts the current thread to sleep using <code>Thread.sleep()</code>.</li>
+<li><strong>Trigger</strong>: The assault is triggered based on a probability defined by the <code>level</code>.</li>
+</ul>
+<h3 id="latencyassaultconfig"><a class="header" href="#latencyassaultconfig">LatencyAssaultConfig</a></h3>
+<p>Configuration class that loads settings from <code>latency-assault.yml</code>.</p>
+<h2 id="configuration-17"><a class="header" href="#configuration-17">Configuration</a></h2>
+<p>The module is configured via <code>latency-assault.yml</code>.</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>enabled</code>: Enable or disable the handler (default: <code>false</code>).</li>
+<li><code>bypass</code>: If <code>true</code>, the assault is skipped even if enabled (default: <code>true</code>).</li>
+<li><code>level</code>: The probability of an attack, defined as “1 out of N requests”.
+<ul>
+<li><code>level: 10</code> means approximately 1 in 10 requests (10%) will be attacked.</li>
+<li><code>level: 1</code> means every request is attacked.</li>
+</ul>
+</li>
+<li><code>latencyRangeStart</code>: The minimum delay in milliseconds (default: <code>1000</code>).</li>
+<li><code>latencyRangeEnd</code>: The maximum delay in milliseconds (default: <code>3000</code>).</li>
+</ul>
+<p><strong>Example Configuration:</strong></p>
+<pre><code class="language-yaml">enabled: true
+bypass: false
+level: 5
+latencyRangeStart: 500
+latencyRangeEnd: 2000
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="memory-assault"><a class="header" href="#memory-assault">Memory Assault</a></h1>
+<p>The <code>memory-assault</code> module in <code>light-chaos-monkey</code> allows you to inject memory pressure into your application. When triggered, it allocates memory in increments until a target threshold is reached, holds that memory for a specified duration, and then releases it. This is useful for testing how your application behaves under low-memory conditions and identifying potential memory-related issues.</p>
+<h2 id="core-components-13"><a class="header" href="#core-components-13">Core Components</a></h2>
+<h3 id="memoryassaulthandler"><a class="header" href="#memoryassaulthandler">MemoryAssaultHandler</a></h3>
+<p>The middleware handler responsible for consuming memory.</p>
+<ul>
+<li><strong>Behavior</strong>: When enabled and triggered (based on the <code>level</code> configuration), it starts an asynchronous process to “eat” free memory. It incrementally allocates byte arrays until the total memory usage reaches the <code>memoryFillTargetFraction</code> of the maximum heap size.</li>
+<li><strong>Safety</strong>: The handler includes logic to prevent immediate OutOfMemoryErrors by controlling the increment size and respecting the maximum target fraction. It also performs a <code>System.gc()</code> after releasing the allocated memory to encourage the JVM to reclaim the space.</li>
+</ul>
+<h3 id="memoryassaultconfig"><a class="header" href="#memoryassaultconfig">MemoryAssaultConfig</a></h3>
+<p>Configuration class that loads settings from <code>memory-assault.yml</code>.</p>
+<h2 id="configuration-18"><a class="header" href="#configuration-18">Configuration</a></h2>
+<p>The module is configured via <code>memory-assault.yml</code>.</p>
+<p><strong>Key Settings:</strong></p>
+<ul>
+<li><code>enabled</code>: Enable or disable the handler (default: <code>false</code>).</li>
+<li><code>bypass</code>: If <code>true</code>, the assault is skipped even if enabled (default: <code>true</code>).</li>
+<li><code>level</code>: The probability of an attack, defined as “1 out of N requests”.
+<ul>
+<li><code>level: 10</code> means approximately 1 in 10 requests (10%) will trigger the memory assault.</li>
+<li><code>level: 1</code> means every request can trigger it (though typically it runs until finished once started).</li>
+</ul>
+</li>
+<li><code>memoryMillisecondsHoldFilledMemory</code>: Duration (in ms) to hold the allocated memory once the target fraction is reached (default: <code>90000</code>).</li>
+<li><code>memoryMillisecondsWaitNextIncrease</code>: Time (in ms) between allocation increments (default: <code>1000</code>).</li>
+<li><code>memoryFillIncrementFraction</code>: Fraction of available free memory to allocate in each increment (default: <code>0.15</code>).</li>
+<li><code>memoryFillTargetFraction</code>: The target fraction of maximum heap memory to occupy (default: <code>0.25</code>).</li>
+</ul>
+<p><strong>Example Configuration:</strong></p>
+<pre><code class="language-yaml">enabled: true
+bypass: false
+level: 10
+memoryFillTargetFraction: 0.5
+memoryMillisecondsHoldFilledMemory: 60000
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-sws-lambda"><a class="header" href="#light-sws-lambda">Light-sws-lambda</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="lambda-invoker"><a class="header" href="#lambda-invoker">Lambda Invoker</a></h1>
+<p>The <code>lambda-invoker</code> module provides a way to invoke AWS Lambda functions from a light-4j application. It includes a configuration class and an HTTP handler that can be used to proxy requests to Lambda functions.</p>
+<h2 id="core-components-14"><a class="header" href="#core-components-14">Core Components</a></h2>
+<h3 id="lambdainvokerconfig"><a class="header" href="#lambdainvokerconfig">LambdaInvokerConfig</a></h3>
+<p>The configuration class for the Lambda invoker. It loads settings from <code>lambda-invoker.yml</code>.</p>
+<ul>
+<li><strong>region</strong>: The AWS region where the Lambda functions are deployed.</li>
+<li><strong>endpointOverride</strong>: Optional URL to override the default AWS Lambda endpoint.</li>
+<li><strong>apiCallTimeout</strong>: Timeout for the entire API call in milliseconds.</li>
+<li><strong>apiCallAttemptTimeout</strong>: Timeout for each individual API call attempt in milliseconds.</li>
+<li><strong>maxRetries</strong>: Maximum number of retries for the invocation.</li>
+<li><strong>maxConcurrency</strong>: Maximum number of concurrent requests to Lambda.</li>
+<li><strong>functions</strong>: A map of endpoints to Lambda function names or ARNs.</li>
+<li><strong>metricsInjection</strong>: Whether to inject Lambda response time metrics into the metrics handler.</li>
+</ul>
+<h3 id="lambdafunctionhandler"><a class="header" href="#lambdafunctionhandler">LambdaFunctionHandler</a></h3>
+<p>An HTTP handler that proxies requests to AWS Lambda functions based on the configured mapping.</p>
+<ul>
+<li><strong>Behavior</strong>: It converts the incoming <code>HttpServerExchange</code> into an <code>APIGatewayProxyRequestEvent</code>, invokes the configured Lambda function asynchronously using the <code>LambdaAsyncClient</code>, and then converts the <code>APIGatewayProxyResponseEvent</code> back into the HTTP response.</li>
+<li><strong>Metrics</strong>: If enabled, it records the total time spent in the Lambda invocation and injects it into the metrics handler.</li>
+</ul>
+<h2 id="configuration-19"><a class="header" href="#configuration-19">Configuration</a></h2>
+<p>Example <code>lambda-invoker.yml</code>:</p>
+<pre><code class="language-yaml">region: us-east-1
+apiCallTimeout: 60000
+apiCallAttemptTimeout: 20000
+maxRetries: 2
+maxConcurrency: 50
+functions:
+  /v1/pets: petstore-function
+  /v1/users: user-service-function
+metricsInjection: true
+metricsName: lambda-response
+</code></pre>
+<h2 id="usage-9"><a class="header" href="#usage-9">Usage</a></h2>
+<p>To use the <code>LambdaFunctionHandler</code>, add it to your <code>handler.yml</code> chain:</p>
+<pre><code class="language-yaml">- com.networknt.aws.lambda.LambdaFunctionHandler@lambda
+</code></pre>
+<p>And configure the paths in <code>handler.yml</code>:</p>
+<pre><code class="language-yaml">paths:
+  - path: '/v1/pets'
+    method: 'GET'
+    handler:
+      - lambda
+</code></pre>
 
                     </main>
 
