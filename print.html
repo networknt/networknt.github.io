@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-e69c1c21.js";
+            window.path_to_searchindex_js = "searchindex-5061426f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-3262e9da.js"></script>
+        <script src="toc-75f624cb.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -1805,6 +1805,125 @@ egressIngressIndicator: ${sidecar.egressIngressIndicator:header}
 <li><strong>Module Registry Integration</strong>: Automatically registers itself with <code>/server/info</code> to provide visibility into the active sidecar configuration.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="sse-handler"><a class="header" href="#sse-handler">SSE Handler</a></h1>
+<p>The SSE (Server-Sent Events) Handler in <code>light-4j</code> allows the server to push real-time updates to the client over a standard HTTP connection. This handler manages the connection lifecycle and keep-alive messages.</p>
+<h2 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h2>
+<p>The configuration for the SSE Handler is defined in <code>sse.yml</code> (or <code>sse.json/yaml</code>). It corresponds to the <code>SseConfig.java</code> class.</p>
+<h3 id="configuration-properties"><a class="header" href="#configuration-properties">Configuration Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Type</th><th style="text-align: left">Default</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable or disable the SSE Handler.</td></tr>
+<tr><td style="text-align: left"><code>path</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/sse</code></td><td style="text-align: left">The default endpoint path for the SSE Handler.</td></tr>
+<tr><td style="text-align: left"><code>keepAliveInterval</code></td><td style="text-align: left">int</td><td style="text-align: left"><code>10000</code></td><td style="text-align: left">The keep-alive interval in milliseconds. Used for the default path or if no specific interval is defined for a prefix.</td></tr>
+<tr><td style="text-align: left"><code>pathPrefixes</code></td><td style="text-align: left">list</td><td style="text-align: left"><code>null</code></td><td style="text-align: left">A list of path prefixes with specific keep-alive intervals. See example below.</td></tr>
+<tr><td style="text-align: left"><code>metricsInjection</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">If true, injects metrics for the downstream API response time (useful in sidecar/gateway modes).</td></tr>
+<tr><td style="text-align: left"><code>metricsName</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>router-response</code></td><td style="text-align: left">The name used for metrics categorization if injection is enabled.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="configuration-example-sseyml"><a class="header" href="#configuration-example-sseyml">Configuration Example (sse.yml)</a></h3>
+<pre><code class="language-yaml"># Enable SSE Handler
+enabled: true
+
+# Default SSE Endpoint Path
+path: /sse
+
+# Default keep-alive interval in milliseconds
+keepAliveInterval: 10000
+
+# Define path prefix related configuration properties as a list of key/value pairs.
+# If request path cannot match to one of the pathPrefixes or the default path, the request will be skipped.
+pathPrefixes:
+  - pathPrefix: /sse/abc
+    keepAliveInterval: 20000
+  - pathPrefix: /sse/def
+    keepAliveInterval: 40000
+
+# Metrics injection (optional, for gateway/sidecar usage)
+metricsInjection: false
+metricsName: router-response
+</code></pre>
+<h2 id="usage-2"><a class="header" href="#usage-2">Usage</a></h2>
+<p>Register the <code>SseHandler</code> in your <code>handler.yml</code> chain. When a client connects to the configured path (e.g., <code>/sse</code>), the handler will establish a persistent connection and manage keep-alive signals based on the <code>keepAliveInterval</code>.</p>
+<h3 id="path-matching"><a class="header" href="#path-matching">Path Matching</a></h3>
+<ol>
+<li><strong>Prefix Matching</strong>: If <code>pathPrefixes</code> are configured, the handler checks if the request path starts with any of the defined prefixes. If a match is found, the specific <code>keepAliveInterval</code> for that prefix is used.</li>
+<li><strong>Exact Matching</strong>: If no prefix matches, the handler checks if the request path exactly matches the default <code>path</code> (<code>/sse</code>).</li>
+<li><strong>Passthrough</strong>: If neither matches, the request is passed to the next handler in the chain.</li>
+</ol>
+<h3 id="traceability"><a class="header" href="#traceability">Traceability</a></h3>
+<p>The handler supports traceability via the <code>X-Traceability-Id</code> header or an <code>id</code> query parameter to track connections in the <code>SseConnectionRegistry</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="mcp-router"><a class="header" href="#mcp-router">MCP Router</a></h1>
+<p>The MCP (Model Context Protocol) Router in <code>light-4j</code> allows binding LLM tools to HTTP endpoints, enabling an AI model to interact with your services via the MCP standard. It supports both Server-Sent Events (SSE) for connection establishment and HTTP POST for JSON-RPC messages.</p>
+<h2 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h2>
+<p>The configuration for the MCP Router is defined in <code>mcp-router.yml</code> (or <code>mcp-router.json/yaml</code>). It corresponds to the <code>McpConfig.java</code> class.</p>
+<h3 id="configuration-properties-1"><a class="header" href="#configuration-properties-1">Configuration Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Type</th><th style="text-align: left">Default</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable or disable the MCP Router Handler.</td></tr>
+<tr><td style="text-align: left"><code>ssePath</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp/sse</code></td><td style="text-align: left">The endpoint path for establishing the MCP Server-Sent Events (SSE) connection.</td></tr>
+<tr><td style="text-align: left"><code>messagePath</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp/message</code></td><td style="text-align: left">The endpoint path for sending MCP JSON-RPC messages (POST).</td></tr>
+<tr><td style="text-align: left"><code>tools</code></td><td style="text-align: left">list</td><td style="text-align: left"><code>null</code></td><td style="text-align: left">A list of tools exposed by this router. Each tool maps to a downstream HTTP service.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="configuration-example-mcp-routeryml"><a class="header" href="#configuration-example-mcp-routeryml">Configuration Example (mcp-router.yml)</a></h3>
+<pre><code class="language-yaml"># Enable MCP Router Handler
+enabled: true
+
+# Path for MCP Server-Sent Events (SSE) endpoint
+ssePath: /mcp/sse
+
+# Path for MCP JSON-RPC message endpoint
+messagePath: /mcp/message
+
+# Define tools exposed by this router
+tools:
+  - name: getWeather
+    description: Get the weather for a location
+    host: https://api.weather.com
+    path: /v1/current
+    method: GET
+    # inputSchema is optional; default is type: object
+</code></pre>
+<h2 id="architecture-2"><a class="header" href="#architecture-2">Architecture</a></h2>
+<p>The MCP Router implements the MCP HTTP transport specification:</p>
+<ol>
+<li><strong>Connection</strong>: Clients connect to the <code>ssePath</code> (default <code>/mcp/sse</code>) via GET to establish an SSE session. The server responds with an endpoint event containing the URI for message submission.</li>
+<li><strong>Messaging</strong>: Clients send JSON-RPC 2.0 messages to the <code>messagePath</code> (default <code>/mcp/message</code>) via POST.</li>
+<li><strong>Tool Execution</strong>: The router translates <code>tools/call</code> requests into HTTP requests to the configured downstream services (<code>host</code> + <code>path</code>).</li>
+</ol>
+<h2 id="supported-methods"><a class="header" href="#supported-methods">Supported Methods</a></h2>
+<p>The router supports the following MCP JSON-RPC methods:</p>
+<ul>
+<li><code>initialize</code>: Returns server capabilities (tools list changed notification) and server info.</li>
+<li><code>notifications/initialized</code>: Acknowledgment from the client.</li>
+<li><code>tools/list</code>: Lists all configured tools with their names, descriptions, and input schemas.</li>
+<li><code>tools/call</code>: Executes a specific tool by name. The <code>arguments</code> in the request are passed to the downstream service.</li>
+</ul>
+<h2 id="usage-3"><a class="header" href="#usage-3">Usage</a></h2>
+<p>Register the <code>McpHandler</code> in your <code>handler.yml</code> chain. Ensure the <code>ssePath</code> and <code>messagePath</code> are accessible.</p>
+<p>Example</p>
+<pre><code class="language-yaml">paths:
+  - path: '/mcp/sse'
+    method: 'GET'
+    exec:
+      - mcp-router
+  - path: '/mcp/message'
+    method: 'POST'
+    exec:
+      - mcp-router
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="interceptor"><a class="header" href="#interceptor">Interceptor</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="request-transformer-interceptor"><a class="header" href="#request-transformer-interceptor">Request Transformer Interceptor</a></h1>
@@ -2027,7 +2146,7 @@ chains:
 <li><strong>Specification:</strong> The API specification (OpenAPI, etc.) if applicable.</li>
 </ul>
 <p>This handler is crucial for monitoring, debugging, and integration with the light-controller and light-portal for runtime dashboards.</p>
-<h3 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h3>
+<h3 id="configuration-6"><a class="header" href="#configuration-6">Configuration</a></h3>
 <p>The handler is configured via <code>info.yml</code>.</p>
 <pre><code class="language-yaml"># Server info endpoint that can output environment and component along with configuration
 
@@ -2187,7 +2306,7 @@ paths:
       - admin
       - getLogContents
 </code></pre>
-<h2 id="usage-2"><a class="header" href="#usage-2">Usage</a></h2>
+<h2 id="usage-4"><a class="header" href="#usage-4">Usage</a></h2>
 <h3 id="1-get-logger-levels"><a class="header" href="#1-get-logger-levels">1. Get Logger Levels</a></h3>
 <p>Retrieves all configured loggers and their current levels.</p>
 <p><strong>Endpoint:</strong> <code>GET /adm/logger</code></p>
@@ -2257,7 +2376,7 @@ logging.downstreamFramework: SpringBoot
 <p>An implementation of <code>Result</code> that holds the successful value.</p>
 <h3 id="3-failure"><a class="header" href="#3-failure">3. Failure<t></t></a></h3>
 <p>An implementation of <code>Result</code> that holds a <code>com.networknt.status.Status</code> object describing the error.</p>
-<h2 id="usage-3"><a class="header" href="#usage-3">Usage</a></h2>
+<h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
 <h3 id="creating-results"><a class="header" href="#creating-results">Creating Results</a></h3>
 <p>You can create success or failure results using the static factory methods:</p>
 <pre><code class="language-java">import com.networknt.monad.Result;
@@ -2349,7 +2468,7 @@ json:
     "$.password": ""
     "$.creditCard.number": "^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})$"
 </code></pre>
-<h2 id="usage-4"><a class="header" href="#usage-4">Usage</a></h2>
+<h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
 <p>The <code>com.networknt.mask.Mask</code> utility class provides static methods to apply masking based on the configuration above.</p>
 <h3 id="1-mask-with-string"><a class="header" href="#1-mask-with-string">1. Mask with String</a></h3>
 <p>Used for simple replacements, typically in URIs or query parameters.</p>
@@ -2867,7 +2986,7 @@ pathSpecMapping:
 <p>The <code>SimpleJwtVerifyHandler</code> is a lightweight alternative to the standard <code>JwtVerifyHandler</code>. It is used when scope validation is not required. It still verifies the JWT signature and expiration but skips the complex authorization checks against the OpenAPI spec.</p>
 <h3 id="swtverifyhandler"><a class="header" href="#swtverifyhandler">SwtVerifyHandler</a></h3>
 <p>The <code>SwtVerifyHandler</code> is designed for Simple Web Tokens (SWT). Unlike JWTs, which are self-contained, SWTs often require token introspection against an OAuth 2.0 provider. This handler manages the introspection process and validates the token’s validity and associated scopes.</p>
-<h2 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h2>
+<h2 id="configuration-7"><a class="header" href="#configuration-7">Configuration</a></h2>
 <p>The security handlers are primarily configured via <code>security.yml</code>. Key configuration options include:</p>
 <ul>
 <li><strong>enableVerifyJwt</strong>: Toggle for JWT verification.</li>
@@ -2913,7 +3032,7 @@ pathSpecMapping:
 <p>Validates the outgoing response from the server. This is typically disabled in production for performance reasons but is invaluable during development and testing to ensure the server respects its own contract.</p>
 <h3 id="schemavalidator"><a class="header" href="#schemavalidator">SchemaValidator</a></h3>
 <p>The underlying engine (built on <code>networknt/json-schema-validator</code>) that performs the actual JSON Schema validation for bodies and complex parameters.</p>
-<h2 id="configuration-6"><a class="header" href="#configuration-6">Configuration</a></h2>
+<h2 id="configuration-8"><a class="header" href="#configuration-8">Configuration</a></h2>
 <p>The module is configured via <code>openapi-validator.yml</code>.</p>
 <h3 id="key-properties"><a class="header" href="#key-properties">Key Properties</a></h3>
 <div class="table-wrapper">
@@ -2967,7 +3086,7 @@ pathSpecMapping:
 <p>Renders a simple HTML page that embeds Swagger UI (via CDN). It is pre-configured to point to the <code>/spec.yaml</code> endpoint (served by <code>SpecDisplayHandler</code>) to load the API definition.</p>
 <h3 id="faviconhandler"><a class="header" href="#faviconhandler">FaviconHandler</a></h3>
 <p>A utility handler that serves a <code>favicon.ico</code> file, commonly requested by browsers when accessing the Swagger UI.</p>
-<h2 id="configuration-7"><a class="header" href="#configuration-7">Configuration</a></h2>
+<h2 id="configuration-9"><a class="header" href="#configuration-9">Configuration</a></h2>
 <p>The module is configured via <code>specification.yml</code>.</p>
 <h3 id="properties"><a class="header" href="#properties">Properties</a></h3>
 <div class="table-wrapper">
@@ -2986,7 +3105,7 @@ pathSpecMapping:
 <p>The <code>specification</code> module fully supports standardized hot-reloading. If the <code>specification.yml</code> is updated, the handlers will automatically refresh their internal configuration without requiring a server restart.</p>
 <h3 id="integration-with-moduleregistry"><a class="header" href="#integration-with-moduleregistry">Integration with ModuleRegistry</a></h3>
 <p>All handlers in this module register themselves with the <code>ModuleRegistry</code> on startup. This allows administrators to verify the loaded configuration via the <code>/server/info</code> endpoint.</p>
-<h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
+<h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
 <p>To use these handlers, you need to register them in your <code>handler.yml</code>.</p>
 <h3 id="example-handleryml-registration"><a class="header" href="#example-handleryml-registration">Example <code>handler.yml</code> registration:</a></h3>
 <pre><code class="language-yaml">handlers:
@@ -3131,7 +3250,7 @@ action:
 <li><strong>Rule-Based Access</strong>: Can enforce complex authorization rules (e.g., “deny if IP is X” or “allow if time is Y”) beyond simple RBAC.</li>
 <li><strong>Runtime Configuration</strong>: Supports hot-reloading of access control rules and settings via <code>access-control.yml</code>.</li>
 </ul>
-<h2 id="configuration-8"><a class="header" href="#configuration-8">Configuration</a></h2>
+<h2 id="configuration-10"><a class="header" href="#configuration-10">Configuration</a></h2>
 <p>This module relies on <code>security.yml</code> (shared with the core framework) and specific service definitions in <code>spec.yaml</code>.</p>
 <h3 id="securityyml"><a class="header" href="#securityyml"><code>security.yml</code></a></h3>
 <p>Standard configuration for JWT verification:</p>
@@ -3269,7 +3388,7 @@ action:
 <p>An interface defining the contract for consumer implementations, potentially allowing for different underlying consumer strategies (though <code>KafkaConsumerManager</code> is the primary implementation).</p>
 <h3 id="kafkaconsumerreadtask"><a class="header" href="#kafkaconsumerreadtask">KafkaConsumerReadTask</a></h3>
 <p>Encapsulates a single read request. It iterates over the Kafka consumer records, buffering them until the response size criteria (min/max bytes) are met or a timeout occurs.</p>
-<h2 id="configuration-9"><a class="header" href="#configuration-9">Configuration</a></h2>
+<h2 id="configuration-11"><a class="header" href="#configuration-11">Configuration</a></h2>
 <p>This module relies on <code>kafka-consumer.yml</code>, managed by <code>KafkaConsumerConfig</code> (from the <code>kafka-common</code> module).</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3277,7 +3396,7 @@ action:
 <li><code>server.id</code>: Unique identifier for the server instance, used for consumer naming.</li>
 <li><code>consumer.instance.timeout.ms</code>: Idle timeout for consumer instances.</li>
 </ul>
-<h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
+<h2 id="usage-8"><a class="header" href="#usage-8">Usage</a></h2>
 <p>This module is typically used by the <code>kafka-sidecar</code> or other microservices that need to expose Kafka consumption over HTTP/REST.</p>
 <p>The <code>KafkaConsumerManager</code> is usually initialized at application startup:</p>
 <pre><code class="language-java">KafkaConsumerConfig config = KafkaConsumerConfig.load();
@@ -3302,7 +3421,7 @@ KafkaConsumerManager manager = new KafkaConsumerManager(config);
 <p>An interface extension which exposes the underlying <code>KafkaProducer</code> instance.</p>
 <h3 id="serializedkeyandvalue"><a class="header" href="#serializedkeyandvalue">SerializedKeyAndValue</a></h3>
 <p>Helper class that holds the serialized bytes for key and value along with target partition and headers.</p>
-<h2 id="configuration-10"><a class="header" href="#configuration-10">Configuration</a></h2>
+<h2 id="configuration-12"><a class="header" href="#configuration-12">Configuration</a></h2>
 <p>This module relies on <code>kafka-producer.yml</code>, managed by <code>KafkaProducerConfig</code> (from the <code>kafka-common</code> module).</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3311,7 +3430,7 @@ KafkaConsumerManager manager = new KafkaConsumerManager(config);
 <li><code>auditEnabled</code>: Toggle for audit logging.</li>
 <li><code>injectOpenTracing</code>: Optional integration with OpenTracing.</li>
 </ul>
-<h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
+<h2 id="usage-9"><a class="header" href="#usage-9">Usage</a></h2>
 <p>Initialize <code>SidecarProducer</code> at application startup. It automatically loads configuration and registers itself.</p>
 <pre><code class="language-java">NativeLightProducer producer = new SidecarProducer();
 producer.open();
@@ -3331,7 +3450,7 @@ producer.produceWithSchema(topic, serviceId, partition, request, headers, auditL
 <li><strong>getKafkaValueByKey()</strong>: A utility to query state stores (interactive queries) with retry logic for handling rebalances.</li>
 <li><strong>getAllKafkaValue()</strong>: Queries all values from a state store.</li>
 </ul>
-<h2 id="configuration-11"><a class="header" href="#configuration-11">Configuration</a></h2>
+<h2 id="configuration-13"><a class="header" href="#configuration-13">Configuration</a></h2>
 <p>This module relies on <code>kafka-streams.yml</code>, managed by <code>KafkaStreamsConfig</code> (from the <code>kafka-common</code> module).</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3341,7 +3460,7 @@ producer.produceWithSchema(topic, serviceId, partition, request, headers, auditL
 <li><code>auditEnabled</code>: When true, an “AuditSink” is added to the topology to capture audit events.</li>
 <li><code>deadLetterEnabled</code>: When true, automatically configures DLQ sinks for error handling based on provided metadata.</li>
 </ul>
-<h2 id="usage-8"><a class="header" href="#usage-8">Usage</a></h2>
+<h2 id="usage-10"><a class="header" href="#usage-10">Usage</a></h2>
 <p>To use this module, implement <code>LightStreams</code> or call its default methods from your startup logic:</p>
 <pre><code class="language-java">// Load config
 KafkaStreamsConfig config = KafkaStreamsConfig.load();
@@ -3368,7 +3487,7 @@ KafkaStreams streams = startStream(ip, port, topology, config, dlqMap, auditPare
 </ul>
 <h3 id="msalexchangeconfig"><a class="header" href="#msalexchangeconfig">MsalExchangeConfig</a></h3>
 <p>Configuration class that loads settings from <code>msal-exchange.yml</code>. It supports hot reloading and module registration.</p>
-<h2 id="configuration-12"><a class="header" href="#configuration-12">Configuration</a></h2>
+<h2 id="configuration-14"><a class="header" href="#configuration-14">Configuration</a></h2>
 <p>The module is configured via <code>msal-exchange.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3404,7 +3523,7 @@ rememberMeTimeout: 604800
 </ul>
 <h3 id="statelessauthconfig"><a class="header" href="#statelessauthconfig">StatelessAuthConfig</a></h3>
 <p>Configuration class that loads settings from <code>statelessAuth.yml</code>. Supports hot reloading and module registration.</p>
-<h2 id="configuration-13"><a class="header" href="#configuration-13">Configuration</a></h2>
+<h2 id="configuration-15"><a class="header" href="#configuration-15">Configuration</a></h2>
 <p>The module is configured via <code>statelessAuth.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3455,7 +3574,7 @@ The configuration also includes sections for configuring social login providers 
 <li><strong>LatencyAssault</strong>: Injects artificial delays (latency) into requests.</li>
 <li><strong>MemoryAssault</strong>: Consumes heaps memory to simulate memory pressure/leaks.</li>
 </ul>
-<h2 id="configuration-14"><a class="header" href="#configuration-14">Configuration</a></h2>
+<h2 id="configuration-16"><a class="header" href="#configuration-16">Configuration</a></h2>
 <p>The module itself is configured via <code>chaos-monkey.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3480,7 +3599,7 @@ The configuration also includes sections for configuring social login providers 
 </ul>
 <h3 id="exceptionassaultconfig"><a class="header" href="#exceptionassaultconfig">ExceptionAssaultConfig</a></h3>
 <p>Configuration class that loads settings from <code>exception-assault.yml</code>.</p>
-<h2 id="configuration-15"><a class="header" href="#configuration-15">Configuration</a></h2>
+<h2 id="configuration-17"><a class="header" href="#configuration-17">Configuration</a></h2>
 <p>The module is configured via <code>exception-assault.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3510,7 +3629,7 @@ level: 5
 </ul>
 <h3 id="killappassaultconfig"><a class="header" href="#killappassaultconfig">KillappAssaultConfig</a></h3>
 <p>Configuration class that loads settings from <code>killapp-assault.yml</code>.</p>
-<h2 id="configuration-16"><a class="header" href="#configuration-16">Configuration</a></h2>
+<h2 id="configuration-18"><a class="header" href="#configuration-18">Configuration</a></h2>
 <p>The module is configured via <code>killapp-assault.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3540,7 +3659,7 @@ level: 100
 </ul>
 <h3 id="latencyassaultconfig"><a class="header" href="#latencyassaultconfig">LatencyAssaultConfig</a></h3>
 <p>Configuration class that loads settings from <code>latency-assault.yml</code>.</p>
-<h2 id="configuration-17"><a class="header" href="#configuration-17">Configuration</a></h2>
+<h2 id="configuration-19"><a class="header" href="#configuration-19">Configuration</a></h2>
 <p>The module is configured via <code>latency-assault.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3574,7 +3693,7 @@ latencyRangeEnd: 2000
 </ul>
 <h3 id="memoryassaultconfig"><a class="header" href="#memoryassaultconfig">MemoryAssaultConfig</a></h3>
 <p>Configuration class that loads settings from <code>memory-assault.yml</code>.</p>
-<h2 id="configuration-18"><a class="header" href="#configuration-18">Configuration</a></h2>
+<h2 id="configuration-20"><a class="header" href="#configuration-20">Configuration</a></h2>
 <p>The module is configured via <code>memory-assault.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3622,7 +3741,7 @@ memoryMillisecondsHoldFilledMemory: 60000
 <li><strong>Behavior</strong>: It converts the incoming <code>HttpServerExchange</code> into an <code>APIGatewayProxyRequestEvent</code>, invokes the configured Lambda function asynchronously using the <code>LambdaAsyncClient</code>, and then converts the <code>APIGatewayProxyResponseEvent</code> back into the HTTP response.</li>
 <li><strong>Metrics</strong>: If enabled, it records the total time spent in the Lambda invocation and injects it into the metrics handler.</li>
 </ul>
-<h2 id="configuration-19"><a class="header" href="#configuration-19">Configuration</a></h2>
+<h2 id="configuration-21"><a class="header" href="#configuration-21">Configuration</a></h2>
 <p>Example <code>lambda-invoker.yml</code>:</p>
 <pre><code class="language-yaml">region: us-east-1
 apiCallTimeout: 60000
@@ -3635,7 +3754,7 @@ functions:
 metricsInjection: true
 metricsName: lambda-response
 </code></pre>
-<h2 id="usage-9"><a class="header" href="#usage-9">Usage</a></h2>
+<h2 id="usage-11"><a class="header" href="#usage-11">Usage</a></h2>
 <p>To use the <code>LambdaFunctionHandler</code>, add it to your <code>handler.yml</code> chain:</p>
 <pre><code class="language-yaml">- com.networknt.aws.lambda.LambdaFunctionHandler@lambda
 </code></pre>

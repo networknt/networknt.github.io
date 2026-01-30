@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Rpc-Router - Light-4j Platform</title>
+        <title>MCP router - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,110 +174,81 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="rpc-router"><a class="header" href="#rpc-router">RPC Router</a></h1>
-<p>The <code>rpc-router</code> is a core module of the <code>light-hybrid-4j</code> framework. It provides a high-performance routing and validation mechanism that enables a single server instance to host multiple, independent service handlers (RPC-style).</p>
-<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
-<p>In the <code>light-hybrid-4j</code> architecture, the <code>rpc-router</code> serves as the primary dispatcher for incoming requests. Unlike traditional RESTful routing based on URL paths and HTTP verbs, the RPC router typically uses a single endpoint (e.g., <code>/api/json</code>) and determines the target logic based on a <code>serviceId</code> (or <code>cmd</code>) specified in the request payload.</p>
-<h3 id="key-responsibilities"><a class="header" href="#key-responsibilities">Key Responsibilities:</a></h3>
-<ul>
-<li><strong>Service Discovery</strong>: Dynamically discovering handlers annotated with <code>@ServiceHandler</code> at startup.</li>
-<li><strong>Request Dispatching</strong>: Mapping incoming JSON or Form payloads to the correct <code>HybridHandler</code>.</li>
-<li><strong>Schema Validation</strong>: Validating request payloads against JSON schemas defined in <code>spec.yaml</code> files.</li>
-<li><strong>Specification Management</strong>: Merging multiple <code>spec.yaml</code> files from various service JARs into a single runtime context.</li>
-<li><strong>Configuration Management</strong>: Providing a standardized, hot-reloadable configuration via <code>rpc-router.yml</code>.</li>
-</ul>
-<h2 id="core-components"><a class="header" href="#core-components">Core Components</a></h2>
-<h3 id="1-schemahandler"><a class="header" href="#1-schemahandler">1. <code>SchemaHandler</code></a></h3>
-<p>The <code>SchemaHandler</code> is a middleware handler that performs the initial processing of RPC requests.</p>
-<ul>
-<li><strong>Spec Loading</strong>: At startup, it scans the classpath for all instances of <code>spec.yaml</code> and merges them.</li>
-<li><strong>Validation</strong>: For every request, it identifies the <code>serviceId</code>, retrieves the associated schema, and validates the <code>data</code> portion of the payload.</li>
-<li><strong>Hot Reload</strong>: Supports refreshing the merged specifications at runtime without a server restart.</li>
-</ul>
-<h3 id="2-jsonhandler"><a class="header" href="#2-jsonhandler">2. <code>JsonHandler</code></a></h3>
-<p>The <code>JsonHandler</code> is the final dispatcher in the chain for JSON-based RPC calls.</p>
-<ul>
-<li><strong>Service Execution</strong>: It retrieves the pre-parsed <code>serviceId</code> and <code>data</code> from the exchange attachments (populated by <code>SchemaHandler</code>) and invokes the corresponding <code>HybridHandler.handle()</code> method.</li>
-</ul>
-<h3 id="3-rpcrouterconfig"><a class="header" href="#3-rpcrouterconfig">3. <code>RpcRouterConfig</code></a></h3>
-<p>This class manages the configuration found in <code>rpc-router.yml</code>. It supports:</p>
-<ul>
-<li><strong>Standardized Loading</strong>: Singleton-based access via <code>RpcRouterConfig.load()</code>.</li>
-<li><strong>Hot Reload</strong>: Thread-safe configuration refreshing via <code>RpcRouterConfig.reload()</code>.</li>
-<li><strong>Module Info</strong>: Automatic registration with the <code>ModuleRegistry</code> for runtime monitoring.</li>
-</ul>
-<h3 id="4-rpcstartuphookprovider"><a class="header" href="#4-rpcstartuphookprovider">4. <code>RpcStartupHookProvider</code></a></h3>
-<p>A startup hook that uses <strong>ClassGraph</strong> to scan configured packages for any class implementing <code>HybridHandler</code> and bearing the <code>@ServiceHandler</code> annotation.</p>
-<h2 id="configuration-rpc-routeryml"><a class="header" href="#configuration-rpc-routeryml">Configuration (<code>rpc-router.yml</code>)</a></h2>
+                        <h1 id="mcp-router"><a class="header" href="#mcp-router">MCP Router</a></h1>
+<p>The MCP (Model Context Protocol) Router in <code>light-4j</code> allows binding LLM tools to HTTP endpoints, enabling an AI model to interact with your services via the MCP standard. It supports both Server-Sent Events (SSE) for connection establishment and HTTP POST for JSON-RPC messages.</p>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>The configuration for the MCP Router is defined in <code>mcp-router.yml</code> (or <code>mcp-router.json/yaml</code>). It corresponds to the <code>McpConfig.java</code> class.</p>
+<h3 id="configuration-properties"><a class="header" href="#configuration-properties">Configuration Properties</a></h3>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Property</th><th>Default</th><th>Description</th></tr>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Type</th><th style="text-align: left">Default</th><th style="text-align: left">Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code>handlerPackages</code></td><td><code>[]</code></td><td>List of package prefixes to scan for service handlers.</td></tr>
-<tr><td><code>jsonPath</code></td><td><code>/api/json</code></td><td>The endpoint for JSON-based RPC requests.</td></tr>
-<tr><td><code>formPath</code></td><td><code>/api/form</code></td><td>The endpoint for Form-based RPC requests.</td></tr>
-<tr><td><code>registerService</code></td><td><code>false</code></td><td>If enabled, registers each discovered service ID with the discovery registry (e.g., Consul).</td></tr>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable or disable the MCP Router Handler.</td></tr>
+<tr><td style="text-align: left"><code>ssePath</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp/sse</code></td><td style="text-align: left">The endpoint path for establishing the MCP Server-Sent Events (SSE) connection.</td></tr>
+<tr><td style="text-align: left"><code>messagePath</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp/message</code></td><td style="text-align: left">The endpoint path for sending MCP JSON-RPC messages (POST).</td></tr>
+<tr><td style="text-align: left"><code>tools</code></td><td style="text-align: left">list</td><td style="text-align: left"><code>null</code></td><td style="text-align: left">A list of tools exposed by this router. Each tool maps to a downstream HTTP service.</td></tr>
 </tbody>
 </table>
 </div>
-<h2 id="request-structure"><a class="header" href="#request-structure">Request Structure</a></h2>
-<p>A typical RPC request to the <code>rpc-router</code> looks as follows:</p>
-<pre><code class="language-json">{
-  "host": "lightapi.net",
-  "service": "petstore",
-  "action": "getPetById",
-  "version": "1.0.0",
-  "data": {
-    "id": 123
-  }
-}
+<h3 id="configuration-example-mcp-routeryml"><a class="header" href="#configuration-example-mcp-routeryml">Configuration Example (mcp-router.yml)</a></h3>
+<pre><code class="language-yaml"># Enable MCP Router Handler
+enabled: true
+
+# Path for MCP Server-Sent Events (SSE) endpoint
+ssePath: /mcp/sse
+
+# Path for MCP JSON-RPC message endpoint
+messagePath: /mcp/message
+
+# Define tools exposed by this router
+tools:
+  - name: getWeather
+    description: Get the weather for a location
+    host: https://api.weather.com
+    path: /v1/current
+    method: GET
+    # inputSchema is optional; default is type: object
 </code></pre>
-<p>The router constructs the internal <code>serviceId</code> as <code>host/service/action/version</code> (e.g., <code>lightapi.net/petstore/getPetById/1.0.0</code>) to locate the handler.</p>
-<h2 id="implementation-example"><a class="header" href="#implementation-example">Implementation Example</a></h2>
-<h3 id="1-the-service-handler"><a class="header" href="#1-the-service-handler">1. The Service Handler</a></h3>
-<pre><code class="language-java">@ServiceHandler(id = "lightapi.net/petstore/getPetById/1.0.0")
-public class GetPetById implements HybridHandler {
-    @Override
-    public ByteBuffer handle(HttpServerExchange exchange, Object data) {
-        Map&lt;String, Object&gt; params = (Map&lt;String, Object&gt;) data;
-        // Business logic...
-        return NioUtils.toByteBuffer("{\"id\": 123, \"name\": \"Fluffy\"}");
-    }
-}
-</code></pre>
-<h3 id="2-the-specification-specyaml"><a class="header" href="#2-the-specification-specyaml">2. The Specification (<code>spec.yaml</code>)</a></h3>
-<p>Place this in <code>src/main/resources</code> of your service module:</p>
-<pre><code class="language-yaml">host: lightapi.net
-service: petstore
-action:
-  - name: getPetById
-    version: 1.0.0
-    handler: getPetById
-    request:
-      schema:
-        type: object
-        properties:
-          id: { type: integer }
-        required: [id]
-</code></pre>
-<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h2 id="architecture"><a class="header" href="#architecture">Architecture</a></h2>
+<p>The MCP Router implements the MCP HTTP transport specification:</p>
 <ol>
-<li><strong>Restrict Scanning</strong>: Always specify <code>handlerPackages</code> in <code>rpc-router.yml</code> to minimize startup time.</li>
-<li><strong>Contract-First</strong>: Define your <code>spec.yaml</code> rigorously. The router uses these schemas to protect your handlers from invalid data.</li>
-<li><strong>Hot Reload</strong>: Use the <code>/server/info</code> endpoint to verify that your configuration and specifications have been updated correctly after a reload.</li>
+<li><strong>Connection</strong>: Clients connect to the <code>ssePath</code> (default <code>/mcp/sse</code>) via GET to establish an SSE session. The server responds with an endpoint event containing the URI for message submission.</li>
+<li><strong>Messaging</strong>: Clients send JSON-RPC 2.0 messages to the <code>messagePath</code> (default <code>/mcp/message</code>) via POST.</li>
+<li><strong>Tool Execution</strong>: The router translates <code>tools/call</code> requests into HTTP requests to the configured downstream services (<code>host</code> + <code>path</code>).</li>
 </ol>
+<h2 id="supported-methods"><a class="header" href="#supported-methods">Supported Methods</a></h2>
+<p>The router supports the following MCP JSON-RPC methods:</p>
+<ul>
+<li><code>initialize</code>: Returns server capabilities (tools list changed notification) and server info.</li>
+<li><code>notifications/initialized</code>: Acknowledgment from the client.</li>
+<li><code>tools/list</code>: Lists all configured tools with their names, descriptions, and input schemas.</li>
+<li><code>tools/call</code>: Executes a specific tool by name. The <code>arguments</code> in the request are passed to the downstream service.</li>
+</ul>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<p>Register the <code>McpHandler</code> in your <code>handler.yml</code> chain. Ensure the <code>ssePath</code> and <code>messagePath</code> are accessible.</p>
+<p>Example</p>
+<pre><code class="language-yaml">paths:
+  - path: '/mcp/sse'
+    method: 'GET'
+    exec:
+      - mcp-router
+  - path: '/mcp/message'
+    method: 'POST'
+    exec:
+      - mcp-router
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/light-hybrid-4j.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/middleware/sse-handler.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/light-hybrid-4j/rpc-security.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/interceptor.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -287,11 +258,11 @@ action:
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/light-hybrid-4j.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/middleware/sse-handler.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/light-hybrid-4j/rpc-security.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/interceptor.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
