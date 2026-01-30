@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Http Handler - Light-4j Platform</title>
+        <title>HttpClient Retry - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,17 +174,198 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="http-handler"><a class="header" href="#http-handler">Http Handler</a></h1>
+                        <h1 id="httpclient-retry"><a class="header" href="#httpclient-retry">HttpClient Retry</a></h1>
+<p>Since the JDK HttpClient supports proxy configuration, we use it to connect to external services through NetSkope or McAfee gateways within an enterprise environment. When comparing it with the light-4j Http2Client, we identified several important behavioral differences and usage considerations.</p>
+<h3 id="unresolved-inetsocketaddress"><a class="header" href="#unresolved-inetsocketaddress">Unresolved InetSocketAddress</a></h3>
+<p>When configuring a proxy for the JDK HttpClient, it is important to use an unresolved socket address for the proxy host.</p>
+<pre><code>        if (config.getProxyHost() != null &amp;&amp; !config.getProxyHost().isEmpty()) {
+            clientBuilder.proxy(ProxySelector.of(
+                    InetSocketAddress.createUnresolved(
+                            config.getProxyHost(),
+                            config.getProxyPort() == 0 ? 443 : config.getProxyPort()
+                    )
+            ));
+        }
+
+</code></pre>
+<p>Using InetSocketAddress.createUnresolved() ensures that DNS resolution occurs when a new connection is established, rather than at client creation time. This allows DNS lookups to respect TTL values and return updated IP addresses when DNS records change.</p>
+<h3 id="retry-with-temporary-httpclient"><a class="header" href="#retry-with-temporary-httpclient">Retry with Temporary HttpClient</a></h3>
+<p>The JDK HttpClient is a heavyweight, long-lived object and should not be created frequently. It also does not expose APIs to directly manage connections (for example, closing an existing connection and retrying with a fresh one).</p>
+<p>A naive retry strategy is to create a new HttpClient instance for retries. Below is an implementation we used for testing purposes:</p>
+<pre><code>                    /*
+                    A new client is created from the second attempt onwards as there is no way we can create new connections. Since this handler
+                    is a singleton, it would be a bad idea to repeatedly abandon HttpClient instances in a singleton handler. It will cause leak
+                    of resource. We need a clean connection without abandoning the shared resource. The solution is to create a temporary fresh
+                    client from the second attempt and discard it immediately to minimize resource footprint.
+                    */
+                    int maxRetries = config.getMaxConnectionRetries();
+                    HttpResponse&lt;byte[]&gt; response = null;
+
+                    for (int attempt = 0; attempt &lt; maxRetries; attempt++) {
+
+                        try {
+                            if (attempt == 0) {
+                                // First attempt: Use the long-lived, shared client
+                                response = this.client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                            } else {
+                                // Subsequent attempts: Create a fresh, temporary client inside a try-with-resources
+                                logger.info("Attempt {} failed. Creating fresh client for retry.", attempt);
+
+                                try (HttpClient temporaryClient = createJavaHttpClient()) {
+                                    response = temporaryClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                                } // temporaryClient.close() called here if inner block exits normally/exceptionally
+                            }
+                            break; // Success! Exit the loop.
+                        } catch (IOException | InterruptedException e) {
+                            // Note: The exception could be from .send() OR from createJavaHttpClient() (if attempt &gt; 0)
+                            if (attempt &gt;= maxRetries - 1) {
+                                throw e; // Rethrow exception on final attempt failure
+                            }
+                            logger.warn("Attempt {} failed ({}). Retrying...", attempt + 1, e.getMessage());
+                            // Loop continues to next attempt
+                        }
+                    }
+
+</code></pre>
+<h4 id="load-test-findings"><a class="header" href="#load-test-findings">Load Test Findings</a></h4>
+<p>We created a test project under light-example-4j/instance-variable consisting of a caller service and a callee service. The caller created a new HttpClient per request.</p>
+<p>During load testing, we observed:</p>
+<ul>
+<li>
+<p>Extremely high thread and memory utilization</p>
+</li>
+<li>
+<p>Very poor throughput</p>
+</li>
+<li>
+<p>Sustained 100% CPU usage for several minutes after traffic stopped, as the JVM attempted to clean up HttpClient resources</p>
+</li>
+</ul>
+<p>This behavior exposes several serious problems.</p>
+<h4 id="identified-problems"><a class="header" href="#identified-problems">Identified Problems</a></h4>
+<p>The following is the problems:</p>
+<ol>
+<li>
+<p><strong>Resource Exhaustion (Threads &amp; Native Memory)</strong>
+The <code>java.net.http.HttpClient</code> is designed to be a long-lived, heavy object. When you create an instance, it spins up a background thread pool (specifically a <code>SelectorManager</code> thread) to handle async I/O.
+If you create a new client for <strong>every</strong> HTTP request, you are spawning thousands of threads. Even though the <code>client</code> reference is overwritten and eventually Garbage Collected, the background threads may not shut down immediately, leading to <code>OutOfMemoryError: unable to create new native thread</code> or high CPU usage.</p>
+</li>
+<li>
+<p><strong>Loss of Connection Pooling (Performance Killer)</strong>
+The <code>HttpClient</code> maintains an internal connection pool to reuse TCP connections (Keep-Alive) to the downstream service (<code>localhost:7002</code>). By recreating the client every time, you force a new TCP handshake (and SSL handshake if using HTTPS) for every single request. This drastically increases latency.</p>
+</li>
+<li>
+<p><strong>Thread Safety (Race Condition)</strong>
+Your handler is a singleton, meaning one instance of <code>DataGetHandler</code> serves all requests.
+You have defined <code>private HttpClient client;</code> as an instance variable.</p>
+<ul>
+<li><strong>Scenario:</strong> Request A comes in, creates a client, and assigns it to <code>this.client</code>. Immediately after, Request B comes in and overwrites <code>this.client</code> with a <em>new</em> client.</li>
+<li>Because <code>handleRequest</code> is called concurrently by multiple Undertow worker threads, having a mutable instance variable shared across requests is unsafe. While it might not crash immediately, it is poor design to share state this way without synchronization (though in this specific logic, you don’t actually <em>need</em> to share the state, which makes it even worse).</li>
+</ul>
+</li>
+</ol>
+<h3 id="connection-close-header"><a class="header" href="#connection-close-header">Connection: close Header</a></h3>
+<p>Given the above findings, creating temporary HttpClient instances for retries is too risky. Further investigation revealed a safer and more efficient approach: forcing a new connection using the Connection: close header.</p>
+<p>By disabling persistent connections for a retry request, the existing HttpClient can be reused while ensuring the next request establishes a fresh TCP connection.</p>
+<h4 id="why-this-is-better-than-creating-a-new-httpclient"><a class="header" href="#why-this-is-better-than-creating-a-new-httpclient">Why this is better than creating a new HttpClient</a></h4>
+<ul>
+<li>
+<p>Lower Resource Overhead: Recreating HttpClient creates a new SelectorManager thread and internal infrastructure, which is a heavy operation.</p>
+</li>
+<li>
+<p>Prevents Thread Leaks: Repeatedly creating and discarding clients can lead to “SelectorManager” thread buildup if not closed properly.</p>
+</li>
+<li>
+<p>Clean Socket Management: The Connection: close header handles the lifecycle at the protocol level, allowing the existing client’s thread pool to remain stable.</p>
+</li>
+</ul>
+<h4 id="how-does-the-header-work"><a class="header" href="#how-does-the-header-work">How does the header work</a></h4>
+<p>The Connection: close header instructs both the client and the server (or load balancer) to terminate the TCP connection immediately after the current request/response exchange is finished. When you use this header on a retry, the following happens:</p>
+<ul>
+<li>
+<p>Current Request: The client established a connection (or reused one) to send the request.</p>
+</li>
+<li>
+<p>After Response: Once the response is received (or the request fails), the client’s internal pool will not return that connection to the pool; it will close the socket.</p>
+</li>
+<li>
+<p>Next Attempt: Any subsequent request made by that same HttpClient instance will be forced to open a brand-new connection. This fresh connection will hit your load balancer again, which can then route it to a different, healthy node.</p>
+</li>
+</ul>
+<h4 id="recommended-retry-strategy-three-attempts"><a class="header" href="#recommended-retry-strategy-three-attempts">Recommended Retry Strategy (Three Attempts)</a></h4>
+<p>In most high-availability scenarios, retrying a third time (or using a “3-strikes” policy) is recommended. Here is the optimal sequence:</p>
+<ul>
+<li>
+<p>1st Attempt (Normal): Use the default persistent connection. This is fast and efficient.</p>
+</li>
+<li>
+<p>2nd Attempt (The “Fresh Connection” Retry): Use the Connection: close header. This forces the load balancer to re-evaluate the target node if the first one was dead or hanging.</p>
+</li>
+<li>
+<p>3rd Attempt (Final Safeguard): If the second attempt fails, it is often worth one final try with a small exponential backoff (e.g., 500ms–1s). This helps in cases of transient network congestion or when the load balancer hasn’t yet updated its health checks to exclude the failing node.</p>
+</li>
+</ul>
+<pre><code>                    /*
+                     * 1st Attempt (Normal): Use the default persistent connection. This is fast and efficient.
+
+                     * 2nd Attempt (The "Fresh Connection" Retry): Use the Connection: close header. This forces
+                     *  the load balancer to re-evaluate the target node if the first one was dead or hanging.
+
+                     * 3rd Attempt (Final Safeguard): It will use a new connection to send the request.
+                     */
+                    int maxRetries = config.getMaxConnectionRetries();
+                    HttpResponse&lt;byte[]&gt; response = null;
+
+                    for (int attempt = 0; attempt &lt; maxRetries; attempt++) {
+                        try {
+                            HttpRequest finalRequest;
+
+                            if (attempt == 0) {
+                                // First attempt: Use original request (Keep-Alive enabled by default)
+                                finalRequest = request;
+                            } else {
+                                // Subsequent attempts: Force a fresh connection by adding the 'Connection: close' header.
+                                // This ensures the load balancer sees a new TCP handshake and can route to a new node.
+                                logger.info("Attempt {} failed. Retrying with 'Connection: close' to force fresh connection.", attempt);
+
+                                finalRequest = HttpRequest.newBuilder(request, (name, value) -&gt; true)
+                                        .header("Connection", "close")
+                                        .build();
+                            }
+
+                            // Always use the same shared, long-lived client
+                            response = this.client.send(finalRequest, HttpResponse.BodyHandlers.ofByteArray());
+                            break; // Success! Exit the loop.
+
+                        } catch (IOException | InterruptedException e) {
+                            if (attempt &gt;= maxRetries - 1) {
+                                throw e; // Rethrow on final attempt
+                            }
+                            logger.warn("Attempt {} failed ({}). Retrying...", attempt + 1, e.getMessage());
+
+                            // Optional: Add a small sleep/backoff here to allow LB health checks to update
+                        }
+                    }
+
+</code></pre>
+<h4 id="header-restriction"><a class="header" href="#header-restriction">Header Restriction</a></h4>
+<p>Header Restriction: Ensure your JVM is started with -Djdk.httpclient.allowRestrictedHeaders=connection to allow the HttpClient to modify the Connection header.</p>
+<p>To make it easier, we have added the following code to the handler.</p>
+<pre><code>    static {
+        System.setProperty("jdk.httpclient.allowRestrictedHeaders", "host,connection");
+    }
+
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../concern/light-4j.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../design/module-registry.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../concern/handler/path-resource.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../cross-cutting-concerns.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -194,11 +375,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../concern/light-4j.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../design/module-registry.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../concern/handler/path-resource.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../cross-cutting-concerns.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
