@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5061426f.js";
+            window.path_to_searchindex_js = "searchindex-29758b15.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-75f624cb.js"></script>
+        <script src="toc-ae2fe306.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -906,6 +906,147 @@ You have defined <code>private HttpClient client;</code> as an instance variable
     }
 
 </code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-genai-client-design"><a class="header" href="#light-genai-client-design">Light GenAI Client Design</a></h1>
+<h2 id="introduction-3"><a class="header" href="#introduction-3">Introduction</a></h2>
+<p>The <code>light-genai-4j</code> library provides a standardized way for Light-4j applications to interact with various Generative AI (GenAI) providers. By abstracting the underlying client implementations behind a common interface, applications can support dynamic model switching and simplified integration for different environments (e.g., local development vs. production).</p>
+<h2 id="architecture-2"><a class="header" href="#architecture-2">Architecture</a></h2>
+<p>The project is structured into a core module and provider-specific implementation modules.</p>
+<h3 id="modules"><a class="header" href="#modules">Modules</a></h3>
+<ol>
+<li><strong>genai-core</strong>: Defines the common interfaces and shared utilities.</li>
+<li><strong>genai-ollama</strong>: Implementation for the Ollama API, suitable for local LLM inference.</li>
+<li><strong>genai-bedrock</strong>: Implementation for AWS Bedrock, suitable for enterprise-grade managed LLMs.</li>
+</ol>
+<h2 id="interface-design"><a class="header" href="#interface-design">Interface Design</a></h2>
+<p>The core interaction is defined by the <code>GenAiClient</code> interface in the <code>genai-core</code> module.</p>
+<pre><code class="language-java">package com.networknt.genai;
+
+import java.util.List;
+
+public interface GenAiClient {
+    /**
+     * Generates a text completion for the given list of chat messages.
+     * 
+     * @param messages The list of chat messages (history).
+     * @return The generated text response from the model.
+     */
+    String chat(List&lt;ChatMessage&gt; messages);
+
+    /**
+     * Generates a text completion stream for the given list of chat messages.
+     * 
+     * @param messages The list of chat messages (history).
+     * @param callback The callback to receive chunks, completion, and errors.
+     */
+    void chatStream(List&lt;ChatMessage&gt; messages, StreamCallback callback);
+}
+</code></pre>
+<p>The <code>StreamCallback</code> interface:</p>
+<pre><code class="language-java">public interface StreamCallback {
+    void onEvent(String content);
+    void onComplete();
+    void onError(Throwable t);
+}
+</code></pre>
+<p>This simple interface allows for “drop-in” replacements of the backend model without changing the application logic.</p>
+<h3 id="chatmessage"><a class="header" href="#chatmessage">ChatMessage</a></h3>
+<p>A simple POJO to represent a message in the conversation.</p>
+<pre><code class="language-java">public class ChatMessage {
+    private String role; // "user", "assistant", "system"
+    private String content;
+    // constructors, getters, setters
+}
+</code></pre>
+<h2 id="implementations"><a class="header" href="#implementations">Implementations</a></h2>
+<h3 id="ollama-genai-ollama"><a class="header" href="#ollama-genai-ollama">Ollama (<code>genai-ollama</code>)</a></h3>
+<p>Connects to a local or remote Ollama instance.</p>
+<ul>
+<li><strong>Configuration</strong>: <code>ollama.yml</code>
+<ul>
+<li><code>ollamaUrl</code>: URL of the Ollama server (e.g., <code>http://localhost:11434</code>).</li>
+<li><code>model</code>: The model name to use (e.g., <code>llama3.1</code>, <code>mistral</code>).</li>
+</ul>
+</li>
+<li><strong>Protocol</strong>: Uses the <code>/api/generate</code> endpoint via HTTP/2.</li>
+</ul>
+<h3 id="aws-bedrock-genai-bedrock"><a class="header" href="#aws-bedrock-genai-bedrock">AWS Bedrock (<code>genai-bedrock</code>)</a></h3>
+<p>Connects to Amazon Bedrock using the AWS SDK for Java v2.</p>
+<ul>
+<li><strong>Configuration</strong>: <code>bedrock.yml</code>
+<ul>
+<li><code>region</code>: AWS Region (e.g., <code>us-east-1</code>).</li>
+<li><code>modelId</code>: The specific model ID (e.g., <code>anthropic.claude-v2</code>, <code>amazon.titan-text-express-v1</code>).</li>
+</ul>
+</li>
+<li><strong>Authentication</strong>: Uses the standard AWS Default Credentials Provider Chain (Environment variables, Profile, IAM Roles).</li>
+</ul>
+<h3 id="openai-genai-openai"><a class="header" href="#openai-genai-openai">OpenAI (<code>genai-openai</code>)</a></h3>
+<p>Connects to the OpenAI Chat Completions API.</p>
+<ul>
+<li><strong>Configuration</strong>: <code>openai.yml</code>
+<ul>
+<li><code>url</code>: API endpoint (e.g., <code>https://api.openai.com/v1/chat/completions</code>).</li>
+<li><code>model</code>: The model to use (e.g., <code>gpt-3.5-turbo</code>, <code>gpt-4</code>).</li>
+<li><code>apiKey</code>: Your OpenAI API key.</li>
+</ul>
+</li>
+<li><strong>Protocol</strong>: Uses standard HTTP/2 (or HTTP/1.1) to send JSON payloads.</li>
+</ul>
+<h3 id="gemini-genai-gemini"><a class="header" href="#gemini-genai-gemini">Gemini (<code>genai-gemini</code>)</a></h3>
+<p>Connects to Google’s Gemini models (via Vertex AI or AI Studio).</p>
+<ul>
+<li><strong>Configuration</strong>: <code>gemini.yml</code>
+<ul>
+<li><code>url</code>: API endpoint structure.</li>
+<li><code>model</code>: The model identifier (e.g., <code>gemini-pro</code>).</li>
+<li><code>apiKey</code>: Your Google API key.</li>
+</ul>
+</li>
+<li><strong>Protocol</strong>: REST API with JSON payloads.</li>
+</ul>
+<h3 id="code-example"><a class="header" href="#code-example">Code Example</a></h3>
+<p>The following example demonstrates how to use the interface to interact with a model, regardless of the underlying implementation.</p>
+<pre><code class="language-java">// Logic to instantiate the correct client based on external configuration (e.g. from service.yml or reflection)
+GenAiClient client;
+if (useBedrock) {
+    client = new BedrockClient();
+} else if (useOpenAi) {
+    client = new OpenAiClient();
+} else if (useGemini) {
+    client = new GeminiClient();
+} else {
+    client = new OllamaClient();
+}
+
+// Application logic remains agnostic
+List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
+messages.add(new ChatMessage("user", "Explain quantum computing in 50 words."));
+String response = client.chat(messages);
+System.out.println(response);
+
+// For subsequent turns:
+messages.add(new ChatMessage("assistant", response));
+messages.add(new ChatMessage("user", "What about entanglement?"));
+String response2 = client.chat(messages);
+</code></pre>
+<h2 id="future-enhancements"><a class="header" href="#future-enhancements">Future Enhancements</a></h2>
+<ul>
+<li><strong>Streaming Support</strong>: Add <code>generateStream</code> to support token streaming.</li>
+<li><strong>Chat Models</strong>: Add support for structured chat history (System, User, Assistant messages).</li>
+<li><strong>Tool Use</strong>: Support for function calling and tool use with models that support it.</li>
+<li><strong>More Providers</strong>: Integrations for OpenAI (ChatGPT), Google Vertex AI (Gemini), and others.</li>
+</ul>
+<h2 id="technical-decisions"><a class="header" href="#technical-decisions">Technical Decisions</a></h2>
+<h3 id="use-of-http2client-over-jdk-httpclient"><a class="header" href="#use-of-http2client-over-jdk-httpclient">Use of <code>Http2Client</code> over JDK <code>HttpClient</code></a></h3>
+<p>The implementation uses the light-4j <code>Http2Client</code> (wrapping Undertow) instead of the standard JDK <code>HttpClient</code> for the following reasons:</p>
+<ol>
+<li><strong>Framework Consistency</strong>: <code>Http2Client</code> is the standard client within the light-4j ecosystem. Using it ensures consistent configuration, management, and behavior across all modules of the framework.</li>
+<li><strong>Performance</strong>: It leverages the non-blocking I/O capabilities of the underlying Undertow server, sharing the same XNIO worker threads as the server components. This minimizes context switching and optimizes resource usage in a microservices environment.</li>
+<li><strong>Callback Pattern</strong>: The <code>ClientCallback</code> and <code>ChannelListener</code> patterns are idiomatic to light-4j/Undertow. While they differ from the <code>CompletableFuture</code> style of the JDK client, using them maintains architectural uniformity for developers familiar with the framework’s internals.</li>
+<li><strong>Integration</strong>: Utilizing the framework’s client allows for seamless integration with other light-4j features such as centralized SSL context management, connection pooling, and client-side observability.</li>
+</ol>
+<p>For implementations that require vendor-specific logic (like AWS signing), we utilize the official vendor SDKs (e.g., AWS SDK for Java v2 for Bedrock) to handle complex authentication and protocol details efficiently.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="cross-cutting-concerns"><a class="header" href="#cross-cutting-concerns">Cross-Cutting-Concerns</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -1895,7 +2036,7 @@ tools:
     method: GET
     # inputSchema is optional; default is type: object
 </code></pre>
-<h2 id="architecture-2"><a class="header" href="#architecture-2">Architecture</a></h2>
+<h2 id="architecture-3"><a class="header" href="#architecture-3">Architecture</a></h2>
 <p>The MCP Router implements the MCP HTTP transport specification:</p>
 <ol>
 <li><strong>Connection</strong>: Clients connect to the <code>ssePath</code> (default <code>/mcp/sse</code>) via GET to establish an SSE session. The server responds with an endpoint event containing the URI for message submission.</li>
@@ -2137,7 +2278,7 @@ chains:
 <h1 id="admin-endpoint"><a class="header" href="#admin-endpoint">Admin Endpoint</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="server-info"><a class="header" href="#server-info">Server Info</a></h1>
-<h3 id="introduction-3"><a class="header" href="#introduction-3">Introduction</a></h3>
+<h3 id="introduction-4"><a class="header" href="#introduction-4">Introduction</a></h3>
 <p>The <code>ServerInfoGetHandler</code> is a middleware component in the light-4j framework that provides a comprehensive overview of the server’s runtime state. This includes:</p>
 <ul>
 <li><strong>Environment Info:</strong> Host IP, hostname, DNS, and runtime metrics (processors, memory).</li>
@@ -3764,6 +3905,469 @@ metricsName: lambda-response
     method: 'GET'
     handler:
       - lambda
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-websocket-4j"><a class="header" href="#light-websocket-4j">Light-websocket-4j</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="websocket-client"><a class="header" href="#websocket-client">Websocket Client</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="websocket-router"><a class="header" href="#websocket-router">WebSocket Router</a></h1>
+<p>The <code>WebSocketRouterHandler</code> is a middleware handler designed to route WebSocket connections to downstream services in a microservices architecture. It sits in the request chain and identifies WebSocket handshake requests either by a specific header (<code>service_id</code>) or by matching the request path against configured prefixes.</p>
+<p>When a request is identified as a WebSocket request targeted for routing, this handler performs the WebSocket handshake (upgrading the connection) and establishes a proxy connection to the appropriate downstream service. It manages the bi-directional traffic between the client and the downstream service.</p>
+<h2 id="configuration-22"><a class="header" href="#configuration-22">Configuration</a></h2>
+<p>The configuration for the WebSocket Router Handler is located in <code>websocket-router.yml</code>.</p>
+<p>| Field | Type | Description | Default |
+|Str|Str|Str|Str|
+| enabled | boolean | Enable or disable the WebSocket Router Handler. | true |
+| pathPrefixService | Map&lt;String, String&gt; | A map defining path prefixes and their corresponding service IDs. If a request path starts with a prefix, it is routed to the associated service ID. | empty |</p>
+<h3 id="example-configuration"><a class="header" href="#example-configuration">Example Configuration</a></h3>
+<pre><code class="language-yaml"># websocket-router.yml
+enabled: true
+pathPrefixService:
+  /ws/chat: chat-service
+  /ws/notification: notification-service
+</code></pre>
+<h2 id="usage-12"><a class="header" href="#usage-12">Usage</a></h2>
+<p>To use the <code>WebSocketRouterHandler</code>, you need to register it in your <code>handler.yml</code> configuration file. It should be placed in the middleware chain where you want to intercept and route WebSocket requests.</p>
+<h3 id="1-register-the-handler"><a class="header" href="#1-register-the-handler">1. Register the Handler</a></h3>
+<p>Add the fully qualified class name to the <code>handlers</code> list in <code>handler.yml</code>:</p>
+<pre><code class="language-yaml">handlers:
+  - com.networknt.websocket.router.WebSocketRouterHandler
+  # ... other handlers
+</code></pre>
+<h3 id="2-configure-the-chain"><a class="header" href="#2-configure-the-chain">2. Configure the Chain</a></h3>
+<p>Add the handler alias (usually <code>WebSocketRouterHandler</code> or a custom alias if defined) to the <code>default</code> chain or specific path chains.</p>
+<pre><code class="language-yaml">chains:
+  default:
+    - exception
+    - metrics
+    - traceability
+    - correlation
+    - WebSocketRouterHandler
+    - header
+    - router
+</code></pre>
+<h2 id="how-it-works-4"><a class="header" href="#how-it-works-4">How it Works</a></h2>
+<ol>
+<li><strong>Request Interception</strong>: The handler checks each incoming request.</li>
+<li><strong>Identification</strong>:
+<ul>
+<li><strong>Header-based</strong>: Checks for the presence of a <code>service_id</code> header.</li>
+<li><strong>Path-based</strong>: Checks if the request path matches any entry in the <code>pathPrefixService</code> map.</li>
+</ul>
+</li>
+<li><strong>Handshake &amp; Upgrade</strong>: If matched, the handler delegates to Undertow’s <code>WebSocketProtocolHandshakeHandler</code> to perform the upgrade.</li>
+<li><strong>Routing</strong>: Upon successful connection (<code>onConnect</code>), it looks up the downstream service URL using the <code>Cluster</code> and <code>Service</code> discovery mechanism based on the <code>service_id</code>.</li>
+<li><strong>Proxying</strong>: It establishes a WebSocket connection to the downstream service and pipes messages between the client and the backend.</li>
+</ol>
+<p>If the request is not matched as a WebSocket routing request, the handler simply delegates to the next handler in the chain, allowing standard HTTP requests to proceed to other endpoints.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="websocket-handler"><a class="header" href="#websocket-handler">WebSocket Handler</a></h1>
+<p>The <code>WebSocketHandler</code> is a middleware handler designed to process WebSocket messages on the server side (Light Gateway or Light 4J Service), rather than proxying them to downstream services. It enables the implementation of custom logic, such as Chat bots, GenAI integration, or real-time notifications, directly within the application.</p>
+<h2 id="configuration-23"><a class="header" href="#configuration-23">Configuration</a></h2>
+<p>The configuration is located in <code>websocket-handler.yml</code>.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th><th>Default</th></tr>
+</thead>
+<tbody>
+<tr><td>enabled</td><td>boolean</td><td>Enable or disable the WebSocket Handler.</td><td>true</td></tr>
+<tr><td>pathPrefixHandlers</td><td>Map&lt;String, String&gt;</td><td>A map where keys are path prefixes (e.g., <code>/chat</code>) and values are the fully qualified class names of the handler implementation which must implement <code>com.networknt.websocket.handler.WebSocketApplicationHandler</code>.</td><td>empty</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="example-configuration-1"><a class="header" href="#example-configuration-1">Example Configuration</a></h3>
+<pre><code class="language-yaml"># websocket-handler.yml
+enabled: true
+pathPrefixHandlers:
+  /chat: com.networknt.chat.ChatHandler
+  /notifications: com.networknt.notify.NotificationHandler
+</code></pre>
+<h2 id="implementing-a-handler"><a class="header" href="#implementing-a-handler">Implementing a Handler</a></h2>
+<p>To handle WebSocket connections, you must implement the <code>com.networknt.websocket.handler.WebSocketApplicationHandler</code> interface used in the configuration above.</p>
+<pre><code class="language-java">package com.networknt.chat;
+
+import com.networknt.websocket.handler.WebSocketApplicationHandler;
+import io.undertow.websockets.core.*;
+import io.undertow.websockets.spi.WebSocketHttpExchange;
+
+public class ChatHandler implements WebSocketApplicationHandler {
+    @Override
+    public void onConnect(WebSocketHttpExchange exchange, WebSocketChannel channel) {
+        channel.getReceiveSetter().set(new AbstractReceiveListener() {
+            @Override
+            protected void onFullTextMessage(WebSocketChannel channel, BufferedTextMessage message) {
+                String data = message.getData();
+                // Process message (e.g., send to GenAI, broadcast to other users)
+                WebSockets.sendText("Echo: " + data, channel, null);
+            }
+        });
+        channel.resumeReceives();
+    }
+}
+</code></pre>
+<h2 id="usage-13"><a class="header" href="#usage-13">Usage</a></h2>
+<p>To use the <code>WebSocketHandler</code>, you need to register it in your <code>handler.yml</code> configuration file.</p>
+<h3 id="1-register-the-handler-1"><a class="header" href="#1-register-the-handler-1">1. Register the Handler</a></h3>
+<p>Add the <code>WebSocketHandler</code> to your <code>handler.yml</code> configuration:</p>
+<pre><code class="language-yaml">handlers:
+  - com.networknt.websocket.handler.WebSocketHandler
+</code></pre>
+<h3 id="2-add-to-chain"><a class="header" href="#2-add-to-chain">2. Add to Chain</a></h3>
+<p>Place it in the middleware chain. It should be placed after security if authentication is required.</p>
+<pre><code class="language-yaml">chains:
+  default:
+    - exception
+    - metrics
+    - traceability
+    - correlation
+    - WebSocketHandler
+    # ... other handlers
+</code></pre>
+<h2 id="how-it-works-5"><a class="header" href="#how-it-works-5">How It Works</a></h2>
+<ol>
+<li><strong>Matching</strong>: The handler checks if the request path starts with one of the configured <code>pathPrefixHandlers</code>.</li>
+<li><strong>Instantiation</strong>: It loads and instantiates the configured handler class singleton at startup.</li>
+<li><strong>Upgrade</strong>: If a request matches, <code>WebSocketHandler</code> performs the WebSocket handshake (upgrading HTTP to WebSocket).</li>
+<li><strong>Delegation</strong>: Upon successful connection (<code>onConnect</code>), it delegates control to the matched implementation of <code>WebSocketApplicationHandler</code>.</li>
+</ol>
+<p>If the request does not match any configured prefix, it is passed to the next handler in the chain.</p>
+<h2 id="maven-dependency"><a class="header" href="#maven-dependency">Maven Dependency</a></h2>
+<p>Ensure you have the module dependency in your <code>pom.xml</code>:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;websocket-handler&lt;/artifactId&gt;
+    &lt;version&gt;${version.light-websocket-4j}&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-genai-4j"><a class="header" href="#light-genai-4j">Light-genai-4j</a></h1>
+<p><code>light-genai-4j</code> is a library that provides integration with various Generative AI models (LLMs) such as Gemini, OpenAI, Bedrock, and Ollama for the light-4j framework.</p>
+<h2 id="design-decisions"><a class="header" href="#design-decisions">Design Decisions</a></h2>
+<h3 id="genai-websocket-handler"><a class="header" href="#genai-websocket-handler">GenAI WebSocket Handler</a></h3>
+<p>The <code>genai-websocket-handler</code> module is located in this repository (<code>light-genai-4j</code>) rather than <code>light-websocket-4j</code>.</p>
+<p><strong>Reasoning:</strong></p>
+<ul>
+<li><strong>Dependency Direction</strong>: This handler implements specific business logic (managing chat history, session context, and invoking LLM clients) that depends on the core GenAI capabilities provided by <code>light-genai-4j</code>.</li>
+<li><strong>Separation of Concerns</strong>: <code>light-websocket-4j</code> is an infrastructure library responsible for the WebSocket transport layer (connection management, routing, hygiene). <code>light-genai-4j</code> is the domain library responsible for AI interactions.</li>
+<li><strong>Implementation</strong>: This module implements <code>com.networknt.websocket.handler.WebSocketApplicationHandler</code> from <code>light-websocket-4j</code>, effectively bridging the transport layer with the AI domain layer.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="ollama-client"><a class="header" href="#ollama-client">Ollama Client</a></h1>
+<p>The <code>ollama-client</code> module provides a non-blocking, asynchronous client for interacting with the Ollama API. It is part of the <code>light-genai-4j</code> library and leverages the Undertow HTTP client for efficient communication.</p>
+<h2 id="features-10"><a class="header" href="#features-10">Features</a></h2>
+<ul>
+<li><strong>Non-blocking I/O</strong>: Uses Undertow’s asynchronous HTTP client for high throughput.</li>
+<li><strong>Streaming Support</strong>: Supports streaming responses (NDJSON) from Ollama for chat completions.</li>
+<li><strong>Configuration</strong>: externalizable configuration via <code>ollama.yml</code>.</li>
+<li><strong>Token Management</strong>: N/A (Ollama usually runs locally without auth, but can be proxied).</li>
+</ul>
+<h2 id="configuration-24"><a class="header" href="#configuration-24">Configuration</a></h2>
+<p>The client is configured via <code>ollama.yml</code> in the <code>src/main/resources/config</code> directory (or externalized config folder).</p>
+<h3 id="properties-1"><a class="header" href="#properties-1">Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>ollamaUrl</code></td><td style="text-align: left">The base URL of the Ollama server.</td><td style="text-align: left"><code>http://localhost:11434</code> (example)</td></tr>
+<tr><td style="text-align: left"><code>model</code></td><td style="text-align: left">The default model to use for requests.</td><td style="text-align: left"><code>llama3.2</code> (example)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="example-ollamayml"><a class="header" href="#example-ollamayml">Example <code>ollama.yml</code></a></h3>
+<pre><code class="language-yaml">ollamaUrl: http://localhost:11434
+model: llama3.2
+</code></pre>
+<h2 id="usage-14"><a class="header" href="#usage-14">Usage</a></h2>
+<h3 id="sync-chat-non-streaming"><a class="header" href="#sync-chat-non-streaming">Sync Chat (Non-Streaming)</a></h3>
+<pre><code class="language-java">GenAiClient client = new OllamaClient();
+List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
+messages.add(new ChatMessage("user", "Hello, who are you?"));
+
+// Blocking call (not recommended for high concurrency)
+String response = client.chat(messages);
+System.out.println(response);
+</code></pre>
+<h3 id="async-chat-streaming"><a class="header" href="#async-chat-streaming">Async Chat (Streaming)</a></h3>
+<pre><code class="language-java">GenAiClient client = new OllamaClient();
+List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
+messages.add(new ChatMessage("user", "Tell me a story."));
+
+client.chatStream(messages, new StreamCallback() {
+    @Override
+    public void onEvent(String content) {
+        System.out.print(content); // Process token chunk
+    }
+
+    @Override
+    public void onComplete() {
+        System.out.println("\nDone.");
+    }
+
+    @Override
+    public void onError(Throwable throwable) {
+        throwable.printStackTrace();
+    }
+});
+</code></pre>
+<h2 id="dependencies"><a class="header" href="#dependencies">Dependencies</a></h2>
+<ul>
+<li><code>light-4j</code> core (client, config)</li>
+<li><code>genai-core</code></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="openai-client"><a class="header" href="#openai-client">OpenAI Client</a></h1>
+<p>The <code>OpenAiClient</code> is an implementation of <code>GenAiClient</code> that interacts with the OpenAI API (GPT models). It supports both synchronous chat and asynchronous streaming chat.</p>
+<h2 id="features-11"><a class="header" href="#features-11">Features</a></h2>
+<ul>
+<li><strong>Synchronous Chat</strong>: Sends a prompt to the model and waits for the full response.</li>
+<li><strong>Streaming Chat</strong>: streams the response from the model token by token, suitable for real-time applications.</li>
+<li><strong>Non-Blocking I/O</strong>: Uses XNIO and Undertow’s asynchronous client to prevent blocking threads during I/O operations.</li>
+</ul>
+<h2 id="configuration-25"><a class="header" href="#configuration-25">Configuration</a></h2>
+<p>The client is configured via <code>openai.yml</code>.</p>
+<h3 id="properties-2"><a class="header" href="#properties-2">Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>url</code></td><td style="text-align: left">The OpenAI API URL for chat completions.</td><td style="text-align: left"><code>https://api.openai.com/v1/chat/completions</code></td></tr>
+<tr><td style="text-align: left"><code>model</code></td><td style="text-align: left">The model to use (e.g., <code>gpt-3.5-turbo</code>, <code>gpt-4</code>).</td><td style="text-align: left"><code>null</code></td></tr>
+<tr><td style="text-align: left"><code>apiKey</code></td><td style="text-align: left">Your OpenAI API key.</td><td style="text-align: left"><code>null</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="example-openaiyml"><a class="header" href="#example-openaiyml">Example <code>openai.yml</code></a></h3>
+<pre><code class="language-yaml">url: https://api.openai.com/v1/chat/completions
+model: gpt-3.5-turbo
+apiKey: your-openai-api-key
+</code></pre>
+<h2 id="usage-15"><a class="header" href="#usage-15">Usage</a></h2>
+<h3 id="injection"><a class="header" href="#injection">Injection</a></h3>
+<p>You can inject the <code>OpenAiClient</code> as a <code>GenAiClient</code> implementation.</p>
+<pre><code class="language-java">GenAiClient client = new OpenAiClient();
+</code></pre>
+<h3 id="synchronous-chat"><a class="header" href="#synchronous-chat">Synchronous Chat</a></h3>
+<pre><code class="language-java">List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
+messages.add(new ChatMessage("user", "Hello, OpenAI!"));
+String response = client.chat(messages);
+System.out.println(response);
+</code></pre>
+<h3 id="streaming-chat"><a class="header" href="#streaming-chat">Streaming Chat</a></h3>
+<pre><code class="language-java">List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
+messages.add(new ChatMessage("user", "Write a long story."));
+
+client.chatStream(messages, new StreamCallback() {
+    @Override
+    public void onEvent(String content) {
+        System.out.print(content);
+    }
+
+    @Override
+    public void onComplete() {
+        System.out.println("\nDone.");
+    }
+
+    @Override
+    public void onError(Throwable throwable) {
+        throwable.printStackTrace();
+    }
+});
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="gemini-client"><a class="header" href="#gemini-client">Gemini Client</a></h1>
+<p>The <code>GeminiClient</code> is an implementation of <code>GenAiClient</code> that interacts with Google’s Gemini API. It supports both synchronous chat and asynchronous streaming chat.</p>
+<h2 id="features-12"><a class="header" href="#features-12">Features</a></h2>
+<ul>
+<li><strong>Synchronous Chat</strong>: Sends a prompt to the model and waits for the full response.</li>
+<li><strong>Streaming Chat</strong>: streams the response from the model chunk by chunk, suitable for real-time applications.</li>
+<li><strong>Non-Blocking I/O</strong>: Uses XNIO and Undertow’s asynchronous client to prevent blocking threads during I/O operations.</li>
+</ul>
+<h2 id="configuration-26"><a class="header" href="#configuration-26">Configuration</a></h2>
+<p>The client is configured via <code>gemini.yml</code>.</p>
+<h3 id="properties-3"><a class="header" href="#properties-3">Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>url</code></td><td style="text-align: left">The Gemini API URL base format.</td><td style="text-align: left"><code>https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent</code></td></tr>
+<tr><td style="text-align: left"><code>model</code></td><td style="text-align: left">The model to use (e.g., <code>gemini-pro</code>).</td><td style="text-align: left"><code>null</code></td></tr>
+<tr><td style="text-align: left"><code>apiKey</code></td><td style="text-align: left">Your Google Cloud API key.</td><td style="text-align: left"><code>null</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="example-geminiyml"><a class="header" href="#example-geminiyml">Example <code>gemini.yml</code></a></h3>
+<pre><code class="language-yaml">url: https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent
+model: gemini-pro
+apiKey: your-google-api-key
+</code></pre>
+<h2 id="usage-16"><a class="header" href="#usage-16">Usage</a></h2>
+<h3 id="injection-1"><a class="header" href="#injection-1">Injection</a></h3>
+<p>You can inject the <code>GeminiClient</code> as a <code>GenAiClient</code> implementation.</p>
+<pre><code class="language-java">GenAiClient client = new GeminiClient();
+</code></pre>
+<h3 id="synchronous-chat-1"><a class="header" href="#synchronous-chat-1">Synchronous Chat</a></h3>
+<pre><code class="language-java">List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
+messages.add(new ChatMessage("user", "Hello, Gemini!"));
+String response = client.chat(messages);
+System.out.println(response);
+</code></pre>
+<h3 id="streaming-chat-1"><a class="header" href="#streaming-chat-1">Streaming Chat</a></h3>
+<pre><code class="language-java">List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
+messages.add(new ChatMessage("user", "Write a poem."));
+
+client.chatStream(messages, new StreamCallback() {
+    @Override
+    public void onEvent(String content) {
+        System.out.print(content);
+    }
+
+    @Override
+    public void onComplete() {
+        System.out.println("\nDone.");
+    }
+
+    @Override
+    public void onError(Throwable throwable) {
+        throwable.printStackTrace();
+    }
+});
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="bedrock-client"><a class="header" href="#bedrock-client">Bedrock Client</a></h1>
+<p>The <code>BedrockClient</code> is an implementation of <code>GenAiClient</code> that interacts with AWS Bedrock. It supports both synchronous chat and asynchronous streaming chat via the AWS SDK for Java 2.x.</p>
+<h2 id="features-13"><a class="header" href="#features-13">Features</a></h2>
+<ul>
+<li><strong>Synchronous Chat</strong>: Sends a prompt to the model and waits for the full response.</li>
+<li><strong>Streaming Chat</strong>: streams the response from the model chunk by chunk, suitable for real-time applications.</li>
+<li><strong>Non-Blocking I/O</strong>: Leverages <code>BedrockRuntimeAsyncClient</code> and JDK <code>CompletableFuture</code> for non-blocking operations.</li>
+</ul>
+<h2 id="configuration-27"><a class="header" href="#configuration-27">Configuration</a></h2>
+<p>The client is configured via <code>bedrock.yml</code>.</p>
+<h3 id="properties-4"><a class="header" href="#properties-4">Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>region</code></td><td style="text-align: left">The AWS region where Bedrock is enabled (e.g., <code>us-east-1</code>).</td><td style="text-align: left"><code>null</code></td></tr>
+<tr><td style="text-align: left"><code>modelId</code></td><td style="text-align: left">The Bedrock model ID to use (e.g., <code>anthropic.claude-v2</code>, <code>amazon.titan-text-express-v1</code>).</td><td style="text-align: left"><code>null</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="example-bedrockyml"><a class="header" href="#example-bedrockyml">Example <code>bedrock.yml</code></a></h3>
+<pre><code class="language-yaml">region: us-east-1
+modelId: anthropic.claude-v2
+</code></pre>
+<h2 id="usage-17"><a class="header" href="#usage-17">Usage</a></h2>
+<h3 id="injection-2"><a class="header" href="#injection-2">Injection</a></h3>
+<p>You can inject the <code>BedrockClient</code> as a <code>GenAiClient</code> implementation.</p>
+<pre><code class="language-java">GenAiClient client = new BedrockClient();
+</code></pre>
+<h3 id="synchronous-chat-2"><a class="header" href="#synchronous-chat-2">Synchronous Chat</a></h3>
+<pre><code class="language-java">List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
+messages.add(new ChatMessage("user", "Hello, Bedrock!"));
+String response = client.chat(messages);
+System.out.println(response);
+</code></pre>
+<h3 id="streaming-chat-2"><a class="header" href="#streaming-chat-2">Streaming Chat</a></h3>
+<pre><code class="language-java">List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
+messages.add(new ChatMessage("user", "Tell me a joke."));
+
+client.chatStream(messages, new StreamCallback() {
+    @Override
+    public void onEvent(String content) {
+        System.out.print(content);
+    }
+
+    @Override
+    public void onComplete() {
+        System.out.println("\nDone.");
+    }
+
+    @Override
+    public void onError(Throwable throwable) {
+        throwable.printStackTrace();
+    }
+});
+</code></pre>
+<h2 id="aws-credentials"><a class="header" href="#aws-credentials">AWS Credentials</a></h2>
+<p>The <code>BedrockClient</code> uses the <code>DefaultCredentialsProvider</code> chain from the AWS SDK. Prior to using the client, ensure your environment is configured with valid AWS credentials (e.g., via environment variables, <code>~/.aws/credentials</code>, or IAM roles).</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="genai-websocket-handler-1"><a class="header" href="#genai-websocket-handler-1">GenAI WebSocket Handler</a></h1>
+<p>The <code>genai-websocket-handler</code> module provides a WebSocket-based interface for interacting with Generative AI models via the <code>light-genai-4j</code> library. It manages user sessions, maintains chat history context, and handles the bi-directional stream of messages between the user and the LLM.</p>
+<h2 id="architecture-4"><a class="header" href="#architecture-4">Architecture</a></h2>
+<p>This module is designed as an implementation of the <code>WebSocketApplicationHandler</code> interface defined in <code>light-websocket-4j</code>. It plugs into the <code>websocket-handler</code> infrastructure to receive upgraded WebSocket connections.</p>
+<h3 id="core-components-15"><a class="header" href="#core-components-15">Core Components</a></h3>
+<ol>
+<li><strong>GenAiWebSocketHandler</strong>: The main entry point. It handles <code>onConnect</code>, manages the WebSocket channel life-cycle, and coordinates message processing.</li>
+<li><strong>SessionManager</strong>: Responsible for creating, retrieving, and validating user chat sessions.</li>
+<li><strong>HistoryManager</strong>: Responsible for persisting and retrieving the conversation history required for LLM context.</li>
+<li><strong>ModelClient</strong>: Wraps the <code>light-genai-4j</code> clients (Gemini, OpenAI, etc.) to invoke the model.</li>
+</ol>
+<h2 id="data-models"><a class="header" href="#data-models">Data Models</a></h2>
+<h3 id="chatmessage-1"><a class="header" href="#chatmessage-1">ChatMessage</a></h3>
+<p>Represents a single message in the conversation.</p>
+<pre><code class="language-java">public class ChatMessage {
+    String role;       // "user", "model", "system"
+    String content;    // The text content
+    long timestamp;    // Epoch timestamp
+}
+</code></pre>
+<h3 id="chatsession"><a class="header" href="#chatsession">ChatSession</a></h3>
+<p>Represents the state of a conversation.</p>
+<pre><code class="language-java">public class ChatSession {
+    String sessionId;
+    String userId;
+    String model;      // The generic model name (e.g., "gemini-pro")
+    Map&lt;String, Object&gt; parameters; // Model parameters (temperature, etc.)
+}
+</code></pre>
+<h2 id="storage-interfaces"><a class="header" href="#storage-interfaces">Storage Interfaces</a></h2>
+<p>To support scaling from a single instance to a clustered environment, session and history management are abstracted behind repository interfaces.</p>
+<h3 id="chatsessionrepository"><a class="header" href="#chatsessionrepository">ChatSessionRepository</a></h3>
+<pre><code class="language-java">public interface ChatSessionRepository {
+    ChatSession createSession(String userId, String model);
+    ChatSession getSession(String sessionId);
+    void deleteSession(String sessionId);
+}
+</code></pre>
+<h3 id="chathistoryrepository"><a class="header" href="#chathistoryrepository">ChatHistoryRepository</a></h3>
+<pre><code class="language-java">public interface ChatHistoryRepository {
+    void addMessage(String sessionId, ChatMessage message);
+    List&lt;ChatMessage&gt; getHistory(String sessionId);
+    void clearHistory(String sessionId);
+}
+</code></pre>
+<h2 id="implementations-1"><a class="header" href="#implementations-1">Implementations</a></h2>
+<h3 id="in-memory-default"><a class="header" href="#in-memory-default">In-Memory (Default)</a></h3>
+<p>The initial implementation provides in-memory storage using concurrent maps. This is suitable for single-instance deployments or testing.</p>
+<ul>
+<li><code>InMemoryChatSessionRepository</code>: Uses <code>ConcurrentHashMap&lt;String, ChatSession&gt;</code>.</li>
+<li><code>InMemoryChatHistoryRepository</code>: Uses <code>ConcurrentHashMap&lt;String, Deque&lt;ChatMessage&gt;&gt;</code> (or List).</li>
+</ul>
+<h3 id="future-implementations"><a class="header" href="#future-implementations">Future Implementations</a></h3>
+<p>The design allows for future implementations without changing the core handler logic:</p>
+<ul>
+<li><strong>JDBC/RDBMS</strong>: Persistent storage for long-term history.</li>
+<li><strong>Redis</strong>: Shared cache for clustered deployments (session affinity not required).</li>
+<li><strong>Hazelcast</strong>: In-memory data grid for distributed caching.</li>
+</ul>
+<h2 id="configuration-28"><a class="header" href="#configuration-28">Configuration</a></h2>
+<p>The implementation to use can be configured via <code>service.yml</code> (using Light-4J’s Service/Module loading) or dedicated config files.</p>
+<p>Example <code>service.yml</code> for In-Memory:</p>
+<pre><code class="language-yaml">- com.networknt.genai.handler.ChatSessionRepository:
+  - com.networknt.genai.handler.InMemoryChatSessionRepository
+- com.networknt.genai.handler.ChatHistoryRepository:
+  - com.networknt.genai.handler.InMemoryChatHistoryRepository
 </code></pre>
 
                     </main>
