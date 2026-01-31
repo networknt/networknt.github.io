@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-29758b15.js";
+            window.path_to_searchindex_js = "searchindex-78feaefd.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ae2fe306.js"></script>
@@ -4364,11 +4364,19 @@ client.chatStream(messages, new StreamCallback() {
 <h2 id="configuration-28"><a class="header" href="#configuration-28">Configuration</a></h2>
 <p>The implementation to use can be configured via <code>service.yml</code> (using Light-4J’s Service/Module loading) or dedicated config files.</p>
 <p>Example <code>service.yml</code> for In-Memory:</p>
-<pre><code class="language-yaml">- com.networknt.genai.handler.ChatSessionRepository:
-  - com.networknt.genai.handler.InMemoryChatSessionRepository
-- com.networknt.genai.handler.ChatHistoryRepository:
+<pre><code class="language-yaml">- com.networknt.genai.handler.ChatHistoryRepository:
   - com.networknt.genai.handler.InMemoryChatHistoryRepository
 </code></pre>
+<h2 id="streaming-behavior"><a class="header" href="#streaming-behavior">Streaming Behavior</a></h2>
+<p>The handler implements a buffering mechanism for the streaming response from the LLM to improve client-side rendering.</p>
+<h3 id="response-buffering"><a class="header" href="#response-buffering">Response Buffering</a></h3>
+<p>LLM providers usually stream tokens (words or partial words) as they are generated. If these tokens are sent to the client immediately as individual WebSocket frames, simplistic clients that print each frame on a new line will display a fragmented “word-per-line” output.</p>
+<p>To resolve this, the <code>GenAiWebSocketHandler</code> buffers incoming tokens and only flushes them to the client when:</p>
+<ol>
+<li>A newline character (<code>\n</code>) is detected in the buffer.</li>
+<li>The stream from the LLM completes.</li>
+</ol>
+<p>This ensures that the client receives complete lines or paragraphs, resulting in a cleaner user experience.</p>
 
                     </main>
 
