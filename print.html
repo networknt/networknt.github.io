@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-78feaefd.js";
+            window.path_to_searchindex_js = "searchindex-23d76e03.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-ae2fe306.js"></script>
+        <script src="toc-fa9771ee.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -2724,7 +2724,7 @@ healthPath: ${portalRegistry.healthPath:/health/}
 <p>There are two main ways to define the mapping between a <code>serviceId</code> and its corresponding hosts:</p>
 <ol>
 <li><strong>service.yml</strong>: The original method, defined as part of the <code>URLImpl</code> parameters.</li>
-<li><strong>direct-registry.yml</strong>: The recommended method for dynamic environments like <code>http-sidecar</code> or <code>light-gateway</code>.</li>
+<li><strong>direct-registry.yml</strong>: The recommended method for dynamic environments like <code>http-sidecar</code> or <code>light-gateway</code> and it supports configuration hot reload.</li>
 </ol>
 <hr>
 <h3 id="1-configuration-via-serviceyml"><a class="header" href="#1-configuration-via-serviceyml">1. Configuration via service.yml</a></h3>
@@ -2758,6 +2758,7 @@ healthPath: ${portalRegistry.healthPath:/health/}
 <pre><code class="language-yaml">      parameters:
         com.networknt.portal.command-1.0.0: https://localhost:8440?environment=0000,https://localhost:8441?environment=0001
 </code></pre>
+<p><strong>Note:</strong> This is the legacy approach and it is not recommended as hot reload is not supported when serviceId to hosts mapping is defined this way.</p>
 <hr>
 <h3 id="2-configuration-via-direct-registryyml-recommended"><a class="header" href="#2-configuration-via-direct-registryyml-recommended">2. Configuration via direct-registry.yml (Recommended)</a></h3>
 <p>When using <code>DirectRegistry</code> in <code>http-sidecar</code> or <code>light-gateway</code>, it is highly recommended to use <code>direct-registry.yml</code>. This file supports the <strong>config-reload</strong> feature, allowing you to update service mappings without downtime.</p>
@@ -3916,10 +3917,12 @@ metricsName: lambda-response
 <p>When a request is identified as a WebSocket request targeted for routing, this handler performs the WebSocket handshake (upgrading the connection) and establishes a proxy connection to the appropriate downstream service. It manages the bi-directional traffic between the client and the downstream service.</p>
 <h2 id="configuration-22"><a class="header" href="#configuration-22">Configuration</a></h2>
 <p>The configuration for the WebSocket Router Handler is located in <code>websocket-router.yml</code>.</p>
-<p>| Field | Type | Description | Default |
-|Str|Str|Str|Str|
-| enabled | boolean | Enable or disable the WebSocket Router Handler. | true |
-| pathPrefixService | Map&lt;String, String&gt; | A map defining path prefixes and their corresponding service IDs. If a request path starts with a prefix, it is routed to the associated service ID. | empty |</p>
+<pre><code># Light websocket router configuration
+# Enable WebSocket Router Handler
+enabled: ${websocket-router.enabled:true}
+# Map of path prefix to serviceId for routing purposes when service_id header is missing.
+pathPrefixService: ${websocket-router.pathPrefixService:}
+</code></pre>
 <h3 id="example-configuration"><a class="header" href="#example-configuration">Example Configuration</a></h3>
 <pre><code class="language-yaml"># websocket-router.yml
 enabled: true
@@ -3932,18 +3935,17 @@ pathPrefixService:
 <h3 id="1-register-the-handler"><a class="header" href="#1-register-the-handler">1. Register the Handler</a></h3>
 <p>Add the fully qualified class name to the <code>handlers</code> list in <code>handler.yml</code>:</p>
 <pre><code class="language-yaml">handlers:
-  - com.networknt.websocket.router.WebSocketRouterHandler
+  - com.networknt.websocket.router.WebSocketRouterHandler@router
   # ... other handlers
 </code></pre>
 <h3 id="2-configure-the-chain"><a class="header" href="#2-configure-the-chain">2. Configure the Chain</a></h3>
-<p>Add the handler alias (usually <code>WebSocketRouterHandler</code> or a custom alias if defined) to the <code>default</code> chain or specific path chains.</p>
+<p>Add the handler alias <code>router</code> or a custom alias if defined to the <code>default</code> chain or specific path chains.</p>
 <pre><code class="language-yaml">chains:
   default:
     - exception
     - metrics
     - traceability
     - correlation
-    - WebSocketRouterHandler
     - header
     - router
 </code></pre>
@@ -4377,6 +4379,147 @@ client.chatStream(messages, new StreamCallback() {
 <li>The stream from the LLM completes.</li>
 </ol>
 <p>This ensures that the client receives complete lines or paragraphs, resulting in a cleaner user experience.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="example-1"><a class="header" href="#example-1">Example</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-websocket-4j-1"><a class="header" href="#light-websocket-4j-1">Light-websocket-4j</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="llm-chat-server"><a class="header" href="#llm-chat-server">LLM Chat Server</a></h1>
+<p>The <code>llmchat-server</code> is an example application demonstrating how to build a real-time Generative AI chat server using <code>light-genai-4j</code> and <code>light-websocket-4j</code>.</p>
+<p>It uses the <code>genai-websocket-handler</code> to manage WebSocket connections and orchestrate interactions with an LLM backend (configured for Ollama by default).</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<ul>
+<li>jdk 11 or above</li>
+<li>maven 3.6.0 or above</li>
+<li><a href="https://ollama.ai/">Ollama</a> running locally (for the default configuration) with a model pulled (e.g., <code>qwen3:14b</code> or <code>llama3</code>).</li>
+</ul>
+<h2 id="configuration-29"><a class="header" href="#configuration-29">Configuration</a></h2>
+<p>The server configuration is consolidated in <code>src/main/resources/config/values.yml</code>.</p>
+<h3 id="server--handler"><a class="header" href="#server--handler">Server &amp; Handler</a></h3>
+<p>The server runs on HTTP port 8080 and defines two main paths:</p>
+<ul>
+<li><code>/</code>: Serves static web resources (the chat UI).</li>
+<li><code>/chat</code>: The WebSocket endpoint for chat sessions.</li>
+</ul>
+<pre><code class="language-yaml">handler.paths:
+  - path: '/'
+    method: 'GET'
+    exec:
+      - resource
+  - path: '/chat'
+    method: 'GET'
+    exec:
+      - websocket
+</code></pre>
+<h3 id="genai-client"><a class="header" href="#genai-client">GenAI Client</a></h3>
+<p>Dependencies are injected via <code>service.yml</code> configuration (in <code>values.yml</code>). By default, it uses <code>OllamaClient</code>.</p>
+<pre><code class="language-yaml">service.singletons:
+  - com.networknt.genai.GenAiClient:
+    - com.networknt.genai.ollama.OllamaClient
+</code></pre>
+<h3 id="ollama-configuration"><a class="header" href="#ollama-configuration">Ollama Configuration</a></h3>
+<p>Configures the connection to the Ollama instance.</p>
+<pre><code class="language-yaml">ollama.ollamaUrl: http://localhost:11434
+ollama.model: qwen3:14b
+</code></pre>
+<h3 id="websocket-handler-1"><a class="header" href="#websocket-handler-1">WebSocket Handler</a></h3>
+<p>Maps the <code>/chat</code> path to the <code>GenAiWebSocketHandler</code>.</p>
+<pre><code class="language-yaml">websocket-handler.pathPrefixHandlers:
+  /chat: com.networknt.genai.handler.GenAiWebSocketHandler
+</code></pre>
+<h2 id="running-the-server"><a class="header" href="#running-the-server">Running the Server</a></h2>
+<ol>
+<li>
+<p><strong>Start Ollama</strong>: Ensure Ollama is running and the model configured in <code>values.yml</code> is available.</p>
+<pre><code class="language-bash">ollama run qwen3:14b
+</code></pre>
+</li>
+<li>
+<p><strong>Build and Start</strong>:</p>
+<pre><code class="language-bash">cd light-example-4j/websocket/llmchat-server
+mvn clean install exec:java
+</code></pre>
+</li>
+</ol>
+<h2 id="usage-18"><a class="header" href="#usage-18">Usage</a></h2>
+<h3 id="web-ui"><a class="header" href="#web-ui">Web UI</a></h3>
+<p>Open your browser and navigate to <code>http://localhost:8080</code>. You should see a simple chat interface where you can type messages and receive streaming responses from the LLM.</p>
+<h3 id="websocket-client-1"><a class="header" href="#websocket-client-1">WebSocket Client</a></h3>
+<p>You can also connect using any WebSocket client (like <code>wscat</code>):</p>
+<pre><code class="language-bash">wscat -c ws://localhost:8080/chat?userId=user1&amp;model=qwen3:14b
+</code></pre>
+<p>Send a message:</p>
+<pre><code>&gt; Hello
+&lt; Assistant: Hi
+&lt; Assistant: there!
+...
+</code></pre>
+<p>The server streams the response token by token (buffered by line/sentence for better display).</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="llm-chat-gateway"><a class="header" href="#llm-chat-gateway">LLM Chat Gateway</a></h1>
+<p>The <code>llmchat-gateway</code> is an example application that demonstrates how to usage <code>websocket-router</code> to create a gateway for the <a href="#llm-chat-server">LLM Chat Server</a>.</p>
+<p>It acts as a secure entry point (HTTPS) that proxies WebSocket traffic to the backend chat server.</p>
+<h2 id="architecture-5"><a class="header" href="#architecture-5">Architecture</a></h2>
+<ul>
+<li><strong>Gateway</strong>: Listens on HTTPS port 8443. Serves the static UI and routes <code>/chat</code> WebSocket connections to the backend.</li>
+<li><strong>Backend</strong>: <code>llmchat-server</code> running on HTTP port 8080.</li>
+<li><strong>Routing</strong>: Uses <code>WebSocketRouterHandler</code> to forward messages based on path or serviceId. Also uses <code>DirectRegistry</code> for service discovery.</li>
+</ul>
+<h2 id="configuration-30"><a class="header" href="#configuration-30">Configuration</a></h2>
+<p>The configuration is located in <code>src/main/resources/config/values.yml</code>.</p>
+<h3 id="server--handler-1"><a class="header" href="#server--handler-1">Server &amp; Handler</a></h3>
+<p>Configured for HTTPS on port 8443.</p>
+<pre><code class="language-yaml">server.httpsPort: 8443
+server.enableHttp: false
+server.enableHttps: true
+
+handler.paths:
+  - path: '/'
+    method: 'GET'
+    exec:
+      - resource
+  - path: '/chat'
+    method: 'GET'
+    exec:
+      - router
+</code></pre>
+<h3 id="websocket-router-1"><a class="header" href="#websocket-router-1">WebSocket Router</a></h3>
+<p>Maps requests to the backend service.</p>
+<pre><code class="language-yaml">websocket-router.pathPrefixService:
+  /chat: com.networknt.llmchat-1.0.0
+</code></pre>
+<h3 id="service-registry"><a class="header" href="#service-registry">Service Registry</a></h3>
+<p>Uses <code>DirectRegistry</code> to locate the backend server (llmchat-server) at <code>http://localhost:8080</code>.</p>
+<pre><code class="language-yaml">service.singletons:
+  - com.networknt.registry.Registry:
+    - com.networknt.registry.support.DirectRegistry
+
+direct-registry:
+  com.networknt.llmchat-1.0.0:
+    - http://localhost:8080
+</code></pre>
+<h2 id="running-the-example"><a class="header" href="#running-the-example">Running the Example</a></h2>
+<ol>
+<li><strong>Start Ollama</strong>: Ensure Ollama is running.</li>
+<li><strong>Start Backend</strong>:
+From <code>light-example-4j/websocket/llmchat-server</code>:
+<pre><code class="language-bash">mvn exec:java
+</code></pre>
+</li>
+<li><strong>Start Gateway</strong>:
+From <code>light-example-4j/websocket/llmchat-gateway</code>:
+<pre><code class="language-bash">mvn exec:java
+</code></pre>
+(Note: ensure you have built it first with <code>mvn clean install</code>)</li>
+</ol>
+<h2 id="usage-19"><a class="header" href="#usage-19">Usage</a></h2>
+<p>Open your browser and navigate to <strong>https://localhost:8443</strong>.</p>
+<ul>
+<li>You might see a security warning because the <code>server.keystore</code> uses a self-signed certificate. Accept it to proceed.</li>
+<li>The chat interface is served from the gateway.</li>
+<li>When you click “Connect”, it opens a secure WebSocket (<code>wss://</code>) to the gateway.</li>
+<li>The gateway routes frames to <code>llmchat-server</code>, which invokes the LLM and streams the response back.</li>
+</ul>
 
                     </main>
 

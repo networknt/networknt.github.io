@@ -35,10 +35,10 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-78feaefd.js";
+            window.path_to_searchindex_js = "../../searchindex-23d76e03.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-ae2fe306.js"></script>
+        <script src="../../toc-fa9771ee.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,10 +179,12 @@
 <p>When a request is identified as a WebSocket request targeted for routing, this handler performs the WebSocket handshake (upgrading the connection) and establishes a proxy connection to the appropriate downstream service. It manages the bi-directional traffic between the client and the downstream service.</p>
 <h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
 <p>The configuration for the WebSocket Router Handler is located in <code>websocket-router.yml</code>.</p>
-<p>| Field | Type | Description | Default |
-|Str|Str|Str|Str|
-| enabled | boolean | Enable or disable the WebSocket Router Handler. | true |
-| pathPrefixService | Map&lt;String, String&gt; | A map defining path prefixes and their corresponding service IDs. If a request path starts with a prefix, it is routed to the associated service ID. | empty |</p>
+<pre><code># Light websocket router configuration
+# Enable WebSocket Router Handler
+enabled: ${websocket-router.enabled:true}
+# Map of path prefix to serviceId for routing purposes when service_id header is missing.
+pathPrefixService: ${websocket-router.pathPrefixService:}
+</code></pre>
 <h3 id="example-configuration"><a class="header" href="#example-configuration">Example Configuration</a></h3>
 <pre><code class="language-yaml"># websocket-router.yml
 enabled: true
@@ -195,18 +197,17 @@ pathPrefixService:
 <h3 id="1-register-the-handler"><a class="header" href="#1-register-the-handler">1. Register the Handler</a></h3>
 <p>Add the fully qualified class name to the <code>handlers</code> list in <code>handler.yml</code>:</p>
 <pre><code class="language-yaml">handlers:
-  - com.networknt.websocket.router.WebSocketRouterHandler
+  - com.networknt.websocket.router.WebSocketRouterHandler@router
   # ... other handlers
 </code></pre>
 <h3 id="2-configure-the-chain"><a class="header" href="#2-configure-the-chain">2. Configure the Chain</a></h3>
-<p>Add the handler alias (usually <code>WebSocketRouterHandler</code> or a custom alias if defined) to the <code>default</code> chain or specific path chains.</p>
+<p>Add the handler alias <code>router</code> or a custom alias if defined to the <code>default</code> chain or specific path chains.</p>
 <pre><code class="language-yaml">chains:
   default:
     - exception
     - metrics
     - traceability
     - correlation
-    - WebSocketRouterHandler
     - header
     - router
 </code></pre>

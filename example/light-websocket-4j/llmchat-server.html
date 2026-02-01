@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Response Transformer - Light-4j Platform</title>
+        <title>llmchat-server - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,113 +174,87 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="response-transformer-interceptor"><a class="header" href="#response-transformer-interceptor">Response Transformer Interceptor</a></h1>
-<p>The <code>response-transformer</code> is a powerful middleware interceptor that allows for dynamic modification of outgoing responses using the <code>light-4j</code> rule engine. It provides a highly flexible way to manipulate response headers and the response body based on custom business logic defined in rules.</p>
-<h3 id="features"><a class="header" href="#features">Features</a></h3>
+                        <h1 id="llm-chat-server"><a class="header" href="#llm-chat-server">LLM Chat Server</a></h1>
+<p>The <code>llmchat-server</code> is an example application demonstrating how to build a real-time Generative AI chat server using <code>light-genai-4j</code> and <code>light-websocket-4j</code>.</p>
+<p>It uses the <code>genai-websocket-handler</code> to manage WebSocket connections and orchestrate interactions with an LLM backend (configured for Ollama by default).</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
 <ul>
-<li><strong>Dynamic Transformation</strong>: Modify response elements at runtime without changing application code.</li>
-<li><strong>Rule-Based</strong>: Leverage the <code>light-4j</code> rule engine to define complex transformation logic.</li>
-<li><strong>Path-Based Activation</strong>: Target specific request paths using the <code>appliedPathPrefixes</code> configuration.</li>
-<li><strong>Header Manipulation</strong>: Add, update, or remove response headers.</li>
-<li><strong>Body Transformation</strong>: Overwrite the response body (supports JSON, XML, and other text-based formats).</li>
-<li><strong>Encoding Support</strong>: Configurable body encoding per path prefix for legacy API compatibility.</li>
-<li><strong>Auto-Registration</strong>: Automatically registers with the <code>ModuleRegistry</code> during configuration loading for administrative visibility.</li>
+<li>jdk 11 or above</li>
+<li>maven 3.6.0 or above</li>
+<li><a href="https://ollama.ai/">Ollama</a> running locally (for the default configuration) with a model pulled (e.g., <code>qwen3:14b</code> or <code>llama3</code>).</li>
 </ul>
-<h3 id="configuration-response-transformeryml"><a class="header" href="#configuration-response-transformeryml">Configuration (response-transformer.yml)</a></h3>
-<p>The interceptor is configured via <code>response-transformer.yml</code>.</p>
-<pre><code class="language-yaml"># Response Transformer Configuration
----
-# Indicate if this interceptor is enabled or not. Default is true.
-enabled: ${response-transformer.enabled:true}
-
-# Indicate if the transform interceptor needs to change the response body. Default is true.
-requiredContent: ${response-transformer.requiredContent:true}
-
-# Default body encoding for the response body. Default is UTF-8.
-defaultBodyEncoding: ${response-transformer.defaultBodyEncoding:UTF-8}
-
-# A list of applied request path prefixes. Only requests matching these prefixes will be processed.
-appliedPathPrefixes: ${response-transformer.appliedPathPrefixes:}
-
-# For certain path prefixes that are not using the defaultBodyEncoding UTF-8, you can define the customized
-# encoding like ISO-8859-1 for the path prefixes here.
-# pathPrefixEncoding:
-#   /v1/pets: ISO-8859-1
-#   /v1/party/info: ISO-8859-1
-</code></pre>
-<h3 id="setup"><a class="header" href="#setup">Setup</a></h3>
-<h4 id="1-add-dependency"><a class="header" href="#1-add-dependency">1. Add Dependency</a></h4>
-<p>Include the following dependency in your <code>pom.xml</code>:</p>
-<pre><code class="language-xml">&lt;dependency&gt;
-    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
-    &lt;artifactId&gt;response-transformer&lt;/artifactId&gt;
-    &lt;version&gt;${version.light-4j}&lt;/version&gt;
-&lt;/dependency&gt;
-</code></pre>
-<h4 id="2-register-interceptor"><a class="header" href="#2-register-interceptor">2. Register Interceptor</a></h4>
-<p>In your <code>handler.yml</code>, add the <code>ResponseTransformerInterceptor</code> to the interceptors list and include it in the appropriate handler chains.</p>
-<pre><code class="language-yaml">handlers:
-  - com.networknt.restrans.ResponseTransformerInterceptor@responseTransformer
-
-chains:
-  default:
-    - ...
-    - responseTransformer
-    - ...
-</code></pre>
-<h3 id="transformation-rules"><a class="header" href="#transformation-rules">Transformation Rules</a></h3>
-<p>The interceptor passes a context map (<code>objMap</code>) to the rule engine. Your rules can inspect these values and return a result map to trigger specific modifications.</p>
-<h4 id="rule-input-map-objmap"><a class="header" href="#rule-input-map-objmap">Rule Input Map (<code>objMap</code>)</a></h4>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>The server configuration is consolidated in <code>src/main/resources/config/values.yml</code>.</p>
+<h3 id="server--handler"><a class="header" href="#server--handler">Server &amp; Handler</a></h3>
+<p>The server runs on HTTP port 8080 and defines two main paths:</p>
 <ul>
-<li><code>auditInfo</code>: Map of audit information (e.g., clientId, endpoint).</li>
-<li><code>requestHeaders</code>: Map of current request headers.</li>
-<li><code>responseHeaders</code>: Map of current response headers.</li>
-<li><code>queryParameters</code>: Map of current query parameters.</li>
-<li><code>pathParameters</code>: Map of current path parameters.</li>
-<li><code>method</code>: HTTP method (e.g., “POST”, “GET”).</li>
-<li><code>requestURL</code>: The full request URL.</li>
-<li><code>requestURI</code>: The request URI.</li>
-<li><code>requestPath</code>: The request path.</li>
-<li><code>requestBody</code>: The request body (if available in the exchange attachment).</li>
-<li><code>responseBody</code>: The original response body string (only if <code>requiredContent</code> is true).</li>
-<li><code>statusCode</code>: The HTTP status code of the response.</li>
+<li><code>/</code>: Serves static web resources (the chat UI).</li>
+<li><code>/chat</code>: The WebSocket endpoint for chat sessions.</li>
 </ul>
-<h4 id="rule-output-result-map"><a class="header" href="#rule-output-result-map">Rule Output Result Map</a></h4>
-<p>To perform a transformation, your rule must return a map containing one or more of the following keys:</p>
-<ul>
-<li><strong><code>responseHeaders</code></strong>: <code>Map</code> - Contains two sub-keys:
-<ul>
-<li><code>remove</code>: <code>List&lt;String&gt;</code> - List of header names to remove.</li>
-<li><code>update</code>: <code>Map&lt;String, String&gt;</code> - Map of header names and values to add or update.</li>
-</ul>
+<pre><code class="language-yaml">handler.paths:
+  - path: '/'
+    method: 'GET'
+    exec:
+      - resource
+  - path: '/chat'
+    method: 'GET'
+    exec:
+      - websocket
+</code></pre>
+<h3 id="genai-client"><a class="header" href="#genai-client">GenAI Client</a></h3>
+<p>Dependencies are injected via <code>service.yml</code> configuration (in <code>values.yml</code>). By default, it uses <code>OllamaClient</code>.</p>
+<pre><code class="language-yaml">service.singletons:
+  - com.networknt.genai.GenAiClient:
+    - com.networknt.genai.ollama.OllamaClient
+</code></pre>
+<h3 id="ollama-configuration"><a class="header" href="#ollama-configuration">Ollama Configuration</a></h3>
+<p>Configures the connection to the Ollama instance.</p>
+<pre><code class="language-yaml">ollama.ollamaUrl: http://localhost:11434
+ollama.model: qwen3:14b
+</code></pre>
+<h3 id="websocket-handler"><a class="header" href="#websocket-handler">WebSocket Handler</a></h3>
+<p>Maps the <code>/chat</code> path to the <code>GenAiWebSocketHandler</code>.</p>
+<pre><code class="language-yaml">websocket-handler.pathPrefixHandlers:
+  /chat: com.networknt.genai.handler.GenAiWebSocketHandler
+</code></pre>
+<h2 id="running-the-server"><a class="header" href="#running-the-server">Running the Server</a></h2>
+<ol>
+<li>
+<p><strong>Start Ollama</strong>: Ensure Ollama is running and the model configured in <code>values.yml</code> is available.</p>
+<pre><code class="language-bash">ollama run qwen3:14b
+</code></pre>
 </li>
-<li><strong><code>responseBody</code></strong>: <code>String</code> - Overwrites the response body buffer with the provided string.</li>
-</ul>
-<h3 id="example-transformation-logic"><a class="header" href="#example-transformation-logic">Example Transformation Logic</a></h3>
-<p>If a rule decides to update a header and the response body, the result map returned from the rule engine might look like this:</p>
-<pre><code class="language-json">{
-  "result": true,
-  "responseHeaders": {
-    "update": {
-      "X-Transformation-Version": "2.0"
-    },
-    "remove": ["Server"]
-  },
-  "responseBody": "{\"status\":\"success\", \"data\": \"transformed content\"}"
-}
+<li>
+<p><strong>Build and Start</strong>:</p>
+<pre><code class="language-bash">cd light-example-4j/websocket/llmchat-server
+mvn clean install exec:java
 </code></pre>
-<h3 id="operational-visibility"><a class="header" href="#operational-visibility">Operational Visibility</a></h3>
-<p>The <code>response-transformer</code> module automatically registers itself with the <code>ModuleRegistry</code>. This allows administrators to inspect the active configuration and status of the interceptor at runtime via the <a href="/concern/admin/server-info.html">Server Info</a> endpoint.</p>
+</li>
+</ol>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<h3 id="web-ui"><a class="header" href="#web-ui">Web UI</a></h3>
+<p>Open your browser and navigate to <code>http://localhost:8080</code>. You should see a simple chat interface where you can type messages and receive streaming responses from the LLM.</p>
+<h3 id="websocket-client"><a class="header" href="#websocket-client">WebSocket Client</a></h3>
+<p>You can also connect using any WebSocket client (like <code>wscat</code>):</p>
+<pre><code class="language-bash">wscat -c ws://localhost:8080/chat?userId=user1&amp;model=qwen3:14b
+</code></pre>
+<p>Send a message:</p>
+<pre><code>&gt; Hello
+&lt; Assistant: Hi
+&lt; Assistant: there!
+...
+</code></pre>
+<p>The server streams the response token by token (buffered by line/sentence for better display).</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/interceptor/request-transformer.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../example/light-websocket-4j.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/admin-endpoint.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../example/light-websocket-4j/llmchat-gateway.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -290,11 +264,11 @@ chains:
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/interceptor/request-transformer.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../example/light-websocket-4j.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/admin-endpoint.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../example/light-websocket-4j/llmchat-gateway.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

@@ -35,10 +35,10 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-78feaefd.js";
+            window.path_to_searchindex_js = "../../searchindex-23d76e03.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-ae2fe306.js"></script>
+        <script src="../../toc-fa9771ee.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,7 +179,7 @@
 <p>There are two main ways to define the mapping between a <code>serviceId</code> and its corresponding hosts:</p>
 <ol>
 <li><strong>service.yml</strong>: The original method, defined as part of the <code>URLImpl</code> parameters.</li>
-<li><strong>direct-registry.yml</strong>: The recommended method for dynamic environments like <code>http-sidecar</code> or <code>light-gateway</code>.</li>
+<li><strong>direct-registry.yml</strong>: The recommended method for dynamic environments like <code>http-sidecar</code> or <code>light-gateway</code> and it supports configuration hot reload.</li>
 </ol>
 <hr>
 <h3 id="1-configuration-via-serviceyml"><a class="header" href="#1-configuration-via-serviceyml">1. Configuration via service.yml</a></h3>
@@ -213,6 +213,7 @@
 <pre><code class="language-yaml">      parameters:
         com.networknt.portal.command-1.0.0: https://localhost:8440?environment=0000,https://localhost:8441?environment=0001
 </code></pre>
+<p><strong>Note:</strong> This is the legacy approach and it is not recommended as hot reload is not supported when serviceId to hosts mapping is defined this way.</p>
 <hr>
 <h3 id="2-configuration-via-direct-registryyml-recommended"><a class="header" href="#2-configuration-via-direct-registryyml-recommended">2. Configuration via direct-registry.yml (Recommended)</a></h3>
 <p>When using <code>DirectRegistry</code> in <code>http-sidecar</code> or <code>light-gateway</code>, it is highly recommended to use <code>direct-registry.yml</code>. This file supports the <strong>config-reload</strong> feature, allowing you to update service mappings without downtime.</p>
