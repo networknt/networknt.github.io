@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-23d76e03.js";
+            window.path_to_searchindex_js = "searchindex-c897d3c8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-fa9771ee.js"></script>
+        <script src="toc-43ecedf9.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -3962,7 +3962,34 @@ pathPrefixService:
 <li><strong>Routing</strong>: Upon successful connection (<code>onConnect</code>), it looks up the downstream service URL using the <code>Cluster</code> and <code>Service</code> discovery mechanism based on the <code>service_id</code>.</li>
 <li><strong>Proxying</strong>: It establishes a WebSocket connection to the downstream service and pipes messages between the client and the backend.</li>
 </ol>
-<p>If the request is not matched as a WebSocket routing request, the handler simply delegates to the next handler in the chain, allowing standard HTTP requests to proceed to other endpoints.</p>
+<h2 id="channel-management"><a class="header" href="#channel-management">Channel Management</a></h2>
+<p>The WebSocket Router uses a concept of “Channels” to manage client sessions.</p>
+<ol>
+<li>
+<p><strong>Channel Group ID</strong>:</p>
+<ul>
+<li>The router expects a unique identifier for each client connection, typically passed in the <code>x-group-id</code> header (internally <code>WsAttributes.CHANNEL_GROUP_ID</code>).</li>
+<li>If this header is missing (e.g., standard browser connections), the router <strong>automatically generates a unique UUID</strong> for the session.</li>
+</ul>
+</li>
+<li>
+<p><strong>Connection Mapping</strong>:</p>
+<ul>
+<li>Each unique Channel Group ID corresponds to a distinct WebSocket connection to the downstream service.</li>
+<li>If a client connects with a generated UUID, a <strong>new</strong> connection is established to the backend service for that specific session.</li>
+<li>Messages are proxied exclusively between the client’s channel and its corresponding downstream connection.</li>
+</ul>
+</li>
+</ol>
+<p>This ensures that multiple browser tabs or distinct clients are isolated, each communicating with the backend over its own dedicated WebSocket link.</p>
+<h2 id="architecture-router-vs-proxy"><a class="header" href="#architecture-router-vs-proxy">Architecture: Router vs. Proxy</a></h2>
+<p>You might observe that the <code>WebSocketRouterHandler</code> functions primarily as a <strong>Reverse Proxy</strong>: it terminates the client connection and establishes a separate connection to the backend service.</p>
+<p>It is named a “Router” because of its role in the system architecture:</p>
+<ol>
+<li><strong>Multiplexing</strong>: It can route different paths (e.g., <code>/chat</code>, <code>/notification</code>) to different backend services on the same gateway port.</li>
+<li><strong>Service Discovery</strong>: It dynamically resolves the backend URL using the <code>service_id</code> and the configured Registry/Cluster (e.g., Consul, Kubernetes), rather than proxying to a static IP address.</li>
+</ol>
+<p>Thus, while the <em>mechanism</em> is proxying, the <em>function</em> is dynamic routing and load balancing of WebSocket traffic.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="websocket-handler"><a class="header" href="#websocket-handler">WebSocket Handler</a></h1>
 <p>The <code>WebSocketHandler</code> is a middleware handler designed to process WebSocket messages on the server side (Light Gateway or Light 4J Service), rather than proxying them to downstream services. It enables the implementation of custom logic, such as Chat bots, GenAI integration, or real-time notifications, directly within the application.</p>
@@ -4044,6 +4071,124 @@ public class ChatHandler implements WebSocketApplicationHandler {
 &lt;/dependency&gt;
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="websocket-rendezvous"><a class="header" href="#websocket-rendezvous">WebSocket Rendezvous</a></h1>
+<p>The <code>websocket-rendezvous</code> module provides a specialized WebSocket handler for the “Rendezvous” pattern. This pattern is useful when the Gateway needs to bridge a connection between an external client (e.g., a browser or mobile app) and a backend service that is behind a firewall or NAT and cannot accept incoming connections directly.</p>
+<p>In this pattern, both the Client and the Backend service initiate outbound WebSocket connections to the Gateway. The Gateway then “pairs” these two connections based on a shared identifier (<code>channelId</code>) and relays messages between them transparently.</p>
+<h2 id="dependencies"><a class="header" href="#dependencies">Dependencies</a></h2>
+<p>To use this module, add the following dependency to your <code>pom.xml</code>:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;websocket-rendezvous&lt;/artifactId&gt;
+    &lt;version&gt;${version.light-4j}&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<h2 id="configuration-24"><a class="header" href="#configuration-24">Configuration</a></h2>
+<p>The module is configured via <code>websocket-rendezvous.yml</code> (or <code>values.yml</code> overrides).</p>
+<p>The configuration key is <code>websocket-rendezvous</code>.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Config Path</th><th style="text-align: left">Default</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable or disable the handler.</td></tr>
+<tr><td style="text-align: left"><code>backendPath</code></td><td style="text-align: left"><code>/connect</code></td><td style="text-align: left">The URI path suffix (or segment) used to identify the Backend connection.</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Example <code>values.yml</code> configuration:</strong></p>
+<pre><code class="language-yaml">websocket-rendezvous:
+  enabled: true
+  backendPath: /connect
+</code></pre>
+<h2 id="handler-configuration-1"><a class="header" href="#handler-configuration-1">Handler Configuration</a></h2>
+<p>To use the handler in a Light-Gateway or Light-4j service, register it in your <code>handler.yml</code> or <code>values.yml</code> under <code>handler.handlers</code> and map it to the desired paths.</p>
+<pre><code class="language-yaml">handler.handlers:
+  - com.networknt.websocket.rendezvous.WebSocketRendezvousHandler@rendezvous
+  # ... other handlers
+
+handler.paths:
+  - path: '/chat'
+    method: 'GET'
+    exec:
+      - rendezvous
+  - path: '/connect'
+    method: 'GET'
+    exec:
+      - rendezvous
+</code></pre>
+<h2 id="how-it-works-6"><a class="header" href="#how-it-works-6">How It Works</a></h2>
+<ol>
+<li>
+<p><strong>Channel Identification</strong>: Both the Client and the Backend must provide a <code>channelId</code> to identify the session. This is typically done via the HTTP header <code>channel-group-id</code> or a query parameter <code>channelId</code> in the WebSocket upgrade request.</p>
+</li>
+<li>
+<p><strong>Role Detection</strong>: The handler determines if an incoming connection is a <strong>Client</strong> or a <strong>Backend</strong> based on the request URI.</p>
+<ul>
+<li>If the request URI contains the configured <code>backendPath</code> (default <code>/connect</code>), it is treated as the <strong>Backend</strong>.</li>
+<li>Otherwise, it is treated as the <strong>Client</strong>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Pairing Logic</strong>:</p>
+<ul>
+<li>When the <strong>Client</strong> connects, the Gateway creates a new <code>WsProxyClientPair</code> and waits for the Backend.</li>
+<li>When the <strong>Backend</strong> connects (providing the same <code>channelId</code>), the Gateway locates the existing session and pairs the Backend connection with the waiting Client connection.</li>
+<li>Once paired, any message received from the Client is forwarded to the Backend, and vice-versa.</li>
+</ul>
+</li>
+<li>
+<p><strong>Message Relaying</strong>: The module uses a dedicated <code>WebSocketRendezvousReceiveListener</code> to bridge the traffic efficiently.</p>
+</li>
+</ol>
+<h2 id="connection-model"><a class="header" href="#connection-model">Connection Model</a></h2>
+<p>The Rendezvous mode uses a <strong>1:1 connection mapping</strong> model:</p>
+<ul>
+<li>For <strong>every</strong> active Client session (identified by a unique <code>channelId</code>), the Backend <strong>must</strong> establish a separate WebSocket connection to the Gateway with the same <code>channelId</code>.</li>
+<li>There is <strong>no multiplexing</strong> of multiple user sessions over a single Backend connection.</li>
+<li>If you have N users connected to the Gateway, the Backend needs N corresponding connections to the Gateway to serve them.</li>
+</ul>
+<h2 id="usage-example-1"><a class="header" href="#usage-example-1">Usage Example</a></h2>
+<p><strong>Client Request:</strong></p>
+<pre><code class="language-http">GET /chat?channelId=12345 HTTP/1.1
+Host: gateway.example.com
+Upgrade: websocket
+Connection: Upgrade
+</code></pre>
+<p><strong>Backend Request:</strong></p>
+<pre><code class="language-http">GET /chat/connect?channelId=12345 HTTP/1.1
+Host: gateway.example.com
+Upgrade: websocket
+Connection: Upgrade
+</code></pre>
+<p><em>Note: The Backend connects to a path containing <code>/connect</code> (e.g., <code>/chat/connect</code>). We recommend using <code>/chat/connect</code> (or similar) to differentiate it from the Frontend endpoint <code>/chat</code>. Using the same endpoint for both would cause the Gateway to misidentify the Backend as a second Client.</em></p>
+<p><em>Why not just <code>/connect</code>?</em>
+<em>In many setups, <code>/connect</code> is reserved as the HTTP trigger endpoint that the UI calls to instruct the Backend to establish the WebSocket connection. Therefore, the Backend should use a distinct WebSocket path like <code>/chat/connect</code>.</em></p>
+<h2 id="sequence-diagram"><a class="header" href="#sequence-diagram">Sequence Diagram</a></h2>
+<pre class="mermaid">sequenceDiagram
+    participant User as User (Browser)
+    participant Gateway
+    participant Backend as Backend Service
+
+    User-&gt;&gt;Gateway: WebSocket Connect (/chat?channelId=123)
+    Note over Gateway: Created Client Session (Waiting)
+
+    User-&gt;&gt;Gateway: HTTP GET /connect?channelId=123
+    Gateway-&gt;&gt;Backend: HTTP Proxy request to Backend
+    Note over Backend: Received Trigger
+
+    Backend-&gt;&gt;Gateway: WebSocket Connect (/chat/connect?channelId=123)
+    Note over Gateway: Identified as Backend (via /connect path)
+    Note over Gateway: Paired with Client Session
+
+    User-&gt;&gt;Gateway: Hello Backend
+    Gateway-&gt;&gt;Backend: Forward: Hello Backend
+    
+    Backend-&gt;&gt;Gateway: Hello User
+    Gateway-&gt;&gt;User: Forward: Hello User
+</pre>
+
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="light-genai-4j"><a class="header" href="#light-genai-4j">Light-genai-4j</a></h1>
 <p><code>light-genai-4j</code> is a library that provides integration with various Generative AI models (LLMs) such as Gemini, OpenAI, Bedrock, and Ollama for the light-4j framework.</p>
 <h2 id="design-decisions"><a class="header" href="#design-decisions">Design Decisions</a></h2>
@@ -4065,7 +4210,7 @@ public class ChatHandler implements WebSocketApplicationHandler {
 <li><strong>Configuration</strong>: externalizable configuration via <code>ollama.yml</code>.</li>
 <li><strong>Token Management</strong>: N/A (Ollama usually runs locally without auth, but can be proxied).</li>
 </ul>
-<h2 id="configuration-24"><a class="header" href="#configuration-24">Configuration</a></h2>
+<h2 id="configuration-25"><a class="header" href="#configuration-25">Configuration</a></h2>
 <p>The client is configured via <code>ollama.yml</code> in the <code>src/main/resources/config</code> directory (or externalized config folder).</p>
 <h3 id="properties-1"><a class="header" href="#properties-1">Properties</a></h3>
 <div class="table-wrapper">
@@ -4115,7 +4260,7 @@ client.chatStream(messages, new StreamCallback() {
     }
 });
 </code></pre>
-<h2 id="dependencies"><a class="header" href="#dependencies">Dependencies</a></h2>
+<h2 id="dependencies-1"><a class="header" href="#dependencies-1">Dependencies</a></h2>
 <ul>
 <li><code>light-4j</code> core (client, config)</li>
 <li><code>genai-core</code></li>
@@ -4129,7 +4274,7 @@ client.chatStream(messages, new StreamCallback() {
 <li><strong>Streaming Chat</strong>: streams the response from the model token by token, suitable for real-time applications.</li>
 <li><strong>Non-Blocking I/O</strong>: Uses XNIO and Undertow’s asynchronous client to prevent blocking threads during I/O operations.</li>
 </ul>
-<h2 id="configuration-25"><a class="header" href="#configuration-25">Configuration</a></h2>
+<h2 id="configuration-26"><a class="header" href="#configuration-26">Configuration</a></h2>
 <p>The client is configured via <code>openai.yml</code>.</p>
 <h3 id="properties-2"><a class="header" href="#properties-2">Properties</a></h3>
 <div class="table-wrapper">
@@ -4190,7 +4335,7 @@ client.chatStream(messages, new StreamCallback() {
 <li><strong>Streaming Chat</strong>: streams the response from the model chunk by chunk, suitable for real-time applications.</li>
 <li><strong>Non-Blocking I/O</strong>: Uses XNIO and Undertow’s asynchronous client to prevent blocking threads during I/O operations.</li>
 </ul>
-<h2 id="configuration-26"><a class="header" href="#configuration-26">Configuration</a></h2>
+<h2 id="configuration-27"><a class="header" href="#configuration-27">Configuration</a></h2>
 <p>The client is configured via <code>gemini.yml</code>.</p>
 <h3 id="properties-3"><a class="header" href="#properties-3">Properties</a></h3>
 <div class="table-wrapper">
@@ -4251,7 +4396,7 @@ client.chatStream(messages, new StreamCallback() {
 <li><strong>Streaming Chat</strong>: streams the response from the model chunk by chunk, suitable for real-time applications.</li>
 <li><strong>Non-Blocking I/O</strong>: Leverages <code>BedrockRuntimeAsyncClient</code> and JDK <code>CompletableFuture</code> for non-blocking operations.</li>
 </ul>
-<h2 id="configuration-27"><a class="header" href="#configuration-27">Configuration</a></h2>
+<h2 id="configuration-28"><a class="header" href="#configuration-28">Configuration</a></h2>
 <p>The client is configured via <code>bedrock.yml</code>.</p>
 <h3 id="properties-4"><a class="header" href="#properties-4">Properties</a></h3>
 <div class="table-wrapper">
@@ -4363,7 +4508,7 @@ client.chatStream(messages, new StreamCallback() {
 <li><strong>Redis</strong>: Shared cache for clustered deployments (session affinity not required).</li>
 <li><strong>Hazelcast</strong>: In-memory data grid for distributed caching.</li>
 </ul>
-<h2 id="configuration-28"><a class="header" href="#configuration-28">Configuration</a></h2>
+<h2 id="configuration-29"><a class="header" href="#configuration-29">Configuration</a></h2>
 <p>The implementation to use can be configured via <code>service.yml</code> (using Light-4J’s Service/Module loading) or dedicated config files.</p>
 <p>Example <code>service.yml</code> for In-Memory:</p>
 <pre><code class="language-yaml">- com.networknt.genai.handler.ChatHistoryRepository:
@@ -4393,7 +4538,7 @@ client.chatStream(messages, new StreamCallback() {
 <li>maven 3.6.0 or above</li>
 <li><a href="https://ollama.ai/">Ollama</a> running locally (for the default configuration) with a model pulled (e.g., <code>qwen3:14b</code> or <code>llama3</code>).</li>
 </ul>
-<h2 id="configuration-29"><a class="header" href="#configuration-29">Configuration</a></h2>
+<h2 id="configuration-30"><a class="header" href="#configuration-30">Configuration</a></h2>
 <p>The server configuration is consolidated in <code>src/main/resources/config/values.yml</code>.</p>
 <h3 id="server--handler"><a class="header" href="#server--handler">Server &amp; Handler</a></h3>
 <p>The server runs on HTTP port 8080 and defines two main paths:</p>
@@ -4465,7 +4610,7 @@ mvn clean install exec:java
 <li><strong>Backend</strong>: <code>llmchat-server</code> running on HTTP port 8080.</li>
 <li><strong>Routing</strong>: Uses <code>WebSocketRouterHandler</code> to forward messages based on path or serviceId. Also uses <code>DirectRegistry</code> for service discovery.</li>
 </ul>
-<h2 id="configuration-30"><a class="header" href="#configuration-30">Configuration</a></h2>
+<h2 id="configuration-31"><a class="header" href="#configuration-31">Configuration</a></h2>
 <p>The configuration is located in <code>src/main/resources/config/values.yml</code>.</p>
 <h3 id="server--handler-1"><a class="header" href="#server--handler-1">Server &amp; Handler</a></h3>
 <p>Configured for HTTPS on port 8443.</p>

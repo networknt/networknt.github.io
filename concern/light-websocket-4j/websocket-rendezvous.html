@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Access Control - Light-4j Platform</title>
+        <title>WebSocket Rendezvous - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,89 +174,133 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="access-control"><a class="header" href="#access-control">Access Control</a></h1>
-<p>The <code>AccessControlHandler</code> is a business middleware handler designed for the <code>light-rest-4j</code> framework. It provides fine-grained, rule-based authorization at the endpoint level, allowing developers to define complex access policies that go beyond simple scope-based security.</p>
-<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
-<p>Unlike standard security handlers that verify tokens and scopes, the Access Control handler interacts with the <strong>Rule Engine</strong> to evaluate business-specific logic. It typically runs late in the middleware chain, after technical concerns like security and validation are handled, and right before the request reaches the business logic or proxy.</p>
-<h3 id="key-features"><a class="header" href="#key-features">Key Features</a></h3>
-<ul>
-<li><strong>Rule-Based Evaluation</strong>: Leverage the Power of the YAML-based Rule Engine.</li>
-<li><strong>Dynamic Configuration</strong>: Supports hot-reloading of both configuration and rules.</li>
-<li><strong>Flexible Logic</strong>: Choose between <code>any</code> or <code>all</code> logic when multiple rules are applied to an endpoint.</li>
-<li><strong>Path Skipping</strong>: Easily bypass checks for specific path prefixes.</li>
-</ul>
-<h2 id="configuration-access-controlyml"><a class="header" href="#configuration-access-controlyml">Configuration (access-control.yml)</a></h2>
-<p>The handler is configured via <code>access-control.yml</code>, which is mapped to the <code>AccessControlConfig</code> class.</p>
-<pre><code class="language-yaml"># Access Control Handler Configuration
----
-# Enable or disable the handler
-enabled: ${access-control.enabled:true}
-
-# If there are multiple rules for an endpoint, how to combine them.
-# any: access is granted if any rule passes.
-# all: access is granted only if all rules pass.
-accessRuleLogic: ${access-control.accessRuleLogic:any}
-
-# If no rules are defined for an endpoint, should access be denied?
-defaultDeny: ${access-control.defaultDeny:true}
-
-# List of path prefixes to skip access control checks.
-skipPathPrefixes:
-  - /health
-  - /server/info
+                        <h1 id="websocket-rendezvous"><a class="header" href="#websocket-rendezvous">WebSocket Rendezvous</a></h1>
+<p>The <code>websocket-rendezvous</code> module provides a specialized WebSocket handler for the “Rendezvous” pattern. This pattern is useful when the Gateway needs to bridge a connection between an external client (e.g., a browser or mobile app) and a backend service that is behind a firewall or NAT and cannot accept incoming connections directly.</p>
+<p>In this pattern, both the Client and the Backend service initiate outbound WebSocket connections to the Gateway. The Gateway then “pairs” these two connections based on a shared identifier (<code>channelId</code>) and relays messages between them transparently.</p>
+<h2 id="dependencies"><a class="header" href="#dependencies">Dependencies</a></h2>
+<p>To use this module, add the following dependency to your <code>pom.xml</code>:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;websocket-rendezvous&lt;/artifactId&gt;
+    &lt;version&gt;${version.light-4j}&lt;/version&gt;
+&lt;/dependency&gt;
 </code></pre>
-<h3 id="configuration-parameters"><a class="header" href="#configuration-parameters">Configuration Parameters</a></h3>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>The module is configured via <code>websocket-rendezvous.yml</code> (or <code>values.yml</code> overrides).</p>
+<p>The configuration key is <code>websocket-rendezvous</code>.</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+<tr><th style="text-align: left">Config Path</th><th style="text-align: left">Default</th><th style="text-align: left">Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code>enabled</code></td><td><code>true</code></td><td>Globally enables or disables the handler.</td></tr>
-<tr><td><code>accessRuleLogic</code></td><td><code>any</code></td><td>Determines evaluation logic for multiple rules (<code>any</code> | <code>all</code>).</td></tr>
-<tr><td><code>defaultDeny</code></td><td><code>true</code></td><td>If <code>true</code>, endpoints without defined rules will return an error.</td></tr>
-<tr><td><code>skipPathPrefixes</code></td><td><code>[]</code></td><td>Requests to these paths skip authorization checks entirely.</td></tr>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable or disable the handler.</td></tr>
+<tr><td style="text-align: left"><code>backendPath</code></td><td style="text-align: left"><code>/connect</code></td><td style="text-align: left">The URI path suffix (or segment) used to identify the Backend connection.</td></tr>
 </tbody>
 </table>
 </div>
-<h2 id="how-it-works"><a class="header" href="#how-it-works">How it Works</a></h2>
-<h3 id="1-rule-loading"><a class="header" href="#1-rule-loading">1. Rule Loading</a></h3>
-<p>Rules are loaded during server startup via the <code>RuleLoaderStartupHook</code>. This hook caches the rules in memory for high-performance evaluation.</p>
-<h3 id="2-request-context"><a class="header" href="#2-request-context">2. Request Context</a></h3>
-<p>When a request arrives, the handler extracts context to build a <strong>Rule Engine Payload</strong>:</p>
+<p><strong>Example <code>values.yml</code> configuration:</strong></p>
+<pre><code class="language-yaml">websocket-rendezvous:
+  enabled: true
+  backendPath: /connect
+</code></pre>
+<h2 id="handler-configuration"><a class="header" href="#handler-configuration">Handler Configuration</a></h2>
+<p>To use the handler in a Light-Gateway or Light-4j service, register it in your <code>handler.yml</code> or <code>values.yml</code> under <code>handler.handlers</code> and map it to the desired paths.</p>
+<pre><code class="language-yaml">handler.handlers:
+  - com.networknt.websocket.rendezvous.WebSocketRendezvousHandler@rendezvous
+  # ... other handlers
+
+handler.paths:
+  - path: '/chat'
+    method: 'GET'
+    exec:
+      - rendezvous
+  - path: '/connect'
+    method: 'GET'
+    exec:
+      - rendezvous
+</code></pre>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
+<ol>
+<li>
+<p><strong>Channel Identification</strong>: Both the Client and the Backend must provide a <code>channelId</code> to identify the session. This is typically done via the HTTP header <code>channel-group-id</code> or a query parameter <code>channelId</code> in the WebSocket upgrade request.</p>
+</li>
+<li>
+<p><strong>Role Detection</strong>: The handler determines if an incoming connection is a <strong>Client</strong> or a <strong>Backend</strong> based on the request URI.</p>
 <ul>
-<li><strong>Audit Info</strong>: User information, client ID, and the resolved OpenApi endpoint.</li>
-<li><strong>Request Headers</strong>: Full map of HTTP headers.</li>
-<li><strong>Parameters</strong>: Combined query and path parameters.</li>
-<li><strong>Request Body</strong>: If a body handler is present and the method is POST/PUT/PATCH.</li>
+<li>If the request URI contains the configured <code>backendPath</code> (default <code>/connect</code>), it is treated as the <strong>Backend</strong>.</li>
+<li>Otherwise, it is treated as the <strong>Client</strong>.</li>
 </ul>
-<h3 id="3-evaluation"><a class="header" href="#3-evaluation">3. Evaluation</a></h3>
-<p>The handler looks up the rules associated with the current OpenApi endpoint.</p>
+</li>
+<li>
+<p><strong>Pairing Logic</strong>:</p>
 <ul>
-<li>If rules exist, it iterates through them using the configured <code>accessRuleLogic</code>.</li>
-<li>Rules are executed by the <code>RuleEngine</code>, which returns a <code>result</code> (true/false) and optional error details.</li>
+<li>When the <strong>Client</strong> connects, the Gateway creates a new <code>WsProxyClientPair</code> and waits for the Backend.</li>
+<li>When the <strong>Backend</strong> connects (providing the same <code>channelId</code>), the Gateway locates the existing session and pairs the Backend connection with the waiting Client connection.</li>
+<li>Once paired, any message received from the Client is forwarded to the Backend, and vice-versa.</li>
 </ul>
-<h3 id="4-enforcement"><a class="header" href="#4-enforcement">4. Enforcement</a></h3>
+</li>
+<li>
+<p><strong>Message Relaying</strong>: The module uses a dedicated <code>WebSocketRendezvousReceiveListener</code> to bridge the traffic efficiently.</p>
+</li>
+</ol>
+<h2 id="connection-model"><a class="header" href="#connection-model">Connection Model</a></h2>
+<p>The Rendezvous mode uses a <strong>1:1 connection mapping</strong> model:</p>
 <ul>
-<li>If the result is <strong>Success</strong>, the request proceeds to the next handler.</li>
-<li>If the result is <strong>Failure</strong>, the handler sets an error status (default <code>ERR10067</code>) and stops the chain.</li>
+<li>For <strong>every</strong> active Client session (identified by a unique <code>channelId</code>), the Backend <strong>must</strong> establish a separate WebSocket connection to the Gateway with the same <code>channelId</code>.</li>
+<li>There is <strong>no multiplexing</strong> of multiple user sessions over a single Backend connection.</li>
+<li>If you have N users connected to the Gateway, the Backend needs N corresponding connections to the Gateway to serve them.</li>
 </ul>
-<h2 id="hot-reload"><a class="header" href="#hot-reload">Hot Reload</a></h2>
-<p>The implementation supports hot-reloading through the standardized <code>AccessControlConfig.reload()</code> mechanism.</p>
-<ul>
-<li>When a configuration change is detected at runtime, the singleton <code>AccessControlConfig</code> instance is updated.</li>
-<li>The <code>AccessControlHandler</code> loads the latest configuration at the start of every request, ensuring zero-downtime updates to authorization policies.</li>
-</ul>
+<h2 id="usage-example"><a class="header" href="#usage-example">Usage Example</a></h2>
+<p><strong>Client Request:</strong></p>
+<pre><code class="language-http">GET /chat?channelId=12345 HTTP/1.1
+Host: gateway.example.com
+Upgrade: websocket
+Connection: Upgrade
+</code></pre>
+<p><strong>Backend Request:</strong></p>
+<pre><code class="language-http">GET /chat/connect?channelId=12345 HTTP/1.1
+Host: gateway.example.com
+Upgrade: websocket
+Connection: Upgrade
+</code></pre>
+<p><em>Note: The Backend connects to a path containing <code>/connect</code> (e.g., <code>/chat/connect</code>). We recommend using <code>/chat/connect</code> (or similar) to differentiate it from the Frontend endpoint <code>/chat</code>. Using the same endpoint for both would cause the Gateway to misidentify the Backend as a second Client.</em></p>
+<p><em>Why not just <code>/connect</code>?</em>
+<em>In many setups, <code>/connect</code> is reserved as the HTTP trigger endpoint that the UI calls to instruct the Backend to establish the WebSocket connection. Therefore, the Backend should use a distinct WebSocket path like <code>/chat/connect</code>.</em></p>
+<h2 id="sequence-diagram"><a class="header" href="#sequence-diagram">Sequence Diagram</a></h2>
+<pre class="mermaid">sequenceDiagram
+    participant User as User (Browser)
+    participant Gateway
+    participant Backend as Backend Service
+
+    User-&gt;&gt;Gateway: WebSocket Connect (/chat?channelId=123)
+    Note over Gateway: Created Client Session (Waiting)
+
+    User-&gt;&gt;Gateway: HTTP GET /connect?channelId=123
+    Gateway-&gt;&gt;Backend: HTTP Proxy request to Backend
+    Note over Backend: Received Trigger
+
+    Backend-&gt;&gt;Gateway: WebSocket Connect (/chat/connect?channelId=123)
+    Note over Gateway: Identified as Backend (via /connect path)
+    Note over Gateway: Paired with Client Session
+
+    User-&gt;&gt;Gateway: Hello Backend
+    Gateway-&gt;&gt;Backend: Forward: Hello Backend
+    
+    Backend-&gt;&gt;Gateway: Hello User
+    Gateway-&gt;&gt;User: Forward: Hello User
+</pre>
+
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/light-rest-4j.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/light-websocket-4j/websocket-handler.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/light-rest-4j/openapi-meta.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/light-genai-4j.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -266,11 +310,11 @@ skipPathPrefixes:
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/light-rest-4j.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/light-websocket-4j/websocket-handler.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/light-rest-4j/openapi-meta.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/light-genai-4j.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

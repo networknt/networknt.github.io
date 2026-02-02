@@ -35,10 +35,10 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-23d76e03.js";
+            window.path_to_searchindex_js = "../../searchindex-c897d3c8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-fa9771ee.js"></script>
+        <script src="../../toc-43ecedf9.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -224,7 +224,34 @@ pathPrefixService:
 <li><strong>Routing</strong>: Upon successful connection (<code>onConnect</code>), it looks up the downstream service URL using the <code>Cluster</code> and <code>Service</code> discovery mechanism based on the <code>service_id</code>.</li>
 <li><strong>Proxying</strong>: It establishes a WebSocket connection to the downstream service and pipes messages between the client and the backend.</li>
 </ol>
-<p>If the request is not matched as a WebSocket routing request, the handler simply delegates to the next handler in the chain, allowing standard HTTP requests to proceed to other endpoints.</p>
+<h2 id="channel-management"><a class="header" href="#channel-management">Channel Management</a></h2>
+<p>The WebSocket Router uses a concept of “Channels” to manage client sessions.</p>
+<ol>
+<li>
+<p><strong>Channel Group ID</strong>:</p>
+<ul>
+<li>The router expects a unique identifier for each client connection, typically passed in the <code>x-group-id</code> header (internally <code>WsAttributes.CHANNEL_GROUP_ID</code>).</li>
+<li>If this header is missing (e.g., standard browser connections), the router <strong>automatically generates a unique UUID</strong> for the session.</li>
+</ul>
+</li>
+<li>
+<p><strong>Connection Mapping</strong>:</p>
+<ul>
+<li>Each unique Channel Group ID corresponds to a distinct WebSocket connection to the downstream service.</li>
+<li>If a client connects with a generated UUID, a <strong>new</strong> connection is established to the backend service for that specific session.</li>
+<li>Messages are proxied exclusively between the client’s channel and its corresponding downstream connection.</li>
+</ul>
+</li>
+</ol>
+<p>This ensures that multiple browser tabs or distinct clients are isolated, each communicating with the backend over its own dedicated WebSocket link.</p>
+<h2 id="architecture-router-vs-proxy"><a class="header" href="#architecture-router-vs-proxy">Architecture: Router vs. Proxy</a></h2>
+<p>You might observe that the <code>WebSocketRouterHandler</code> functions primarily as a <strong>Reverse Proxy</strong>: it terminates the client connection and establishes a separate connection to the backend service.</p>
+<p>It is named a “Router” because of its role in the system architecture:</p>
+<ol>
+<li><strong>Multiplexing</strong>: It can route different paths (e.g., <code>/chat</code>, <code>/notification</code>) to different backend services on the same gateway port.</li>
+<li><strong>Service Discovery</strong>: It dynamically resolves the backend URL using the <code>service_id</code> and the configured Registry/Cluster (e.g., Consul, Kubernetes), rather than proxying to a static IP address.</li>
+</ol>
+<p>Thus, while the <em>mechanism</em> is proxying, the <em>function</em> is dynamic routing and load balancing of WebSocket traffic.</p>
 
                     </main>
 
