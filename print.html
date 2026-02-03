@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c897d3c8.js";
+            window.path_to_searchindex_js = "searchindex-6e9b1757.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-43ecedf9.js"></script>
+        <script src="toc-3b56448d.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -1180,6 +1180,437 @@ chains:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="middleware-handler"><a class="header" href="#middleware-handler">Middleware Handler</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="api-key-handler"><a class="header" href="#api-key-handler">API Key Handler</a></h1>
+<p>For some legacy applications to migrate from a monolithic gateway to the light-gateway without changing any code on the consumer application, we need to support the API Key authentication on the light-gateway (LG) or client-proxy (LCP). The consumer application sends the API key in a header to authenticate itself on the light-gateway. Then the light-gateway will retrieve a JWT token to access the downstream API.</p>
+<p>Only specific paths will have API Key set up, and the header name for each application might be different. To support all use cases, we add a list of maps to the configuration <code>apikey.yml</code> to <code>pathPrefixAuths</code> property.</p>
+<p>Each config item will have <code>pathPrefix</code>, <code>headerName</code>, and <code>apiKey</code>. The handler will try to match the path prefix first and then get the input API Key from the header. After comparing with the configured API Key, the handler will return either <code>ERR10075</code> API_KEY_MISMATCH or pass the control to the next handler in the chain.</p>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>The configuration is managed by <code>ApiKeyConfig</code> and corresponds to <code>apikey.yml</code> (or <code>apikey.json</code>/<code>apikey.properties</code>).</p>
+<h3 id="configuration-properties"><a class="header" href="#configuration-properties">Configuration Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Type</th><th style="text-align: left">Default</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">Enable ApiKey Authentication Handler.</td></tr>
+<tr><td style="text-align: left"><code>hashEnabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">If API key hash is enabled. The API key will be hashed with PBKDF2WithHmacSHA1 before it is stored in the config file. It is more secure than putting the clear text key into the config file.</td></tr>
+<tr><td style="text-align: left"><code>pathPrefixAuths</code></td><td style="text-align: left">list</td><td style="text-align: left"><code>null</code></td><td style="text-align: left">A list of mappings between path prefix and the api key parameters.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="configuration-example-apikeyyml"><a class="header" href="#configuration-example-apikeyyml">Configuration Example (apikey.yml)</a></h3>
+<pre><code class="language-yaml"># ApiKey Authentication Security Configuration for light-4j
+# Enable ApiKey Authentication Handler, default is false.
+enabled: ${apikey.enabled:false}
+
+# If API key hash is enabled. The API key will be hashed with PBKDF2WithHmacSHA1 before it is
+# stored in the config file. It is more secure than put the encrypted key into the config file.
+# The default value is false. If you want to enable it, you need to use the light-hash command line tool.
+hashEnabled: ${apikey.hashEnabled:false}
+
+# path prefix to the api key mapping. It is a list of map between the path prefix and the api key
+# for apikey authentication. In the handler, it loops through the list and find the matching path
+# prefix. Once found, it will check if the apikey is equal to allow the access or return an error.
+pathPrefixAuths: ${apikey.pathPrefixAuths:}
+</code></pre>
+<h3 id="values-example-valuesyml"><a class="header" href="#values-example-valuesyml">Values Example (values.yml)</a></h3>
+<p>To enable the handler and configure paths, add the following to your <code>values.yml</code>:</p>
+<pre><code class="language-yaml"># apikey.yml
+apikey.enabled: true
+apikey.pathPrefixAuths:
+  - pathPrefix: /test1
+    headerName: x-gateway-apikey
+    apiKey: abcdefg
+  - pathPrefix: /test2
+    headerName: x-apikey
+    apiKey: mykey
+</code></pre>
+<p>JSON format example for <code>pathPrefixAuths</code> (useful for config server):</p>
+<pre><code class="language-json">[{"pathPrefix":"/test1","headerName":"x-gateway-apikey","apiKey":"abcdefg"},{"pathPrefix":"/test2","headerName":"x-apikey","apiKey":"mykey"}]
+</code></pre>
+<h3 id="multiple-consumers-for-same-path"><a class="header" href="#multiple-consumers-for-same-path">Multiple Consumers for Same Path</a></h3>
+<p>Most services will have multiple consumers, and each consumer might have its own API key for authentication. You can define multiple entries for the same path prefix:</p>
+<pre><code class="language-yaml">apikey.pathPrefixAuths:
+  - pathPrefix: /test1
+    headerName: x-gateway-apikey
+    apiKey: abcdefg
+  # The same prefix has another apikey header and value.
+  - pathPrefix: /test1
+    headerName: authorization
+    apiKey: xyz
+</code></pre>
+<h2 id="security-with-hash"><a class="header" href="#security-with-hash">Security with Hash</a></h2>
+<p>Storing API keys in clear text is only recommended for testing. For production, enable hashing:</p>
+<ol>
+<li>Enable hash in <code>values.yml</code>:
+<pre><code class="language-yaml">apikey.hashEnabled: true
+</code></pre>
+</li>
+<li>Generate the hash of your API key using the <a href="https://github.com/networknt/light-hash">light-hash</a> utility.</li>
+<li>Use the generated hash string as the <code>apiKey</code> value in your configuration.</li>
+</ol>
+<h2 id="error-response"><a class="header" href="#error-response">Error Response</a></h2>
+<p>If the request path matches a configured prefix but the API key verification fails, the handler returns error <code>ERR10075</code>.</p>
+<p><strong>Status Code</strong>: 401
+<strong>Code</strong>: ERR10075
+<strong>Message</strong>: API_KEY_MISMATCH
+<strong>Description</strong>: APIKEY from header %s is not matched for request path prefix %s.</p>
+<p>To prevent leaking sensitive information, the expected apiKey from the config file is not revealed in the error message.</p>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<p>Register the <code>ApiKeyHandler</code> in your <code>handler.yml</code> chain.</p>
+<pre><code class="language-yaml">handler.handlers:
+  .
+  - com.networknt.apikey.ApiKeyHandler@apikey
+
+handler.chains.default:
+  .
+  - apikey
+  .
+</code></pre>
+<p>If you are using the Unified Security Handler, you can integrate the API Key handler there as well to support multiple authentication methods (ApiKey, Basic, OAuth2, SWT) simultaneously.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="audit-handler"><a class="header" href="#audit-handler">Audit Handler</a></h1>
+<p>The <code>AuditHandler</code> is a middleware component responsible for logging request and response details for auditing purposes. It captures important information such as headers, execution time, status codes, and even request/response bodies if configured.</p>
+<p>The audit logs are typically written to a separate log file (e.g., <code>audit.log</code>) via slf4j/logback, allowing them to be ingested by centralized logging systems like ELK or Splunk.</p>
+<h2 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h2>
+<p>The configuration is managed by <code>AuditConfig</code> and corresponds to <code>audit.yml</code> (or <code>audit.json</code>/<code>audit.properties</code>).</p>
+<h3 id="configuration-properties-1"><a class="header" href="#configuration-properties-1">Configuration Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Type</th><th style="text-align: left">Default</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable or disable the Audit Handler.</td></tr>
+<tr><td style="text-align: left"><code>mask</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable masking of sensitive data in headers and audit fields.</td></tr>
+<tr><td style="text-align: left"><code>statusCode</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Include response status code in the audit log.</td></tr>
+<tr><td style="text-align: left"><code>responseTime</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Include response time (latency) in milliseconds.</td></tr>
+<tr><td style="text-align: left"><code>auditOnError</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">If true, only log when the response status code is &gt;= 400. If false, log every request.</td></tr>
+<tr><td style="text-align: left"><code>logLevelIsError</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">If true, logs at ERROR level. If false, logs at INFO level.</td></tr>
+<tr><td style="text-align: left"><code>timestampFormat</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>null</code></td><td style="text-align: left">Custom format for the timestamp (e.g., <code>yyyy-MM-dd'T'HH:mm:ss.SSSZ</code>). If null, uses epoch timestamp.</td></tr>
+<tr><td style="text-align: left"><code>headers</code></td><td style="text-align: left">list</td><td style="text-align: left"><code>[...]</code></td><td style="text-align: left">List of request headers to include in the log. Default: <code>X-Correlation-Id</code>, <code>X-Traceability-Id</code>, <code>caller_id</code>.</td></tr>
+<tr><td style="text-align: left"><code>audit</code></td><td style="text-align: left">list</td><td style="text-align: left"><code>[...]</code></td><td style="text-align: left">List of specific audit fields to include. Default: <code>client_id</code>, <code>user_id</code>, <code>scope_client_id</code>, <code>endpoint</code>, <code>serviceId</code>.</td></tr>
+<tr><td style="text-align: left"><code>requestBodyMaxSize</code></td><td style="text-align: left">int</td><td style="text-align: left"><code>4096</code></td><td style="text-align: left">Max size of request body to log (if <code>requestBody</code> is in <code>audit</code> list). Truncated if larger.</td></tr>
+<tr><td style="text-align: left"><code>responseBodyMaxSize</code></td><td style="text-align: left">int</td><td style="text-align: left"><code>4096</code></td><td style="text-align: left">Max size of response body to log (if <code>responseBody</code> is in <code>audit</code> list). Truncated if larger.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="configuration-example-audityml"><a class="header" href="#configuration-example-audityml">Configuration Example (audit.yml)</a></h3>
+<pre><code class="language-yaml"># Enable Audit Logging
+enabled: ${audit.enabled:true}
+
+# Enable mask in the audit log
+mask: ${audit.mask:true}
+
+# Output response status code
+statusCode: ${audit.statusCode:true}
+
+# Output response time
+responseTime: ${audit.responseTime:true}
+
+# when auditOnError is true:
+#  - it will only log when status code &gt;= 400
+# when auditOnError is false:
+#  - it will log on every request
+auditOnError: ${audit.auditOnError:false}
+
+# log level; by default it is set to info. If you want to change it to error, set to true.
+logLevelIsError: ${audit.logLevelIsError:false}
+
+# timestamp format
+timestampFormat: ${audit.timestampFormat:}
+
+# headers to audit
+headers: ${audit.headers:X-Correlation-Id, X-Traceability-Id,caller_id}
+
+# audit fields. Add requestBody or responseBody here to enable payload logging.
+audit: ${audit.audit:client_id, user_id, scope_client_id, endpoint, serviceId}
+</code></pre>
+<h3 id="values-example-valuesyml-1"><a class="header" href="#values-example-valuesyml-1">Values Example (values.yml)</a></h3>
+<p>You can customize the audit behavior per environment using <code>values.yml</code>. For example, to enable full body logging in a dev environment:</p>
+<pre><code class="language-yaml"># audit.yml
+audit.audit:
+  - client_id
+  - user_id
+  - endpoint
+  - requestBody
+  - responseBody
+  - queryParameters
+  - pathParameters
+</code></pre>
+<h2 id="logging-body-and-parameters"><a class="header" href="#logging-body-and-parameters">Logging Body and Parameters</a></h2>
+<p>The <code>AuditHandler</code> supports logging additional details if they are added to the <code>audit</code> list in the configuration:</p>
+<ul>
+<li><code>requestBody</code>: Logs the request body.</li>
+<li><code>responseBody</code>: Logs the response body.</li>
+<li><code>queryParameters</code>: Logs query parameters.</li>
+<li><code>pathParameters</code>: Logs path parameters.</li>
+<li><code>requestCookies</code>: Logs request cookies.</li>
+</ul>
+<p><strong>Note</strong>: Enabling body logging (<code>requestBody</code> or <code>responseBody</code>) can significantly impact performance and is generally not recommended for production unless <code>auditOnError</code> is enabled or for specific debugging purposes.</p>
+<h2 id="usage-1"><a class="header" href="#usage-1">Usage</a></h2>
+<p>Register the <code>AuditHandler</code> in your <code>handler.yml</code> chain. It is usually placed near the beginning of the chain to capture the start time and ensure it runs even if downstream handlers fail.</p>
+<pre><code class="language-yaml">handler.handlers:
+  .
+  - com.networknt.audit.AuditHandler@audit
+
+handler.chains.default:
+  - exception
+  - traceability
+  - correlation
+  - audit
+  .
+</code></pre>
+<h2 id="logback-configuration"><a class="header" href="#logback-configuration">Logback Configuration</a></h2>
+<p>The <code>AuditHandler</code> writes to a logger named <code>audit</code>. You should configure a specific appender in your <code>logback.xml</code> to route these logs to a separate file or system.</p>
+<p>Example <code>logback.xml</code> snippet:</p>
+<pre><code class="language-xml">&lt;appender name="audit" class="ch.qos.logback.core.rolling.RollingFileAppender"&gt;
+    &lt;file&gt;log/audit.log&lt;/file&gt;
+    &lt;encoder&gt;
+        &lt;pattern&gt;%msg%n&lt;/pattern&gt;
+    &lt;/encoder&gt;
+    &lt;rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy"&gt;
+        &lt;fileNamePattern&gt;log/audit.log.%i.zip&lt;/fileNamePattern&gt;
+        &lt;minIndex&gt;1&lt;/minIndex&gt;
+        &lt;maxIndex&gt;10&lt;/maxIndex&gt;
+    &lt;/rollingPolicy&gt;
+    &lt;triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy"&gt;
+        &lt;maxFileSize&gt;10MB&lt;/maxFileSize&gt;
+    &lt;/triggeringPolicy&gt;
+&lt;/appender&gt;
+
+&lt;logger name="audit" level="INFO" additivity="false"&gt;
+    &lt;appender-ref ref="audit"/&gt;
+&lt;/logger&gt;
+</code></pre>
+<h2 id="log-format"><a class="header" href="#log-format">Log Format</a></h2>
+<p>The audit log is written as a JSON object.</p>
+<p>Example output:</p>
+<pre><code class="language-json">{
+  "timestamp": "2023-10-27T10:00:00.123-0400",
+  "serviceId": "com.networknt.petstore-1.0.0",
+  "X-Correlation-Id": "12345",
+  "endpoint": "/v1/pets@get",
+  "statusCode": 200,
+  "responseTime": 45
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="basic-auth"><a class="header" href="#basic-auth">Basic Auth</a></h1>
+<p>The Basic Authentication middleware provides a mechanism to authenticate users using the standard HTTP Basic Authentication scheme (Authorization header with <code>Basic base64(username:password)</code>).</p>
+<p>While OAuth 2.0 (JWT) is the recommended security standard for microservices, Basic Auth is useful for:</p>
+<ul>
+<li>IoT devices that do not support OAuth flows.</li>
+<li>Integrating legacy systems.</li>
+<li>Simple authentication requirements where a full OAuth provider is overkill.</li>
+</ul>
+<h2 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h2>
+<p>The configuration is managed by <code>BasicAuthConfig</code> and corresponds to <code>basic-auth.yml</code> (or <code>basic-auth.json</code>/<code>basic-auth.properties</code>).
+The settings are injected under the <code>basic</code> key in <code>values.yml</code>.</p>
+<h3 id="configuration-properties-2"><a class="header" href="#configuration-properties-2">Configuration Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Type</th><th style="text-align: left">Default</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">Enable or disable the Basic Auth Handler.</td></tr>
+<tr><td style="text-align: left"><code>enableAD</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable LDAP (Active Directory) authentication if the password in config is empty.</td></tr>
+<tr><td style="text-align: left"><code>allowAnonymous</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">Allow requests without Authorization header if the path matches the <code>anonymous</code> user’s paths.</td></tr>
+<tr><td style="text-align: left"><code>allowBearerToken</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">Allow requests with <code>Bearer</code> token to pass through if the path matches the <code>bearer</code> user’s paths. Useful for proxying mixed auth traffic.</td></tr>
+<tr><td style="text-align: left"><code>users</code></td><td style="text-align: left">list/map</td><td style="text-align: left"><code>null</code></td><td style="text-align: left">A list of user definitions containing <code>username</code>, <code>password</code>, and allowed <code>paths</code>.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="user-definition"><a class="header" href="#user-definition">User Definition</a></h3>
+<p>Each user object in the <code>users</code> list/map contains:</p>
+<ul>
+<li><code>username</code>: The login username.</li>
+<li><code>password</code>: The password (clear text or encrypted).</li>
+<li><code>paths</code>: A list of URL path prefixes this user is allowed to access.</li>
+</ul>
+<p>Special usernames:</p>
+<ul>
+<li><code>anonymous</code>: Used when <code>allowAnonymous</code> is true. Defines paths accessible without authentication.</li>
+<li><code>bearer</code>: Used when <code>allowBearerToken</code> is true. Defines paths accessible with a Bearer token (verification delegated to downstream or another handler).</li>
+</ul>
+<h3 id="configuration-example-basic-authyml"><a class="header" href="#configuration-example-basic-authyml">Configuration Example (basic-auth.yml)</a></h3>
+<pre><code class="language-yaml"># Basic Authentication Security Configuration for light-4j
+enabled: ${basic.enabled:false}
+enableAD: ${basic.enableAD:true}
+allowAnonymous: ${basic.allowAnonymous:false}
+allowBearerToken: ${basic.allowBearerToken:false}
+users: ${basic.users:}
+</code></pre>
+<h3 id="values-example-valuesyml-2"><a class="header" href="#values-example-valuesyml-2">Values Example (values.yml)</a></h3>
+<p>You typically configure users in <code>values.yml</code>:</p>
+<pre><code class="language-yaml">basic.enabled: true
+basic.users:
+  - username: user1
+    password: user1pass
+    paths:
+      - /v1/address
+  - username: user2
+    # Encrypted password
+    password: CRYPT:0754fbc37347c136be7725cbf62b6942:71756e13c2400985d0402ed6f49613d0
+    paths:
+      - /v2/pet
+      - /v2/address
+  # Paths allowed for anonymous access (if allowAnonymous: true)
+  - username: anonymous
+    paths:
+      - /v1/party
+      - /info
+</code></pre>
+<h2 id="features-2"><a class="header" href="#features-2">Features</a></h2>
+<h3 id="static-user-authentication"><a class="header" href="#static-user-authentication">Static User Authentication</a></h3>
+<p>Verify <code>username</code> and <code>password</code> against the configured list. If matched, checks if the request path matches one of the user’s allowed <code>paths</code>.</p>
+<h3 id="ldap-authentication"><a class="header" href="#ldap-authentication">LDAP Authentication</a></h3>
+<p>If <code>enableAD</code> is true and a configured user has an <strong>empty password</strong>, the handler attempts to authenticate against the configured LDAP server (using <code>LdapUtil</code>). Context:</p>
+<ol>
+<li>User <code>user1</code> is defined in <code>basic.users</code> with <code>password: ""</code> (empty).</li>
+<li>Incoming request has <code>Basic base64(user1:secret)</code>.</li>
+<li>Handler skips local password check and calls <code>LdapUtil.authenticate("user1", "secret")</code>.</li>
+<li>If LDAP auth succeeds, it checks the allowed <code>paths</code> for <code>user1</code> in the config.</li>
+</ol>
+<h3 id="anonymous-access"><a class="header" href="#anonymous-access">Anonymous Access</a></h3>
+<p>If <code>allowAnonymous</code> is true, requests without an Authorization header are checked against the paths defined for the special <code>anonymous</code> user.</p>
+<ul>
+<li>If path matches <code>anonymous.paths</code>, request proceeds.</li>
+<li>If path does not match, returns <code>ERR10071</code> (NOT_AUTHORIZED_REQUEST_PATH) or <code>ERR10002</code> (MISSING_AUTH_TOKEN).</li>
+</ul>
+<h3 id="bearer-token-pass-through"><a class="header" href="#bearer-token-pass-through">Bearer Token Pass-through</a></h3>
+<p>If <code>allowBearerToken</code> is true, requests with <code>Authorization: Bearer &lt;token&gt;</code> are checked against the paths defined for the special <code>bearer</code> user.</p>
+<ul>
+<li>If path matches <code>bearer.paths</code>, request proceeds (skipping Basic Auth check).</li>
+<li>This is useful in a gateway/proxy where some endpoints use Basic Auth and others use OAuth2, and you want to route them through the same chain conditionally.</li>
+</ul>
+<h2 id="usage-2"><a class="header" href="#usage-2">Usage</a></h2>
+<p>Register the <code>BasicAuthHandler</code> in your <code>handler.yml</code> chain.</p>
+<pre><code class="language-yaml">handler.handlers:
+  .
+  - com.networknt.basicauth.BasicAuthHandler@basic
+
+handler.chains.default:
+  .
+  - basic
+  .
+</code></pre>
+<h2 id="error-codes"><a class="header" href="#error-codes">Error Codes</a></h2>
+<ul>
+<li><code>ERR10002</code>: MISSING_AUTH_TOKEN - The basic authentication header is missing (and anonymous not allowed).</li>
+<li><code>ERR10046</code>: INVALID_BASIC_HEADER - The format of the basic authentication header is not valid.</li>
+<li><code>ERR10047</code>: INVALID_USERNAME_OR_PASSWORD - Invalid username or password.</li>
+<li><code>ERR10071</code>: NOT_AUTHORIZED_REQUEST_PATH - Authenticated user is not authorized for the requested path.</li>
+<li><code>ERR10072</code>: BEARER_USER_NOT_FOUND - Bearer token allowed but <code>bearer</code> user configuration missing.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="body-handler"><a class="header" href="#body-handler">Body Handler</a></h1>
+<p>The <code>BodyHandler</code> is a middleware component designed primarily for <code>light-rest-4j</code> services. It automatically parses the incoming request body for methods like POST, PUT, and PATCH, and attaches the parsed object to the exchange for subsequent handlers to consume.</p>
+<p><strong>Note:</strong> This handler is <strong>not</strong> suitable for <code>light-gateway</code> or <code>http-sidecar</code> as those services typically stream the request body directly to downstream services without consuming it. For gateway scenarios, use <code>RequestBodyInterceptor</code> and <code>ResponseBodyInterceptor</code> if inspection is required.</p>
+<h2 id="functionality"><a class="header" href="#functionality">Functionality</a></h2>
+<p>The handler inspects the <code>Content-Type</code> header and parses the body accordingly:</p>
+<ol>
+<li>
+<p><strong>application/json</strong>:</p>
+<ul>
+<li>Parsed into a <code>Map</code> (if starts with <code>{</code>) or <code>List</code> (if starts with <code>[</code>).</li>
+<li>Attached to exchange with key <code>BodyHandler.REQUEST_BODY</code>.</li>
+<li>Optionally caches the raw string body to <code>BodyHandler.REQUEST_BODY_STRING</code> if <code>cacheRequestBody</code> is enabled (useful for auditing).</li>
+</ul>
+</li>
+<li>
+<p><strong>text/plain</strong>:</p>
+<ul>
+<li>Parsed into a <code>String</code>.</li>
+<li>Attached to exchange with key <code>BodyHandler.REQUEST_BODY</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>multipart/form-data</strong> / <strong>application/x-www-form-urlencoded</strong>:</p>
+<ul>
+<li>Parsed into <code>FormData</code>.</li>
+<li>Attached to exchange with key <code>BodyHandler.REQUEST_BODY</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Other / Missing Content-Type</strong>:</p>
+<ul>
+<li>Attached as an <code>InputStream</code>.</li>
+<li>Attached to exchange with key <code>BodyHandler.REQUEST_BODY</code>.</li>
+</ul>
+</li>
+</ol>
+<h2 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h2>
+<p>The configuration is managed by <code>BodyConfig</code> and corresponds to <code>body.yml</code> (or <code>body.json</code>/<code>body.properties</code>).</p>
+<h3 id="configuration-properties-3"><a class="header" href="#configuration-properties-3">Configuration Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Type</th><th style="text-align: left">Default</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable or disable the Body Handler.</td></tr>
+<tr><td style="text-align: left"><code>cacheRequestBody</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">Cache the request body as a string. Required if you want to audit the request body.</td></tr>
+<tr><td style="text-align: left"><code>cacheResponseBody</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">Cache the response body as a string. Required if you want to audit the response body.</td></tr>
+<tr><td style="text-align: left"><code>logFullRequestBody</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">If true, logs the full request body (debug only, not for production).</td></tr>
+<tr><td style="text-align: left"><code>logFullResponseBody</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>false</code></td><td style="text-align: left">If true, logs the full response body (debug only, not for production).</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="configuration-example-bodyyml"><a class="header" href="#configuration-example-bodyyml">Configuration Example (body.yml)</a></h3>
+<pre><code class="language-yaml"># Enable body parse flag
+enabled: ${body.enabled:true}
+
+# Cache request body as a string along with JSON object.
+# Required for audit logging of request body.
+cacheRequestBody: ${body.cacheRequestBody:false}
+
+# Cache response body as a string.
+# Required for audit logging of response body.
+cacheResponseBody: ${body.cacheResponseBody:false}
+
+# Log full bodies for debugging (use carefully)
+logFullRequestBody: ${body.logFullRequestBody:false}
+logFullResponseBody: ${body.logFullResponseBody:false}
+</code></pre>
+<h2 id="usage-3"><a class="header" href="#usage-3">Usage</a></h2>
+<p>Register the <code>BodyHandler</code> in your <code>handler.yml</code> chain. It should be placed early in the chain, before any validation or business logic handlers that need access to the body.</p>
+<pre><code class="language-yaml">handler.handlers:
+  .
+  - com.networknt.body.BodyHandler@body
+
+handler.chains.default:
+  .
+  - exception
+  - correlation
+  - body
+  .
+</code></pre>
+<h3 id="retrieving-the-body"><a class="header" href="#retrieving-the-body">Retrieving the Body</a></h3>
+<p>In your business handler or subsequent middleware:</p>
+<pre><code class="language-java">import com.networknt.body.BodyHandler;
+
+// ...
+
+// Get the parsed body (Map, List, String, FormData, or InputStream)
+Object body = exchange.getAttachment(BodyHandler.REQUEST_BODY);
+
+if (body instanceof List) {
+    // Handle JSON List
+} else if (body instanceof Map) {
+    // Handle JSON Map
+} else {
+    // Handle other types
+}
+</code></pre>
+<h3 id="retrieving-the-cached-string"><a class="header" href="#retrieving-the-cached-string">Retrieving the Cached String</a></h3>
+<p>If <code>cacheRequestBody</code> is enabled:</p>
+<pre><code class="language-java">// Get the raw JSON string
+String bodyString = exchange.getAttachment(BodyHandler.REQUEST_BODY_STRING);
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="header-handler"><a class="header" href="#header-handler">Header Handler</a></h1>
 <p>The <code>HeaderHandler</code> is a middleware component in the light-4j framework designed to modify request and response headers as they pass through the handler chain. This is particularly useful for cross-cutting concerns such as:</p>
 <ul>
@@ -1189,7 +1620,7 @@ chains:
 <li><strong>API Management:</strong> Standardizing headers across different microservices.</li>
 </ul>
 <p>The handler is highly configurable, allowing for global header manipulation as well as path-specific configurations.</p>
-<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<h2 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h2>
 <p>The <code>HeaderHandler</code> uses a configuration file named <code>header.yml</code> to define its behavior.</p>
 <h3 id="configuration-options"><a class="header" href="#configuration-options">Configuration Options</a></h3>
 <p>The configuration supports the following sections:</p>
@@ -1343,7 +1774,7 @@ header.pathPrefixHeader:
         keyG: valueG
         keyH: valueH
 </code></pre>
-<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<h2 id="usage-4"><a class="header" href="#usage-4">Usage</a></h2>
 <p>To use the <code>HeaderHandler</code> in your application:</p>
 <ol>
 <li><strong>Add the Dependency:</strong> Ensure the <code>header</code> module is included in your project’s <code>pom.xml</code>.</li>
@@ -1368,7 +1799,7 @@ header.pathPrefixHeader:
 </li>
 <li><strong>Default Policy:</strong> Configurable default behavior (allow or deny) when no specific rule is matched.</li>
 </ul>
-<h2 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h2>
+<h2 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h2>
 <p>The configuration is managed via <code>whitelist.yml</code>.</p>
 <h3 id="configuration-options-1"><a class="header" href="#configuration-options-1">Configuration Options</a></h3>
 <ul>
@@ -1447,7 +1878,7 @@ whitelist.paths:
 <li><strong>Message:</strong> <code>INVALID_IP_FOR_PATH</code></li>
 <li><strong>Description:</strong> <code>Peer IP %s is not in the whitelist for the endpoint %s</code></li>
 </ul>
-<h2 id="usage-1"><a class="header" href="#usage-1">Usage</a></h2>
+<h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
 <ol>
 <li>Add the <code>ip-whitelist</code> module dependency to your <code>pom.xml</code>.</li>
 <li>Add <code>com.networknt.whitelist.WhitelistHandler</code> to your <code>handler.yml</code> chain.</li>
@@ -1554,7 +1985,7 @@ userIdKeyResolver: ${limit.userIdKeyResolver:com.networknt.limit.key.JwtUserIdKe
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="prometheus-metrics"><a class="header" href="#prometheus-metrics">Prometheus Metrics</a></h1>
 <p>The <code>prometheus</code> module in <code>light-4j</code> provides a systems monitoring middleware handler that integrates with <a href="https://prometheus.io/">Prometheus</a>. Unlike other metrics modules that “push” data to a central server (e.g., InfluxDB), Prometheus adopts a <strong>pull-based</strong> model where the Prometheus server periodically scrapes metrics from instrumented targets.</p>
-<h3 id="features-2"><a class="header" href="#features-2">Features</a></h3>
+<h3 id="features-3"><a class="header" href="#features-3">Features</a></h3>
 <ul>
 <li><strong>Runtime Collection</strong>: Captures HTTP request counts and response times using the Prometheus dimensional data model.</li>
 <li><strong>Dimensionality</strong>: Automatically attaches labels like <code>endpoint</code> and <code>clientId</code> to every metric, allowing for granular filtering and aggregation in Grafana.</li>
@@ -1640,7 +2071,7 @@ chains:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sanitizer-handler"><a class="header" href="#sanitizer-handler">Sanitizer Handler</a></h1>
 <p>The <code>SanitizerHandler</code> is a middleware component in <code>light-4j</code> designed to address Cross-Site Scripting (XSS) concerns by sanitizing request headers and bodies. It leverages the OWASP Java Encoder to perform context-aware encoding of potentially malicious user input.</p>
-<h3 id="features-3"><a class="header" href="#features-3">Features</a></h3>
+<h3 id="features-4"><a class="header" href="#features-4">Features</a></h3>
 <ul>
 <li><strong>Context-Aware Encoding</strong>: Uses the <code>owasp-java-encoder</code> to safely encode data.</li>
 <li><strong>Header Sanitization</strong>: Encodes request headers to prevent header-based XSS or injection.</li>
@@ -1723,7 +2154,7 @@ chains:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="security-handler"><a class="header" href="#security-handler">Security Handler</a></h1>
 <p>The <code>SecurityHandler</code> (implemented as <code>JwtVerifyHandler</code> in REST, GraphQL, etc.) is responsible for verifying the security tokens (JWT or SWT) in the request header. It is a core component of the light-4j framework and provides distributed policy enforcement without relying on a centralized gateway.</p>
-<h2 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h2>
+<h2 id="configuration-6"><a class="header" href="#configuration-6">Configuration</a></h2>
 <p>The security configuration is usually defined in <code>security.yml</code>, but it can be overridden by framework-specific files like <code>openapi-security.yml</code> or <code>graphql-security.yml</code>.</p>
 <h3 id="example-securityyml"><a class="header" href="#example-securityyml">Example security.yml</a></h3>
 <pre><code class="language-yaml"># Security configuration for security module in light-4j.
@@ -1815,7 +2246,7 @@ passThroughClaims:
 <h1 id="unified-security"><a class="header" href="#unified-security">Unified Security</a></h1>
 <p>The <code>UnifiedSecurityHandler</code> is a powerful middleware that consolidates various security mechanisms into a single handler. It is designed to simplify security configuration, especially in complex environments like a shared light-gateway, where different paths might require different authentication methods.</p>
 <p>By using the <code>UnifiedSecurityHandler</code>, you avoid chaining multiple security-specific handlers (like <code>BasicAuthHandler</code>, <code>JwtVerifyHandler</code>, <code>ApiKeyHandler</code>) and can manage all security policies in one place.</p>
-<h2 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h2>
+<h2 id="configuration-7"><a class="header" href="#configuration-7">Configuration</a></h2>
 <p>The configuration for this handler is defined in <code>unified-security.yml</code>.</p>
 <h3 id="example-unified-securityyml"><a class="header" href="#example-unified-securityyml">Example unified-security.yml</a></h3>
 <pre><code class="language-yaml"># Unified security configuration.
@@ -1948,9 +2379,9 @@ egressIngressIndicator: ${sidecar.egressIngressIndicator:header}
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sse-handler"><a class="header" href="#sse-handler">SSE Handler</a></h1>
 <p>The SSE (Server-Sent Events) Handler in <code>light-4j</code> allows the server to push real-time updates to the client over a standard HTTP connection. This handler manages the connection lifecycle and keep-alive messages.</p>
-<h2 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h2>
+<h2 id="configuration-8"><a class="header" href="#configuration-8">Configuration</a></h2>
 <p>The configuration for the SSE Handler is defined in <code>sse.yml</code> (or <code>sse.json/yaml</code>). It corresponds to the <code>SseConfig.java</code> class.</p>
-<h3 id="configuration-properties"><a class="header" href="#configuration-properties">Configuration Properties</a></h3>
+<h3 id="configuration-properties-4"><a class="header" href="#configuration-properties-4">Configuration Properties</a></h3>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -1988,7 +2419,7 @@ pathPrefixes:
 metricsInjection: false
 metricsName: router-response
 </code></pre>
-<h2 id="usage-2"><a class="header" href="#usage-2">Usage</a></h2>
+<h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
 <p>Register the <code>SseHandler</code> in your <code>handler.yml</code> chain. When a client connects to the configured path (e.g., <code>/sse</code>), the handler will establish a persistent connection and manage keep-alive signals based on the <code>keepAliveInterval</code>.</p>
 <h3 id="path-matching"><a class="header" href="#path-matching">Path Matching</a></h3>
 <ol>
@@ -2001,9 +2432,9 @@ metricsName: router-response
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="mcp-router"><a class="header" href="#mcp-router">MCP Router</a></h1>
 <p>The MCP (Model Context Protocol) Router in <code>light-4j</code> allows binding LLM tools to HTTP endpoints, enabling an AI model to interact with your services via the MCP standard. It supports both Server-Sent Events (SSE) for connection establishment and HTTP POST for JSON-RPC messages.</p>
-<h2 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h2>
+<h2 id="configuration-9"><a class="header" href="#configuration-9">Configuration</a></h2>
 <p>The configuration for the MCP Router is defined in <code>mcp-router.yml</code> (or <code>mcp-router.json/yaml</code>). It corresponds to the <code>McpConfig.java</code> class.</p>
-<h3 id="configuration-properties-1"><a class="header" href="#configuration-properties-1">Configuration Properties</a></h3>
+<h3 id="configuration-properties-5"><a class="header" href="#configuration-properties-5">Configuration Properties</a></h3>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -2011,8 +2442,7 @@ metricsName: router-response
 </thead>
 <tbody>
 <tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable or disable the MCP Router Handler.</td></tr>
-<tr><td style="text-align: left"><code>ssePath</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp/sse</code></td><td style="text-align: left">The endpoint path for establishing the MCP Server-Sent Events (SSE) connection.</td></tr>
-<tr><td style="text-align: left"><code>messagePath</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp/message</code></td><td style="text-align: left">The endpoint path for sending MCP JSON-RPC messages (POST).</td></tr>
+<tr><td style="text-align: left"><code>path</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp</code></td><td style="text-align: left">The unified endpoint path for both connection establishment (SSE via GET) and JSON-RPC messages (POST).</td></tr>
 <tr><td style="text-align: left"><code>tools</code></td><td style="text-align: left">list</td><td style="text-align: left"><code>null</code></td><td style="text-align: left">A list of tools exposed by this router. Each tool maps to a downstream HTTP service.</td></tr>
 </tbody>
 </table>
@@ -2021,11 +2451,8 @@ metricsName: router-response
 <pre><code class="language-yaml"># Enable MCP Router Handler
 enabled: true
 
-# Path for MCP Server-Sent Events (SSE) endpoint
-ssePath: /mcp/sse
-
-# Path for MCP JSON-RPC message endpoint
-messagePath: /mcp/message
+# Path for MCP endpoint (Streamable HTTP)
+path: /mcp
 
 # Define tools exposed by this router
 tools:
@@ -2037,10 +2464,10 @@ tools:
     # inputSchema is optional; default is type: object
 </code></pre>
 <h2 id="architecture-3"><a class="header" href="#architecture-3">Architecture</a></h2>
-<p>The MCP Router implements the MCP HTTP transport specification:</p>
+<p>The MCP Router implements the MCP HTTP transport specification using a <strong>Single Path</strong> architecture:</p>
 <ol>
-<li><strong>Connection</strong>: Clients connect to the <code>ssePath</code> (default <code>/mcp/sse</code>) via GET to establish an SSE session. The server responds with an endpoint event containing the URI for message submission.</li>
-<li><strong>Messaging</strong>: Clients send JSON-RPC 2.0 messages to the <code>messagePath</code> (default <code>/mcp/message</code>) via POST.</li>
+<li><strong>Connection</strong>: Clients connect to the configured <code>path</code> (default <code>/mcp</code>) via <strong>GET</strong> to establish an SSE session. The server generates a unique session ID and responds with an <code>endpoint</code> event containing the URI for message submission (e.g., <code>/mcp?sessionId=uuid</code>).</li>
+<li><strong>Messaging</strong>: Clients send JSON-RPC 2.0 messages to the same <code>path</code> (default <code>/mcp</code>) via <strong>POST</strong>. The session context is maintained via the <code>sessionId</code> query parameter or header.</li>
 <li><strong>Tool Execution</strong>: The router translates <code>tools/call</code> requests into HTTP requests to the configured downstream services (<code>host</code> + <code>path</code>).</li>
 </ol>
 <h2 id="supported-methods"><a class="header" href="#supported-methods">Supported Methods</a></h2>
@@ -2051,25 +2478,42 @@ tools:
 <li><code>tools/list</code>: Lists all configured tools with their names, descriptions, and input schemas.</li>
 <li><code>tools/call</code>: Executes a specific tool by name. The <code>arguments</code> in the request are passed to the downstream service.</li>
 </ul>
-<h2 id="usage-3"><a class="header" href="#usage-3">Usage</a></h2>
-<p>Register the <code>McpHandler</code> in your <code>handler.yml</code> chain. Ensure the <code>ssePath</code> and <code>messagePath</code> are accessible.</p>
-<p>Example</p>
+<h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
+<p>Register the <code>McpHandler</code> in your <code>handler.yml</code> chain.</p>
+<p>Example:</p>
 <pre><code class="language-yaml">paths:
-  - path: '/mcp/sse'
+  - path: '/mcp'
     method: 'GET'
     exec:
       - mcp-router
-  - path: '/mcp/message'
+  - path: '/mcp'
     method: 'POST'
     exec:
       - mcp-router
 </code></pre>
+<h2 id="verification-with-verify_mcppy"><a class="header" href="#verification-with-verify_mcppy">Verification with verify_mcp.py</a></h2>
+<p>To assist with testing and verification, a Python script <code>verify_mcp.py</code> is available in the <code>light-gateway</code> root directory (and potentially other project roots). This script simulates an MCP client to ensure the router is correctly configured and routing requests.</p>
+<h3 id="prerequisite"><a class="header" href="#prerequisite">Prerequisite</a></h3>
+<p>Install the required Python packages:</p>
+<pre><code class="language-bash">pip install requests sseclient-py
+</code></pre>
+<h3 id="running-the-script"><a class="header" href="#running-the-script">Running the Script</a></h3>
+<p>Run the script against your running gateway instance (default <code>https://localhost:8443</code>):</p>
+<pre><code class="language-bash">python3 verify_mcp.py
+</code></pre>
+<h3 id="what-it-does"><a class="header" href="#what-it-does">What it does</a></h3>
+<ol>
+<li><strong>Connects to SSE</strong>: Initiates a GET request to <code>/mcp</code> and listens for server sent events. It confirms receipt of the <code>endpoint</code> event.</li>
+<li><strong>Initializes</strong>: Sends a POST request with the <code>initialize</code> JSON-RPC method to verify protocol negotiation.</li>
+<li><strong>Lists Tools</strong>: Sends a <code>tools/list</code> request to verify that configured tools are being correctly exposed by the router.</li>
+</ol>
+<p>If successful, you will see output confirming the SSE connection, the endpoint event, and the JSON responses for initialization and tool listing.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="interceptor"><a class="header" href="#interceptor">Interceptor</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="request-transformer-interceptor"><a class="header" href="#request-transformer-interceptor">Request Transformer Interceptor</a></h1>
 <p>The <code>request-transformer</code> is a powerful middleware interceptor that allows for dynamic modification of incoming requests using the <code>light-4j</code> rule engine. It provides a highly flexible way to manipulate request metadata (headers, query parameters, path) and the request body based on custom business logic defined in rules.</p>
-<h3 id="features-4"><a class="header" href="#features-4">Features</a></h3>
+<h3 id="features-5"><a class="header" href="#features-5">Features</a></h3>
 <ul>
 <li><strong>Dynamic Transformation</strong>: Modify request elements at runtime without changing application code.</li>
 <li><strong>Rule-Based</strong>: Leverage the <code>light-4j</code> rule engine to define complex transformation logic.</li>
@@ -2179,7 +2623,7 @@ chains:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="response-transformer-interceptor"><a class="header" href="#response-transformer-interceptor">Response Transformer Interceptor</a></h1>
 <p>The <code>response-transformer</code> is a powerful middleware interceptor that allows for dynamic modification of outgoing responses using the <code>light-4j</code> rule engine. It provides a highly flexible way to manipulate response headers and the response body based on custom business logic defined in rules.</p>
-<h3 id="features-5"><a class="header" href="#features-5">Features</a></h3>
+<h3 id="features-6"><a class="header" href="#features-6">Features</a></h3>
 <ul>
 <li><strong>Dynamic Transformation</strong>: Modify response elements at runtime without changing application code.</li>
 <li><strong>Rule-Based</strong>: Leverage the <code>light-4j</code> rule engine to define complex transformation logic.</li>
@@ -2277,6 +2721,159 @@ chains:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="admin-endpoint"><a class="header" href="#admin-endpoint">Admin Endpoint</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cache-explorer"><a class="header" href="#cache-explorer">Cache Explorer</a></h1>
+<p>The <code>CacheExplorerHandler</code> is an admin endpoint that allows developers and operators to inspect the contents of the application’s internal caches. It is particularly useful for debugging and verifying that data (such as JWKs, ensuring config reloading, etc.) is correctly cached.</p>
+<h2 id="overview-1"><a class="header" href="#overview-1">Overview</a></h2>
+<ul>
+<li><strong>Type</strong>: Admin Handler</li>
+<li><strong>Class</strong>: <code>com.networknt.cache.CacheExplorerHandler</code></li>
+<li><strong>Source</strong>: <code>light-4j/cache-explorer</code></li>
+</ul>
+<h2 id="usage-8"><a class="header" href="#usage-8">Usage</a></h2>
+<p>The handler operates by retrieving a specific cache by name via the <code>CacheManager</code> singleton.</p>
+<h3 id="endpoint"><a class="header" href="#endpoint">Endpoint</a></h3>
+<p>The endpoint is typically accessible via the admin port (default 8473) if configured using the <a href="/concern/admin-endpoint">admin-endpoint</a> module.</p>
+<p><strong>Method</strong>: <code>GET</code>
+<strong>Path</strong>: <code>/adm/cache</code> (or as configured in <code>handler.yml</code>)</p>
+<h3 id="parameters-1"><a class="header" href="#parameters-1">Parameters</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Parameter</th><th style="text-align: left">Type</th><th style="text-align: left">Required</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>name</code></td><td style="text-align: left">Query</td><td style="text-align: left">Yes</td><td style="text-align: left">The name of the cache to inspect (e.g., <code>jwk</code>, <code>jwt</code>, <code>myCache</code>).</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<h4 id="inspect-jwk-cache"><a class="header" href="#inspect-jwk-cache">Inspect JWK Cache</a></h4>
+<p>The <code>jwk</code> cache has special handling to format the output as a simple JSON map of strings.</p>
+<p>Request:</p>
+<pre><code>GET /adm/cache?name=jwk
+</code></pre>
+<p>Response:</p>
+<pre><code class="language-json">{
+  "key1": "value1",
+  "key2": "value2"
+}
+</code></pre>
+<h4 id="inspect-generic-cache"><a class="header" href="#inspect-generic-cache">Inspect Generic Cache</a></h4>
+<p>For other caches, it returns the JSON representation of the cache’s key-value pairs.</p>
+<p>Request:</p>
+<pre><code>GET /adm/cache?name=myCache
+</code></pre>
+<p>Response:</p>
+<pre><code class="language-json">{
+  "user123": {
+    "name": "John",
+    "role": "admin"
+  }
+}
+</code></pre>
+<h2 id="configuration-10"><a class="header" href="#configuration-10">Configuration</a></h2>
+<p>This module does not have a specific configuration file (e.g., <code>cache-explorer.yml</code>). It relies on the <code>CacheManager</code> being available and populated.</p>
+<p>To use it, you must register the handler in <code>handler.yml</code> and add it to the admin chain (or another chain).</p>
+<h3 id="handleryml-registration"><a class="header" href="#handleryml-registration"><code>handler.yml</code> Registration</a></h3>
+<pre><code class="language-yaml">handler.handlers:
+  # ... other handlers ...
+  - com.networknt.cache.CacheExplorerHandler@cache_explorer
+
+handler.chains.default:
+  # ...
+  - cache_explorer
+</code></pre>
+<p><strong>Note</strong>: In most standard <code>light-4j</code> templates, if you are using the unified <code>admin-endpoint</code>, this handler might not be wired by default and needs explicit registration if you want it exposed on the main port, or it might be auto-wired in the admin chain if the dependency is present (depending on the chassis version).</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="config-reload"><a class="header" href="#config-reload">Config Reload</a></h1>
+<p>The <code>config-reload</code> module provides admin endpoints to reload configuration files for specific modules or plugins at runtime without restarting the server. This is particularly useful in shared environments like a gateway where restarting would impact multiple services, or for dynamic updates to policies and rules.</p>
+<h2 id="endpoints"><a class="header" href="#endpoints">Endpoints</a></h2>
+<p>The module typically exposes two operations on the same path (e.g., <code>/adm/modules</code>).</p>
+<h3 id="get-registered-modules"><a class="header" href="#get-registered-modules">Get Registered Modules</a></h3>
+<ul>
+<li><strong>Path</strong>: <code>/adm/modules</code></li>
+<li><strong>Method</strong>: <code>GET</code></li>
+<li><strong>Description</strong>: Returns a list of all registered modules and plugins capable of being reloaded.</li>
+<li><strong>Response</strong>: A JSON array of class names (Strings).</li>
+</ul>
+<h3 id="trigger-config-reload"><a class="header" href="#trigger-config-reload">Trigger Config Reload</a></h3>
+<ul>
+<li><strong>Path</strong>: <code>/adm/modules</code></li>
+<li><strong>Method</strong>: <code>POST</code></li>
+<li><strong>Description</strong>: Triggers a config reload for the specified list of modules or plugins.</li>
+<li><strong>Request Body</strong>: A JSON array of class names (Strings) to reload. If the list is empty or contains “ALL”, it attempts to reload all registered modules.</li>
+<li><strong>Response</strong>: A JSON array of the class names that were successfully reloaded.</li>
+</ul>
+<h2 id="configuration-11"><a class="header" href="#configuration-11">Configuration</a></h2>
+<h3 id="module-configuration-configreloadyml"><a class="header" href="#module-configuration-configreloadyml">Module Configuration (<code>configreload.yml</code>)</a></h3>
+<p>The module itself is configured via <code>configReload.yml</code> (or <code>configReload.yaml</code>/<code>json</code>).</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">Enable or disable the config reload endpoints.</td><td style="text-align: left"><code>true</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="handler-configuration-handleryml"><a class="header" href="#handler-configuration-handleryml">Handler Configuration (<code>handler.yml</code>)</a></h3>
+<p>To expose the endpoints, you need to configure them in your <code>handler.yml</code>.</p>
+<pre><code class="language-yaml">paths:
+  - path: '/adm/modules'
+    method: 'get'
+    exec:
+      - admin
+      - modules
+  - path: '/adm/modules'
+    method: 'post'
+    exec:
+      - admin
+      - configReload
+</code></pre>
+<p>And in <code>values.yml</code> (if using aliases):</p>
+<pre><code class="language-yaml">handler.handlers:
+  - com.networknt.config.reload.handler.ModuleRegistryGetHandler@modules
+  - com.networknt.config.reload.handler.ConfigReloadHandler@configReload
+</code></pre>
+<h2 id="security"><a class="header" href="#security">Security</a></h2>
+<p>These are sensitive admin endpoints. They should be protected by OAuth 2.0 (requiring a specific scope like <code>admin</code> or <code>${serviceId}/admin</code>) or restricted by IP whitelist in a sidecar/gateway deployment.</p>
+<h2 id="dependency-3"><a class="header" href="#dependency-3">Dependency</a></h2>
+<p>Add the following dependency to your <code>pom.xml</code>:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+  &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+  &lt;artifactId&gt;config-reload&lt;/artifactId&gt;
+  &lt;version&gt;${version.light-4j}&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<h2 id="usage-examples"><a class="header" href="#usage-examples">Usage Examples</a></h2>
+<h3 id="list-modules"><a class="header" href="#list-modules">List Modules</a></h3>
+<pre><code class="language-bash">curl -k https://localhost:8443/adm/modules
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">[
+    "com.networknt.limit.LimitHandler",
+    "com.networknt.audit.AuditHandler",
+    "com.networknt.router.middleware.PathPrefixServiceHandler",
+    ...
+]
+</code></pre>
+<h3 id="reload-config"><a class="header" href="#reload-config">Reload Config</a></h3>
+<p>Reload configuration for the Limit Handler and Path Prefix Handler.</p>
+<pre><code class="language-bash">curl -k -X POST https://localhost:8443/adm/modules \
+  -H 'Content-Type: application/json' \
+  -d '[
+    "com.networknt.limit.LimitHandler",
+    "com.networknt.router.middleware.PathPrefixServiceHandler"
+  ]'
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">[
+    "com.networknt.limit.LimitHandler",
+    "com.networknt.router.middleware.PathPrefixServiceHandler"
+]
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="server-info"><a class="header" href="#server-info">Server Info</a></h1>
 <h3 id="introduction-4"><a class="header" href="#introduction-4">Introduction</a></h3>
 <p>The <code>ServerInfoGetHandler</code> is a middleware component in the light-4j framework that provides a comprehensive overview of the server’s runtime state. This includes:</p>
@@ -2287,7 +2884,7 @@ chains:
 <li><strong>Specification:</strong> The API specification (OpenAPI, etc.) if applicable.</li>
 </ul>
 <p>This handler is crucial for monitoring, debugging, and integration with the light-controller and light-portal for runtime dashboards.</p>
-<h3 id="configuration-6"><a class="header" href="#configuration-6">Configuration</a></h3>
+<h3 id="configuration-12"><a class="header" href="#configuration-12">Configuration</a></h3>
 <p>The handler is configured via <code>info.yml</code>.</p>
 <pre><code class="language-yaml"># Server info endpoint that can output environment and component along with configuration
 
@@ -2391,7 +2988,7 @@ ModuleRegistry.registerModule(
 <h1 id="logger-handler"><a class="header" href="#logger-handler">Logger Handler</a></h1>
 <p>The <code>logger-handler</code> module provides a suite of administrative endpoints to manage logger levels and retrieve log contents at runtime. This allows developers and operators to troubleshoot issues in a running system by adjusting verbosity or inspecting logs without requiring a restart.</p>
 <p><strong>Note:</strong> These administrative features are powerful. In production environments, they <strong>must</strong> be protected by security handlers (e.g., OAuth 2.0 JWT verification with specific scopes) to prevent unauthorized access. It is highly recommended to use the <a href="https://doc.networknt.com/service/controller/">Light Controller</a> or <a href="https://portal.networknt.com">Light Portal</a> for centralized management.</p>
-<h2 id="features-6"><a class="header" href="#features-6">Features</a></h2>
+<h2 id="features-7"><a class="header" href="#features-7">Features</a></h2>
 <ul>
 <li><strong>Runtime Level Adjustment</strong>: Change logging levels for existing loggers or create new ones for specific packages/classes.</li>
 <li><strong>Log Content Inspection</strong>: Retrieve log entries directly from service instances for UI display or analysis.</li>
@@ -2447,7 +3044,7 @@ paths:
       - admin
       - getLogContents
 </code></pre>
-<h2 id="usage-4"><a class="header" href="#usage-4">Usage</a></h2>
+<h2 id="usage-9"><a class="header" href="#usage-9">Usage</a></h2>
 <h3 id="1-get-logger-levels"><a class="header" href="#1-get-logger-levels">1. Get Logger Levels</a></h3>
 <p>Retrieves all configured loggers and their current levels.</p>
 <p><strong>Endpoint:</strong> <code>GET /adm/logger</code></p>
@@ -2491,7 +3088,7 @@ logging.downstreamFramework: SpringBoot
 </code></pre>
 <pre><code class="language-bash">curl -H "X-Adm-PassThrough: true" https://localhost:9445/adm/logger
 </code></pre>
-<h2 id="dependency-3"><a class="header" href="#dependency-3">Dependency</a></h2>
+<h2 id="dependency-4"><a class="header" href="#dependency-4">Dependency</a></h2>
 <p>Add the following to your <code>pom.xml</code>:</p>
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;com.networknt&lt;/groupId&gt;
@@ -2506,6 +3103,832 @@ logging.downstreamFramework: SpringBoot
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="module"><a class="header" href="#module">Module</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="load-balance"><a class="header" href="#load-balance">Load Balance</a></h1>
+<p>The light-4j platform encourages client-side discovery to avoid proxies in front of multiple service instances. This architecture reduces network hops and latency. The client-side load balancer is responsible for selecting a single available service instance from a list of discovered URLs for a downstream request.</p>
+<h2 id="loadbalance-interface"><a class="header" href="#loadbalance-interface">LoadBalance Interface</a></h2>
+<p>All load balancing strategies enforce the <code>LoadBalance</code> interface.</p>
+<pre><code class="language-java">public interface LoadBalance {
+    /**
+     * Select one url from a list of url with requestKey as optional.
+     *
+     * @param urls List of available URLs
+     * @param serviceId Service ID
+     * @param tag Service tag (optional)
+     * @param requestKey Optional key for hashing (e.g., userId, clientId)
+     * @return Selected URL
+     */
+    URL select(List&lt;URL&gt; urls, String serviceId, String tag, String requestKey);
+
+    default int getPositive(int originValue){
+        return 0x7fffffff &amp; originValue;
+    }
+}
+</code></pre>
+<h2 id="strategies"><a class="header" href="#strategies">Strategies</a></h2>
+<h3 id="round-robin"><a class="header" href="#round-robin">Round Robin</a></h3>
+<p>The <code>RoundRobinLoadBalance</code> strategy picks a URL from the list sequentially. It distributes the load equally across all available instances.</p>
+<ul>
+<li><strong>Assumption</strong>: All service instances have similar resource configurations and capabilities.</li>
+<li><strong>Mechanism</strong>: Uses an internal <code>AtomicInteger</code> index per service to cycle through the list.</li>
+<li><strong>Parameters</strong>: The <code>requestKey</code> is ignored.</li>
+</ul>
+<h3 id="local-first"><a class="header" href="#local-first">Local First</a></h3>
+<p>The <code>LocalFirstLoadBalance</code> strategy prioritizes service instances running on the same host (same IP address) to minimize network latency.</p>
+<ul>
+<li><strong>Mechanism</strong>:
+<ol>
+<li>It identifies the local IP address.</li>
+<li>It filters the list of available URLs for those matching the local IP.</li>
+<li>If local instances are found, it performs <strong>Round Robin</strong> among them.</li>
+<li>If no local instances are found, it falls back to <strong>Round Robin</strong> across all available URLs.</li>
+</ol>
+</li>
+<li><strong>Use Case</strong>: Ideal for deployments where multiple services run on the same physical or virtual machine (e.g., standalone Java processes, <code>light-hybrid-4j</code> services).</li>
+</ul>
+<h3 id="consistent-hash"><a class="header" href="#consistent-hash">Consistent Hash</a></h3>
+<p>The <code>ConsistentHashLoadBalance</code> strategy ensures that requests with the same <code>requestKey</code> (e.g., <code>client_id</code>, <code>user_id</code>) are routed to the same service instance. This is useful for caching or stateful services (Data Sharding / Z-Axis Scaling).</p>
+<ul>
+<li><strong>Mechanism</strong>: Uses the hash code of the <code>requestKey</code> to select a specific instance.</li>
+<li><strong>Current Status</strong>: Basic implementation using modulo hashing. A more advanced consistent hashing ring implementation is planned.</li>
+</ul>
+<h2 id="configuration-13"><a class="header" href="#configuration-13">Configuration</a></h2>
+<p>The load balancer implementation is typically configured as a singleton in <code>service.yml</code>. Only one implementation should be active per client instance during runtime.</p>
+<h3 id="example-round-robin-configuration"><a class="header" href="#example-round-robin-configuration">Example: Round Robin Configuration</a></h3>
+<p>In <code>service.yml</code>:</p>
+<pre><code class="language-yaml">singletons:
+  - com.networknt.balance.LoadBalance:
+    - com.networknt.balance.RoundRobinLoadBalance
+</code></pre>
+<h3 id="example-local-first-configuration"><a class="header" href="#example-local-first-configuration">Example: Local First Configuration</a></h3>
+<p>In <code>service.yml</code>:</p>
+<pre><code class="language-yaml">singletons:
+  - com.networknt.balance.LoadBalance:
+    - com.networknt.balance.LocalFirstLoadBalance
+</code></pre>
+<h2 id="usage-10"><a class="header" href="#usage-10">Usage</a></h2>
+<p>The load balancer is used internally by <code>Cluster</code> implementations or directly by clients (like <code>light-consumer-4j</code>) after service discovery returns a list of healthy nodes.</p>
+<pre><code class="language-java">// Example usage pattern
+List&lt;URL&gt; urls = registry.discover(serviceId, tag);
+URL selectedUrl = loadBalance.select(urls, serviceId, tag, requestKey);
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cluster"><a class="header" href="#cluster">Cluster</a></h1>
+<p>The <code>Cluster</code> module acts as the orchestrator for client-side service discovery. It integrates the <a href="/concern/module/registry">Service Registry</a> (to find service instances) and <a href="/concern/module/load-balance">Load Balance</a> (to select the best instance) modules, providing a simple interface for clients to resolve a service ID to a concrete URL for invocation.</p>
+<p>It maintains a local cache of discovered services to minimize calls to the underlying registry (Consul, ZooKeeper, or Direct) and handles notifications when service instances change.</p>
+<h2 id="cluster-interface"><a class="header" href="#cluster-interface">Cluster Interface</a></h2>
+<p>The module’s core is the <code>Cluster</code> interface, which provides methods to resolve service addresses.</p>
+<pre><code class="language-java">public interface Cluster {
+    // Resolve a serviceId to a single URL string (e.g., "https://192.168.1.10:8443")
+    String serviceToUrl(String protocol, String serviceId, String tag, String requestKey);
+
+    // Get a list of all available service instances as URIs
+    List&lt;URI&gt; services(String protocol, String serviceId, String tag);
+}
+</code></pre>
+<h3 id="parameters-2"><a class="header" href="#parameters-2">Parameters</a></h3>
+<ul>
+<li><strong>protocol</strong>: <code>http</code> or <code>https</code>.</li>
+<li><strong>serviceId</strong>: The unique identifier of the service (e.g., <code>com.networknt.petstore-1.0.0</code>).</li>
+<li><strong>tag</strong>: An optional environment tag (e.g., <code>dev</code>, <code>prod</code>). If used, discovery will be filtered by this tag.</li>
+<li><strong>requestKey</strong>: An optional key used for load balancing (e.g., for Consistent Hash). Can be null for policies like Round Robin.</li>
+</ul>
+<h2 id="default-implementation-lightcluster"><a class="header" href="#default-implementation-lightcluster">Default Implementation: LightCluster</a></h2>
+<p><code>LightCluster</code> is the default implementation provided by <code>light-4j</code>.</p>
+<h3 id="workflow"><a class="header" href="#workflow">Workflow</a></h3>
+<ol>
+<li><strong>Check Cache</strong>: It first checks its internal in-memory cache (<code>serviceMap</code>) for the list of URLs associated with the <code>serviceId</code> and <code>tag</code>.</li>
+<li><strong>Discovery (if cache miss)</strong>:
+<ul>
+<li>It creates a “subscribe URL” representing the service.</li>
+<li>It subscribes to the <code>Registry</code> (Direct, Consul, etc.) to receive updates (notifications) about this service.</li>
+<li>It performs an initial discovery lookup to get the current list of instances.</li>
+<li>It populates the cache with the results.</li>
+</ul>
+</li>
+<li><strong>Load Balance</strong>:
+<ul>
+<li>Once the list of URLs is retrieved (from cache or discovery), <code>LightCluster</code> delegates to the <code>LoadBalance</code> module.</li>
+<li>The load balancer selects a single <code>URL</code> based on the configured strategy (Round Robin, Local First, etc.) and the <code>requestKey</code>.</li>
+</ul>
+</li>
+<li><strong>Return</strong>: The selected URL is returned as a string.</li>
+</ol>
+<h3 id="caching-and-updates"><a class="header" href="#caching-and-updates">Caching and Updates</a></h3>
+<p><code>LightCluster</code> registers a <code>ClusterNotifyListener</code> with the registry. When service instances change (e.g., a node goes down or a new one comes up), the registry notifies this listener, ensuring the <code>serviceMap</code> cache is updated in near real-time.</p>
+<h2 id="configuration-14"><a class="header" href="#configuration-14">Configuration</a></h2>
+<p>The cluster module does not have its own configuration file (e.g., <code>cluster.yml</code>). Instead, it relies on dependency injection via <code>service.yml</code> to wire up the <code>Cluster</code>, <code>Registry</code>, and <code>LoadBalance</code> implementations.</p>
+<h3 id="configuring-serviceyml"><a class="header" href="#configuring-serviceyml">configuring <code>service.yml</code></a></h3>
+<p>To use <code>LightCluster</code>, ensure your <code>service.yml</code> typically looks like this (it may vary depending on your specific registry choice):</p>
+<pre><code class="language-yaml">singletons:
+  # Registry configuration (e.g., DirectRegistry for local testing)
+  - com.networknt.registry.URL:
+      - com.networknt.registry.URLImpl:
+          protocol: https
+          host: localhost
+          port: 8080
+          path: direct
+          parameters:
+            com.networknt.petstore-1.0.0: https://localhost:8443,https://localhost:8444
+  - com.networknt.registry.Registry:
+      - com.networknt.registry.support.DirectRegistry
+
+  # Load Balancer configuration
+  - com.networknt.balance.LoadBalance:
+      - com.networknt.balance.RoundRobinLoadBalance
+
+  # Cluster configuration
+  - com.networknt.cluster.Cluster:
+      - com.networknt.cluster.LightCluster
+</code></pre>
+<p>In a production environment using Consul, the <code>service.yml</code> would specify <code>ConsulRegistry</code> instead.</p>
+<h2 id="usage-11"><a class="header" href="#usage-11">Usage</a></h2>
+<p>You primarily use the <code>Cluster</code> instance via the <code>Http2Client</code> or <code>Client</code> methods that abstract this lookup, but you can also use it directly if needed.</p>
+<pre><code class="language-java">Cluster cluster = SingletonServiceFactory.getBean(Cluster.class);
+
+// Find a healthy instance for Petstore service
+String url = cluster.serviceToUrl("https", "com.networknt.petstore-1.0.0", "dev", null);
+
+if (url != null) {
+    // Make call to url
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="switch"><a class="header" href="#switch">Switch</a></h1>
+<p>The <code>Switch</code> module (source package <code>com.networknt.switcher</code>) provides a mechanism to manage runtime feature flags or service availability switches. It allows parts of the system to turn logic on or off dynamically without restarting the server.</p>
+<p>A common use case is during the server shutdown process: a “service available” switch can be turned off to stop accepting new requests while allowing existing requests to complete.</p>
+<h2 id="components"><a class="header" href="#components">Components</a></h2>
+<ul>
+<li><strong>Switcher</strong>: A simple entity class representing a named switch with a boolean state (<code>on</code> or <code>off</code>).</li>
+<li><strong>SwitcherService</strong>: An interface defining operations to manage switchers (init, get, set, listener).</li>
+<li><strong>LocalSwitcherService</strong>: The default in-memory implementation of <code>SwitcherService</code>.</li>
+<li><strong>SwitcherUtil</strong>: A static utility class that provides global access to the <code>SwitcherService</code>.</li>
+</ul>
+<h2 id="usage-12"><a class="header" href="#usage-12">Usage</a></h2>
+<p>The module is primarily used via the <code>SwitcherUtil</code> class.</p>
+<h3 id="initializing-a-switcher"><a class="header" href="#initializing-a-switcher">Initializing a Switcher</a></h3>
+<p>You can initialize a switcher with a name and a default state.</p>
+<pre><code class="language-java">import com.networknt.switcher.SwitcherUtil;
+
+// Initialize a switcher named "maintenanceMode" to false (off)
+SwitcherUtil.initSwitcher("maintenanceMode", false);
+</code></pre>
+<h3 id="checking-switch-state"><a class="header" href="#checking-switch-state">Checking Switch State</a></h3>
+<p>Check if a switch is currently enabling.</p>
+<pre><code class="language-java">if (SwitcherUtil.isOpen("maintenanceMode")) {
+    // Logic when maintenance mode is ON
+} else {
+    // Normal operation logic
+}
+</code></pre>
+<p>You can also check with a default value if the switcher might not have been initialized yet.</p>
+<pre><code class="language-java">// Returns true if "newFeature" is open, otherwise returns the default (false)
+boolean isFeatureEnabled = SwitcherUtil.switcherIsOpenWithDefault("newFeature", false);
+</code></pre>
+<h3 id="setting-switch-state"><a class="header" href="#setting-switch-state">Setting Switch State</a></h3>
+<p>Change the state of a switch programmatically.</p>
+<pre><code class="language-java">// Turn on maintenance mode
+SwitcherUtil.setSwitcherValue("maintenanceMode", true);
+</code></pre>
+<h3 id="listeners"><a class="header" href="#listeners">Listeners</a></h3>
+<p>You can register a <code>SwitcherListener</code> to be notified when a switcher’s value changes.</p>
+<pre><code class="language-java">SwitcherUtil.registerSwitcherListener("maintenanceMode", new SwitcherListener() {
+    @Override
+    public void onSwitcherChanged(String key, boolean value) {
+        System.out.println("Switcher " + key + " changed to " + value);
+    }
+});
+</code></pre>
+<h2 id="example-graceful-shutdown"><a class="header" href="#example-graceful-shutdown">Example: Graceful Shutdown</a></h2>
+<p>In the <code>light-4j</code> server shutdown hook, the framework might use a switcher to signal that the server is shutting down.</p>
+<ol>
+<li>Server startup: <code>SwitcherUtil.initSwitcher(Constants.SERVER_STATUS_SWITCHER, true);</code></li>
+<li>Request Handler: Checks <code>SwitcherUtil.isOpen(Constants.SERVER_STATUS_SWITCHER)</code>. If false, returns 503 Service Unavailable.</li>
+<li>Shutdown Hook: <code>SwitcherUtil.setSwitcherValue(Constants.SERVER_STATUS_SWITCHER, false);</code></li>
+</ol>
+<p>This allows the registry to be notified and the load balancer to stop sending traffic, while the server wraps up in-flight requests.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="consul-registry"><a class="header" href="#consul-registry">Consul Registry</a></h1>
+<p>The <code>consul</code> module integrates with HashiCorp Consul to provide service registry and discovery for the light-4j framework. It allows services to automatically register themselves upon startup and discovering other services using client-side load balancing.</p>
+<h2 id="overview-2"><a class="header" href="#overview-2">Overview</a></h2>
+<ul>
+<li><strong>Registry</strong>: When a service starts, it registers itself with the Consul agent. It deregisters on graceful shutdown.</li>
+<li><strong>Discovery</strong>: Clients using <code>Cluster</code> and <code>LoadBalance</code> modules can discover available service instances. The <code>ConsulRegistry</code> implementation uses blocking queries (long polling) to receive real-time updates from Consul about service health and availability.</li>
+<li><strong>Health Checks</strong>: Supports TCP, HTTP, and TTL health checks to ensure only healthy instances are returned to clients.</li>
+</ul>
+<h2 id="configuration-15"><a class="header" href="#configuration-15">Configuration</a></h2>
+<p>The module requires configuration in multiple files.</p>
+<h3 id="1-serviceyml"><a class="header" href="#1-serviceyml">1. <code>service.yml</code></a></h3>
+<p>You must configure the <code>Registry</code> singleton to use <code>ConsulRegistry</code>.</p>
+<pre><code class="language-yaml">singletons:
+  - com.networknt.registry.URL:
+      - com.networknt.registry.URLImpl:
+          protocol: light
+          host: localhost
+          port: 8080
+          path: consul
+          parameters:
+            registryRetryPeriod: '30000'
+  - com.networknt.consul.client.ConsulClient:
+      - com.networknt.consul.client.ConsulClientImpl
+  - com.networknt.registry.Registry:
+      - com.networknt.consul.ConsulRegistry
+</code></pre>
+<h3 id="2-consulyml"><a class="header" href="#2-consulyml">2. <code>consul.yml</code></a></h3>
+<p>This file controls the connection to Consul and the health check behavior.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>consulUrl</code></td><td style="text-align: left">URL of the Consul agent.</td><td style="text-align: left"><code>http://localhost:8500</code></td></tr>
+<tr><td style="text-align: left"><code>consulToken</code></td><td style="text-align: left">Access token for Consul ACL.</td><td style="text-align: left"><code>the_one_ring</code></td></tr>
+<tr><td style="text-align: left"><code>checkInterval</code></td><td style="text-align: left">Interval for health checks (e.g., <code>10s</code>).</td><td style="text-align: left"><code>10s</code></td></tr>
+<tr><td style="text-align: left"><code>deregisterAfter</code></td><td style="text-align: left">Time to wait after a failure before deregistering.</td><td style="text-align: left"><code>2m</code></td></tr>
+<tr><td style="text-align: left"><code>tcpCheck</code></td><td style="text-align: left">Enable TCP ping health check.</td><td style="text-align: left"><code>false</code></td></tr>
+<tr><td style="text-align: left"><code>httpCheck</code></td><td style="text-align: left">Enable HTTP endpoint health check.</td><td style="text-align: left"><code>false</code></td></tr>
+<tr><td style="text-align: left"><code>ttlCheck</code></td><td style="text-align: left">Enable active TTL heartbeat.</td><td style="text-align: left"><code>true</code></td></tr>
+<tr><td style="text-align: left"><code>wait</code></td><td style="text-align: left">Long polling wait time (max 10m).</td><td style="text-align: left"><code>600s</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Health Check Options:</strong></p>
+<ul>
+<li><strong>TCP</strong>: Consul pings the service IP/Port. Simple, but less reliable in containerized environments.</li>
+<li><strong>HTTP</strong>: Consul calls <code>/health/{serviceId}</code>. Recommended for most services as it proves the application is responsive.</li>
+<li><strong>TTL</strong>: The service actively sends heartbeats to Consul. Useful if the service is behind a NAT or cannot be reached by Consul.</li>
+</ul>
+<h3 id="3-serveryml"><a class="header" href="#3-serveryml">3. <code>server.yml</code></a></h3>
+<p>The service must be configured to enable the registry and usually dynamic ports (especially for Kubernetes).</p>
+<pre><code class="language-yaml">serviceId: com.networknt.petstore-1.0.0
+enableRegistry: true
+dynamicPort: true
+minPort: 2400
+maxPort: 2500
+</code></pre>
+<h3 id="4-secretyml"><a class="header" href="#4-secretyml">4. <code>secret.yml</code></a></h3>
+<p>For security, the Consul token should be managed in <code>secret.yml</code>.</p>
+<pre><code class="language-yaml">consulToken: your-secure-jwt-or-uuid-token
+</code></pre>
+<h2 id="deployment"><a class="header" href="#deployment">Deployment</a></h2>
+<p>When deploying to Kubernetes:</p>
+<ol>
+<li><strong>Host Network</strong>: Services should use <code>hostNetwork: true</code> so they register with the Node’s IP address.</li>
+<li><strong>Downward API</strong>: Pass the host IP to the container so the service knows what IP to register.</li>
+</ol>
+<pre><code class="language-yaml">    spec:
+      hostNetwork: true
+      containers:
+      - env:
+        - name: STATUS_HOST_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+</code></pre>
+<h2 id="blocking-queries"><a class="header" href="#blocking-queries">Blocking Queries</a></h2>
+<p><code>ConsulRegistry</code> uses Consul’s blocking query feature. Instead of polling every X seconds, it opens a connection that Consul holds open for up to <code>wait</code> time (default 10 minutes). If the service catalog changes (new instance, health failure), Consul returns the result immediately. This provides near-real-time updates with minimal overhead.</p>
+<h2 id="usage-13"><a class="header" href="#usage-13">Usage</a></h2>
+<p>You rarely interact with <code>ConsulRegistry</code> directly. Instead, you use the <code>Cluster</code> or <code>Http2Client</code> which uses the registry behind the scenes.</p>
+<pre><code class="language-java">// The cluster lookups will automatically use ConsulRegistry to find instances
+Cluster cluster = SingletonServiceFactory.getBean(Cluster.class);
+String url = cluster.serviceToUrl("https", "com.networknt.petstore-1.0.0", "dev", null);
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="config"><a class="header" href="#config">Config</a></h1>
+<p>The <code>Config</code> module is the backbone of the <code>light-4j</code> framework, handling the loading and management of configuration files for all modules and the application itself. It follows a “configuration over code” philosophy and supports externalized configuration for containerized deployments.</p>
+<h2 id="singleton-and-instance"><a class="header" href="#singleton-and-instance">Singleton and Instance</a></h2>
+<p>The <code>Config</code> class is a singleton. It caches loaded configurations to ensure high performance.</p>
+<pre><code class="language-java">// Get the singleton instance
+Config config = Config.getInstance();
+</code></pre>
+<h2 id="formats-and-priority"><a class="header" href="#formats-and-priority">Formats and Priority</a></h2>
+<p>Supported formats are <code>yml</code>, <code>yaml</code>, and <code>json</code>.
+The loading priority for a given configuration name (e.g., <code>server</code>) is:</p>
+<ol>
+<li><code>server.yml</code></li>
+<li><code>server.yaml</code></li>
+<li><code>server.json</code></li>
+</ol>
+<p>YAML is highly recommended due to its readability and support for comments.</p>
+<h2 id="loading-sequence"><a class="header" href="#loading-sequence">Loading Sequence</a></h2>
+<p>The <code>Config</code> module loads configuration files in a specific order, allowing for hierarchical overrides. This is critical for managing configurations across different environments (Dev, Test, Prod) without rebuilding the application.</p>
+<ol>
+<li><strong>Externalized Directory</strong>: Specified by the system property <code>-Dlight-4j-config-dir=/config</code>. This is the highest priority and is typically used in Docker/Kubernetes to map a volume containing environment-specific configs.</li>
+<li><strong>Application Resources</strong>: Files found in <code>src/main/resources/config</code> of your application.</li>
+<li><strong>Module Resources</strong>: Default configuration files packaged within the jar of each module (e.g., <code>light-4j</code> core modules).</li>
+</ol>
+<h2 id="usage-14"><a class="header" href="#usage-14">Usage</a></h2>
+<h3 id="loading-as-map"><a class="header" href="#loading-as-map">Loading as Map</a></h3>
+<p>Useful for dynamic configurations.</p>
+<pre><code class="language-java">Map&lt;String, Object&gt; serverConfig = Config.getInstance().getJsonMapConfig("server");
+int port = (int) serverConfig.get("httpsPort");
+</code></pre>
+<h3 id="loading-as-object-pojo"><a class="header" href="#loading-as-object-pojo">Loading as Object (POJO)</a></h3>
+<p>Encouraged for type safety. The POJO must map to the JSON/YAML structure.</p>
+<pre><code class="language-java">ServerConfig serverConfig = (ServerConfig) Config.getInstance().getJsonObjectConfig("server", ServerConfig.class);
+</code></pre>
+<h3 id="loading-strings-or-streams"><a class="header" href="#loading-strings-or-streams">Loading Strings or Streams</a></h3>
+<p>For loading raw files like certificates or text files.</p>
+<pre><code class="language-java">String certContent = Config.getInstance().getStringFromFile("primary.crt");
+InputStream is = Config.getInstance().getInputStreamFromFile("primary.crt");
+</code></pre>
+<h2 id="configuration-injection"><a class="header" href="#configuration-injection">Configuration Injection</a></h2>
+<p>Starting from 1.5.26, you can inject values into your <code>yml</code> files using the syntax <code>${VAR:default}</code>. The values are resolved from:</p>
+<ol>
+<li><strong>values.yml</strong>: A global values file in the config path.</li>
+<li><strong>Environment Variables</strong>: System environment variables.</li>
+</ol>
+<h3 id="syntax"><a class="header" href="#syntax">Syntax</a></h3>
+<ul>
+<li><code>${VAR}</code>: value of VAR. Throws exception if missing.</li>
+<li><code>${VAR:default}</code>: value of VAR. Uses <code>default</code> if missing.</li>
+<li><code>${VAR:?error}</code>: value of VAR. Throws custom error message if missing.</li>
+<li><code>${VAR:$}</code>: Escapes the injection (keeps <code>${VAR}</code>).</li>
+</ul>
+<h3 id="example-1"><a class="header" href="#example-1">Example</a></h3>
+<p><code>server.yml</code>:</p>
+<pre><code class="language-yaml">serviceId: ${SERVER_SERVICEID:com.networknt.petstore-1.0.0}
+</code></pre>
+<p><code>values.yml</code>:</p>
+<pre><code class="language-yaml">SERVER_SERVICEID: com.networknt.petstore-2.0.0
+</code></pre>
+<h2 id="handling-secrets"><a class="header" href="#handling-secrets">Handling Secrets</a></h2>
+<p>Release 1.6.0+ supports transparent decryption of sensitive values.</p>
+<h3 id="setup-6"><a class="header" href="#setup-6">Setup</a></h3>
+<p>In your <code>config.yml</code> (or <code>service.yml</code> in newer versions):</p>
+<pre><code class="language-yaml">decryptorClass: com.networknt.decrypt.AESDecryptor
+</code></pre>
+<h3 id="decryptors"><a class="header" href="#decryptors">Decryptors</a></h3>
+<ul>
+<li><strong>AESDecryptor</strong>: Uses default password <code>light</code>.</li>
+<li><strong>AutoAESDecryptor</strong>: Reads password from environment variable <code>light-4j-config-password</code>.</li>
+<li><strong>ManualAESDecryptor</strong>: Prompts for password in the console/terminal at startup.</li>
+</ul>
+<p>If a value in your config file starts with <code>CRYPT:</code> (e.g., <code>CRYPT:adfasdfadf...</code>), the <code>Config</code> module will automatically attempts to decrypt it when loading.</p>
+<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
+<ol>
+<li><strong>Externalize Environments</strong>: Use <code>-Dlight-4j-config-dir</code> or mapped volumes in Kubernetes for strictly environment-specific configs (like DB connections, secrets).</li>
+<li><strong>App Level Configs</strong>: Put common configurations that differ from defaults in <code>src/main/resources/config</code>.</li>
+<li><strong>Values.yml</strong>: Use <code>values.yml</code> to centrally manage variables that are injected into multiple other config files.</li>
+<li><strong>Secrets</strong>: Never commit plain text passwords. Use the encryption feature or Kubernetes Secrets mapped to files in the config directory.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cache-manager"><a class="header" href="#cache-manager">Cache Manager</a></h1>
+<p>The <code>CacheManager</code> module provides a unified interface for managing in-memory caches within the light-4j application. It abstracts the underlying caching implementation, allowing developers to configure and use caches without tying their code to a specific library.</p>
+<p>The default implementation provided by <code>light-4j</code> is based on <a href="https://github.com/ben-manes/caffeine">Caffeine</a>, a high-performance Java caching library.</p>
+<h2 id="cachemanager-interface"><a class="header" href="#cachemanager-interface">CacheManager Interface</a></h2>
+<p>The <code>CacheManager</code> interface defines standard operations for interacting with caches:</p>
+<pre><code class="language-java">public interface CacheManager {
+    void addCache(String cacheName, long maxSize, long expiryInMinutes);
+    Map&lt;Object, Object&gt; getCache(String cacheName);
+    void put(String cacheName, String key, Object value);
+    Object get(String cacheName, String key);
+    void delete(String cacheName, String key);
+    void removeCache(String cacheName);
+    int getSize(String cacheName);
+}
+</code></pre>
+<h2 id="configuration-16"><a class="header" href="#configuration-16">Configuration</a></h2>
+<p>The configuration is managed by <code>CacheConfig</code> and corresponds to <code>cache.yml</code> (or <code>cache.json</code>/<code>cache.properties</code>).
+The configuration allows defining multiple named caches, each with its own size limit and expiration policy.</p>
+<h3 id="configuration-properties-6"><a class="header" href="#configuration-properties-6">Configuration Properties</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Type</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>caches</code></td><td style="text-align: left">list</td><td style="text-align: left">A list of cache definitions.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="cache-item-properties"><a class="header" href="#cache-item-properties">Cache Item Properties</a></h3>
+<p>Each item in the <code>caches</code> list contains:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Type</th><th style="text-align: left">Description</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>cacheName</code></td><td style="text-align: left">string</td><td style="text-align: left">Unique name for the cache.</td></tr>
+<tr><td style="text-align: left"><code>expiryInMinutes</code></td><td style="text-align: left">int</td><td style="text-align: left">Expiration time in minutes (TTL).</td></tr>
+<tr><td style="text-align: left"><code>maxSize</code></td><td style="text-align: left">int</td><td style="text-align: left">Maximum number of entries in the cache.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="configuration-example-cacheyml"><a class="header" href="#configuration-example-cacheyml">Configuration Example (cache.yml)</a></h3>
+<pre><code class="language-yaml"># Cache Configuration
+caches:
+  - cacheName: jwt
+    expiryInMinutes: 10
+    maxSize: 10000
+  - cacheName: jwk
+    expiryInMinutes: 1440
+    maxSize: 100
+</code></pre>
+<h3 id="values-example-valuesyml-3"><a class="header" href="#values-example-valuesyml-3">Values Example (values.yml)</a></h3>
+<p>You can override the cache configuration in <code>values.yml</code>. Note that since <code>caches</code> is a list, you typically override the entire list or use stringified JSON if supported by the config loader, but YAML list format is standard.</p>
+<pre><code class="language-yaml">cache.caches:
+  - cacheName: userCache
+    expiryInMinutes: 60
+    maxSize: 500
+  - cacheName: tokenCache
+    expiryInMinutes: 15
+    maxSize: 2000
+</code></pre>
+<h2 id="usage-15"><a class="header" href="#usage-15">Usage</a></h2>
+<p>To use the cache manager, you can retrieve the singleton instance and interact with your named caches.</p>
+<h3 id="retrieving-the-instance"><a class="header" href="#retrieving-the-instance">Retrieving the Instance</a></h3>
+<p>The <code>CacheManager</code> follows a singleton pattern (or can be injected via dependency injection if using a DI framework).</p>
+<pre><code class="language-java">CacheManager cacheManager = CacheManager.getInstance();
+</code></pre>
+<h3 id="basic-operations"><a class="header" href="#basic-operations">Basic Operations</a></h3>
+<pre><code class="language-java">// Put a value into the cache
+cacheManager.put("userCache", "userId123", userObject);
+
+// Get a value from the cache
+Object value = cacheManager.get("userCache", "userId123");
+if (value != null) {
+    // Cache hit
+}
+
+// Delete a specific key
+cacheManager.delete("userCache", "userId123");
+
+// Remove an entire cache
+cacheManager.removeCache("userCache");
+</code></pre>
+<h2 id="implementation"><a class="header" href="#implementation">Implementation</a></h2>
+<p>The default implementation <code>CaffeineCacheManager</code> uses Caffeine’s <code>Caffeine.newBuilder()</code> to create caches with:</p>
+<ul>
+<li><code>maximumSize</code>: Limits the cache size.</li>
+<li><code>expireAfterWrite</code>: Expires entries after the specified duration.</li>
+</ul>
+<p>This implementation is registered automatically via <code>SingletonServiceFactory</code> or module registration when <code>CacheConfig</code> loads.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="data-source"><a class="header" href="#data-source">Data Source</a></h1>
+<p>The <code>data-source</code> module provides a flexible way to configure and manage JDBC data sources in light-4j applications. It wraps <a href="https://github.com/brettwooldridge/HikariCP">HikariCP</a> to provide high-performance connection pooling.</p>
+<h2 id="overview-3"><a class="header" href="#overview-3">Overview</a></h2>
+<p>Unlike the simple <code>javax.sql.DataSource</code> configuration in <code>service.yml</code>, the <code>data-source</code> module offers:</p>
+<ul>
+<li>Support for multiple data sources.</li>
+<li>Detailed HikariCP configuration.</li>
+<li>Encrypted password support.</li>
+<li>Separation of concerns (DataSource config vs. Service config).</li>
+</ul>
+<h2 id="dependency-5"><a class="header" href="#dependency-5">Dependency</a></h2>
+<p>Add the following dependency to your <code>pom.xml</code>:</p>
+<pre><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;data-source&lt;/artifactId&gt;
+    &lt;version&gt;${version.light-4j}&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.zaxxer&lt;/groupId&gt;
+    &lt;artifactId&gt;HikariCP&lt;/artifactId&gt;
+&lt;/dependency&gt;
+&lt;!-- Add your JDBC driver dependency here (e.g., mysql-connector-java, postgresql) --&gt;
+</code></pre>
+<h2 id="configuration-17"><a class="header" href="#configuration-17">Configuration</a></h2>
+<p>Configuration is primarily handled in <code>datasource.yml</code>.</p>
+<h3 id="datasourceyml"><a class="header" href="#datasourceyml"><code>datasource.yml</code></a></h3>
+<p>You can define multiple data sources by giving them unique names (e.g., <code>PostgresDataSource</code>, <code>H2DataSource</code>).</p>
+<pre><code class="language-yaml"># Example Configuration
+PostgresDataSource:
+  DriverClassName: org.postgresql.ds.PGSimpleDataSource
+  jdbcUrl: jdbc:postgresql://postgresdb:5432/mydb
+  username: postgres
+  # Password can be encrypted using the light-4j decryptor
+  password: CRYPT:747372737...
+  maximumPoolSize: 10
+  connectionTimeout: 30000
+  # Optional HikariCP settings
+  settings:
+    autoCommit: true
+  # Optional driver parameters
+  parameters:
+    ssl: 'false'
+
+H2DataSource:
+  DriverClassName: org.h2.jdbcx.JdbcDataSource
+  jdbcUrl: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+  username: sa
+  password: sa
+</code></pre>
+<h3 id="serviceyml"><a class="header" href="#serviceyml"><code>service.yml</code></a></h3>
+<p>You need to register the data sources in <code>service.yml</code> so they can be injected or retrieved via <code>SingletonServiceFactory</code>.</p>
+<pre><code class="language-yaml">singletons:
+  # Register the Decryptor for encrypted passwords
+  - com.networknt.utility.Decryptor:
+      - com.networknt.decrypt.AESDecryptor
+
+  # Register specific Data Sources
+  - com.networknt.db.GenericDataSource:
+      - com.networknt.db.GenericDataSource:
+          - java.lang.String: PostgresDataSource
+      - com.networknt.db.GenericDataSource:
+          - java.lang.String: H2DataSource
+
+  # Or specific implementations if available
+  - javax.sql.DataSource:
+      - com.networknt.db.GenericDataSource::getDataSource:
+          - java.lang.String: PostgresDataSource
+</code></pre>
+<h2 id="usage-16"><a class="header" href="#usage-16">Usage</a></h2>
+<h3 id="getting-a-datasource"><a class="header" href="#getting-a-datasource">Getting a DataSource</a></h3>
+<p>You can retrieve the <code>DataSource</code> instance using <code>SingletonServiceFactory</code>.</p>
+<pre><code class="language-java">import com.networknt.service.SingletonServiceFactory;
+import com.networknt.db.GenericDataSource;
+import javax.sql.DataSource;
+
+public class MyDao {
+    public void query() {
+        // Option 1: Get the GenericDataSource wrapper
+        GenericDataSource genericDs = SingletonServiceFactory.getBean(GenericDataSource.class); 
+        // Note: If you have multiple, you might need getBean(Class, name) or check how it's registered.
+        
+        // Option 2: If registered as javax.sql.DataSource
+        DataSource ds = SingletonServiceFactory.getBean(DataSource.class);
+        
+        try (Connection conn = ds.getConnection()) {
+            // ... use connection
+        }
+    }
+}
+</code></pre>
+<h3 id="multiple-data-sources"><a class="header" href="#multiple-data-sources">Multiple Data Sources</a></h3>
+<p>If you have multiple data sources, it is best to register them by name in <code>service.yml</code> and retrieve them by name or class if you created specific subclasses.</p>
+<pre><code class="language-java">// Retrieving by name if registered as such (requires custom registration logic or specific class beans)
+GenericDataSource postgres = (GenericDataSource) SingletonServiceFactory.getBean("PostgresDataSource");
+</code></pre>
+<h2 id="features-8"><a class="header" href="#features-8">Features</a></h2>
+<h3 id="encrypted-passwords"><a class="header" href="#encrypted-passwords">Encrypted Passwords</a></h3>
+<p>You can use the <code>light-4j</code> encryption tool to encrypt database passwords. Prefix the encrypted string with <code>CRYPT:</code> in <code>datasource.yml</code> or <code>secret.yml</code>.</p>
+<h3 id="setting-configuration"><a class="header" href="#setting-configuration">Setting Configuration</a></h3>
+<p>The <code>settings</code> map in <code>datasource.yml</code> matches the <code>setXxx</code> methods of <code>HikariDataSource</code>. For example:</p>
+<pre><code class="language-yaml">settings:
+  autoCommit: false
+  idleTimeout: 60000
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="db-provider"><a class="header" href="#db-provider">DB Provider</a></h1>
+<p>The <code>db-provider</code> module is a lightweight database provider designed to simplify the initialization of a generic SQL/JDBC data source, typically for internal services or control plane components (like <code>light-portal</code> or <code>light-config-server</code>) that need a single, primary database connection.</p>
+<h2 id="overview-4"><a class="header" href="#overview-4">Overview</a></h2>
+<p>Unlike the more flexible <code>data-source</code> module which is designed for multiple, named data sources, <code>db-provider</code> focuses on providing a <strong>single, global</strong> <code>HikariDataSource</code> initialized at startup. It is often used in conjunction with a <code>StartupHookProvider</code> to ensure the database connection is ready before the server starts handling requests.</p>
+<h2 id="configuration-18"><a class="header" href="#configuration-18">Configuration</a></h2>
+<p>The module is configured via <code>db-provider.yml</code> (or <code>yaml</code>/<code>json</code>).</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>driverClassName</code></td><td style="text-align: left">JDBC driver class name.</td><td style="text-align: left"><code>org.postgresql.Driver</code></td></tr>
+<tr><td style="text-align: left"><code>jdbcUrl</code></td><td style="text-align: left">JDBC connection URL.</td><td style="text-align: left"><code>jdbc:postgresql://timescale:5432/configserver</code></td></tr>
+<tr><td style="text-align: left"><code>username</code></td><td style="text-align: left">Database username.</td><td style="text-align: left"><code>postgres</code></td></tr>
+<tr><td style="text-align: left"><code>password</code></td><td style="text-align: left">Database password (supports encryption).</td><td style="text-align: left"><code>secret</code></td></tr>
+<tr><td style="text-align: left"><code>maximumPoolSize</code></td><td style="text-align: left">Max connections in the pool.</td><td style="text-align: left"><code>3</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Example <code>db-provider.yml</code>:</strong></p>
+<pre><code class="language-yaml">driverClassName: org.h2.Driver
+jdbcUrl: jdbc:h2:mem:testdb
+username: sa
+password: sa
+maximumPoolSize: 5
+</code></pre>
+<h2 id="startup-hook"><a class="header" href="#startup-hook">Startup Hook</a></h2>
+<p>To use this module, you typically register the <code>SqlDbStartupHook</code> in your <code>service.yml</code>. This hook reads the configuration, creates the <code>HikariDataSource</code>, and initializes the <code>CacheManager</code>.</p>
+<p><strong>service.yml:</strong></p>
+<pre><code class="language-yaml">startupHooks:
+  - com.networknt.db.provider.SqlDbStartupHook
+</code></pre>
+<h2 id="usage-17"><a class="header" href="#usage-17">Usage</a></h2>
+<p>Once initialized by the startup hook, the data source is available via the static field in <code>SqlDbStartupHook</code>.</p>
+<pre><code class="language-java">import com.networknt.db.provider.SqlDbStartupHook;
+import javax.sql.DataSource;
+import java.sql.Connection;
+
+public class MyService {
+    public void doSomething() {
+        DataSource ds = SqlDbStartupHook.ds;
+        try (Connection conn = ds.getConnection()) {
+            // ... perform DB operations
+        } catch (SQLException e) {
+            // handle exception
+        }
+    }
+}
+</code></pre>
+<h2 id="key-classes"><a class="header" href="#key-classes">Key Classes</a></h2>
+<ul>
+<li><strong><code>DbProviderConfig</code></strong>: Loads configuration from <code>db-provider.yml</code>.</li>
+<li><strong><code>SqlDbStartupHook</code></strong>: Initializes the global <code>HikariDataSource</code> and <code>CacheManager</code>.</li>
+<li><strong><code>DbProvider</code></strong>: Interface for provider extensions (defaulting to <code>DbProviderImpl</code>).</li>
+</ul>
+<h2 id="when-to-use"><a class="header" href="#when-to-use">When to use</a></h2>
+<ul>
+<li><strong>Use <code>db-provider</code></strong> if you are building a simple service or a light-4j platform component (like Config Server) that needs a single, standard SQL connection setup globally at startup.</li>
+<li><strong>Use <code>data-source</code></strong> if you need multiple data sources, named data sources, or more complex configuration that doesn’t rely on a specific startup hook.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="decryptor"><a class="header" href="#decryptor">Decryptor</a></h1>
+<p>The <code>decryptor</code> module provides a mechanism to decrypt sensitive configuration values (like passwords, tokens, and keys) at runtime. This allows you to check in your configuration files with encrypted values, enhancing security.</p>
+<h2 id="configuration-19"><a class="header" href="#configuration-19">Configuration</a></h2>
+<p>The decryptor is configured in <code>config.yml</code>.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>decryptorClass</code></td><td style="text-align: left">The implementation class of the <code>Decryptor</code> interface.</td><td style="text-align: left"><code>com.networknt.decrypt.AutoAESDecryptor</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Note</strong>: The default class name in newer versions might be <code>AutoAESSaltDecryptor</code>. The <code>Config</code> module loads this class to handle any value starting with <code>CRYPT:</code>.</p>
+<h2 id="implementations-1"><a class="header" href="#implementations-1">Implementations</a></h2>
+<p>The module provides several implementations of the <code>Decryptor</code> interface.</p>
+<h3 id="autoaessaltdecryptor"><a class="header" href="#autoaessaltdecryptor"><code>AutoAESSaltDecryptor</code></a></h3>
+<p>This is the default and recommended implementation. It uses AES encryption with a salt.</p>
+<ul>
+<li><strong>Key Source</strong>: Checks the environment variable <code>LIGHT_4J_CONFIG_PASSWORD</code>.</li>
+<li><strong>Fallback</strong>: If the environment variable is not set, it defaults to the password <code>light</code> (useful for testing).</li>
+<li><strong>Usage</strong>: Locate the sensitive value in your config file (e.g., <code>values.yml</code> or <code>secret.yml</code>) and replace the plain text with <code>CRYPT:encoded_string</code>.</li>
+</ul>
+<h3 id="manualaessaltdecryptor"><a class="header" href="#manualaessaltdecryptor"><code>ManualAESSaltDecryptor</code></a></h3>
+<p>This implementation prompts the user to enter the password in the console/terminal during server startup. This is useful for local development or environments where environment variables cannot be securely set.</p>
+<h2 id="encryption-utility"><a class="header" href="#encryption-utility">Encryption Utility</a></h2>
+<p>To encrypt your secrets, you can use the <code>light-encryptor</code> utility tool.</p>
+<ol>
+<li>Clone <code>https://github.com/networknt/light-encryptor</code>.</li>
+<li>Run the utility (Java jar) with your master password and the clear text string.</li>
+<li>The tool will output the encrypted string (e.g., <code>CRYPT:fa343a...</code>).</li>
+<li>Copy this string into your configuration file.</li>
+</ol>
+<h2 id="deployment-1"><a class="header" href="#deployment-1">Deployment</a></h2>
+<ol>
+<li><strong>Generate Encrypted Values</strong>: Use <code>light-encryptor</code> to generate <code>CRYPT:...</code> strings.</li>
+<li><strong>Update Config</strong>: Put these strings in <code>secret.yml</code> or other config files.</li>
+<li><strong>Set Master Password</strong>: In your deployment environment (Kubernetes, VM), set the <code>LIGHT_4J_CONFIG_PASSWORD</code> environment variable to your master password.
+<ul>
+<li>In Kubernetes, use a Secret mapped to an environment variable.</li>
+</ul>
+</li>
+</ol>
+<pre><code class="language-yaml">env:
+  - name: LIGHT_4J_CONFIG_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: my-app-secret
+        key: master-password
+</code></pre>
+<h2 id="creating-a-review-decryptor"><a class="header" href="#creating-a-review-decryptor">Creating a Review Decryptor</a></h2>
+<p>If you need a custom encryption algorithm (e.g., integrating with a cloud KMS or HashiCorp Vault), you can implement the <code>com.networknt.decrypt.Decryptor</code> interface and update <code>config.yml</code> to point to your class.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="http2-client"><a class="header" href="#http2-client">Http2 Client</a></h1>
+<p>The <code>Http2Client</code> module provided by <code>light-4j</code> is a high-performance, asynchronous HTTP client that supports both HTTP/1.1 and HTTP/2. It is built on top of Undertow’s client capabilities and is designed to be efficient, lightweight, and easy to use in microservices architectures.</p>
+<h2 id="features-9"><a class="header" href="#features-9">Features</a></h2>
+<ul>
+<li><strong>HTTP/1.1 and HTTP/2 Support</strong>: Transparently handles both protocol versions.</li>
+<li><strong>Asynchronous &amp; Non-blocking</strong>: Uses callbacks and futures to handle requests without blocking threads.</li>
+<li><strong>Connection Pooling</strong>: Built-in connection pooling for efficient resource management, especially for HTTP/1.1.</li>
+<li><strong>OAuth 2.0 Integration</strong>: Built-in support for handling OAuth 2.0 tokens (client credentials, authorization code, etc.).</li>
+<li><strong>Service Discovery</strong>: Integrates with light-4j service discovery to resolve service IDs to URLs.</li>
+<li><strong>TLS/SSL Support</strong>: Comprehensive TLS configuration including two-way SSL.</li>
+</ul>
+<h2 id="configuration-20"><a class="header" href="#configuration-20">Configuration</a></h2>
+<p>The client is configured via <code>client.yml</code>.</p>
+<h3 id="key-configuration-sections"><a class="header" href="#key-configuration-sections">Key Configuration Sections</a></h3>
+<h4 id="tls-tls"><a class="header" href="#tls-tls">TLS (<code>tls</code>)</a></h4>
+<p>Configures Transport Layer Security settings.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>verifyHostname</code></td><td style="text-align: left">Verify the hostname against the certificate.</td><td style="text-align: left"><code>true</code></td></tr>
+<tr><td style="text-align: left"><code>loadTrustStore</code></td><td style="text-align: left">Load the trust store.</td><td style="text-align: left"><code>true</code></td></tr>
+<tr><td style="text-align: left"><code>trustStore</code></td><td style="text-align: left">Path to the trust store file.</td><td style="text-align: left"><code>client.truststore</code></td></tr>
+<tr><td style="text-align: left"><code>loadKeyStore</code></td><td style="text-align: left">Load the key store (for 2-way SSL).</td><td style="text-align: left"><code>false</code></td></tr>
+<tr><td style="text-align: left"><code>tlsVersion</code></td><td style="text-align: left">TLS version to use (e.g., TLSv1.2, TLSv1.3).</td><td style="text-align: left"><code>TLSv1.2</code></td></tr>
+</tbody>
+</table>
+</div>
+<h4 id="request-request"><a class="header" href="#request-request">Request (<code>request</code>)</a></h4>
+<p>Configures request behavior and connection pooling.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>timeout</code></td><td style="text-align: left">Request timeout in milliseconds.</td><td style="text-align: left"><code>3000</code></td></tr>
+<tr><td style="text-align: left"><code>enableHttp2</code></td><td style="text-align: left">Enable HTTP/2 support.</td><td style="text-align: left"><code>true</code></td></tr>
+<tr><td style="text-align: left"><code>connectionPoolSize</code></td><td style="text-align: left">Max connections per host in the pool.</td><td style="text-align: left"><code>1000</code></td></tr>
+<tr><td style="text-align: left"><code>maxReqPerConn</code></td><td style="text-align: left">Max requests per connection before closing.</td><td style="text-align: left"><code>1000000</code></td></tr>
+</tbody>
+</table>
+</div>
+<h4 id="oauth-oauth"><a class="header" href="#oauth-oauth">OAuth (<code>oauth</code>)</a></h4>
+<p>Configures interactions with OAuth 2.0 providers for token management. Includes sections for <code>token</code> (acquiring tokens), <code>sign</code> (signing requests), and <code>key</code> (fetching JWKs).</p>
+<h3 id="example-clientyml"><a class="header" href="#example-clientyml">Example <code>client.yml</code></a></h3>
+<pre><code class="language-yaml">tls:
+  verifyHostname: true
+  loadTrustStore: true
+  trustStore: client.truststore
+  trustStorePass: password
+request:
+  timeout: 3000
+  enableHttp2: true
+  connectionPoolSize: 100
+oauth:
+  token:
+    server_url: https://localhost:6882
+    client_credentials:
+      client_id: my-client
+      client_secret: my-secret
+</code></pre>
+<h2 id="usage-18"><a class="header" href="#usage-18">Usage</a></h2>
+<h3 id="getting-the-client-instance"><a class="header" href="#getting-the-client-instance">Getting the Client Instance</a></h3>
+<p>The <code>Http2Client</code> is a singleton.</p>
+<pre><code class="language-java">import com.networknt.client.Http2Client;
+
+Http2Client client = Http2Client.getInstance();
+</code></pre>
+<h3 id="making-a-request"><a class="header" href="#making-a-request">Making a Request</a></h3>
+<p>You can use <code>borrowConnection</code> to get a connection and then send a request.</p>
+<pre><code class="language-java">import io.undertow.client.ClientConnection;
+import io.undertow.client.ClientRequest;
+import io.undertow.util.Methods;
+import java.net.URI;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
+
+// ...
+
+try {
+    // Borrow a connection
+    ClientConnection connection = client.borrowConnection(
+        new URI("https://example.com"),
+        Http2Client.WORKER,
+        Http2Client.SSL,
+        Http2Client.BUFFER_POOL,
+        OptionMap.create(UndertowOptions.ENABLE_HTTP2, true)
+    ).get();
+
+    // Create the request
+    ClientRequest request = new ClientRequest().setMethod(Methods.GET).setPath("/api/v1/data");
+    request.getRequestHeaders().put(Headers.HOST, "example.com");
+
+    // Latch to wait for response
+    final CountDownLatch latch = new CountDownLatch(1);
+    final AtomicReference&lt;ClientResponse&gt; reference = new AtomicReference&lt;&gt;();
+
+    // Send the request
+    connection.sendRequest(request, client.createClientCallback(reference, latch));
+
+    // Wait for the response
+    latch.await();
+
+    // Process response
+    ClientResponse response = reference.get();
+    int statusCode = response.getResponseCode();
+    String body = response.getAttachment(Http2Client.RESPONSE_BODY);
+
+    System.out.println("Status: " + statusCode);
+    System.out.println("Body: " + body);
+
+    // Return the connection to the pool
+    client.returnConnection(connection);
+
+} catch (Exception e) {
+    e.printStackTrace();
+}
+</code></pre>
+<h3 id="handling-token-injection"><a class="header" href="#handling-token-injection">Handling Token Injection</a></h3>
+<p>The client can automatically inject OAuth tokens.</p>
+<pre><code class="language-java">// Inject Client Credentials token
+client.addCcToken(request);
+
+// Inject Authorization Code token (Bearer token passed from caller)
+client.addAuthToken(request, "bearer_token_string");
+</code></pre>
+<h3 id="propagating-headers"><a class="header" href="#propagating-headers">Propagating Headers</a></h3>
+<p>For service-to-service calls, you often need to propagate headers like correlation ID and traceability ID.</p>
+<pre><code class="language-java">// Propagate headers from an existing HttpServerExchange
+client.propagateHeaders(request, exchange);
+</code></pre>
+<h2 id="best-practices-2"><a class="header" href="#best-practices-2">Best Practices</a></h2>
+<ol>
+<li><strong>Release Connections</strong>: Always return connections to the pool using <code>client.returnConnection(connection)</code> in a <code>finally</code> block or use <code>try-with-resources</code> concepts if applicable, to avoid leaking connections.</li>
+<li><strong>Timeouts</strong>: Always set timeouts for your requests to prevent indefinite hanging.</li>
+<li><strong>HTTP/2</strong>: Enable HTTP/2 for better performance (multiplexing) if your infrastructure supports it.</li>
+<li><strong>Singleton</strong>: Use the singleton <code>Http2Client.getInstance()</code> rather than creating new instances.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="monad-result"><a class="header" href="#monad-result">Monad Result</a></h1>
 <p>The <code>monad-result</code> module provides a functional way to handle success and failure occurrences in your application logic. It is an implementation of a Result monad, similar to <code>Optional</code> in Java, but designed to carry failure information (error status) instead of just being empty.</p>
 <p>This approach promotes cleaner code by avoiding the use of exceptions for expected business logic failures, making the control flow more explicit and easier to follow.</p>
@@ -2517,7 +3940,7 @@ logging.downstreamFramework: SpringBoot
 <p>An implementation of <code>Result</code> that holds the successful value.</p>
 <h3 id="3-failure"><a class="header" href="#3-failure">3. Failure<t></t></a></h3>
 <p>An implementation of <code>Result</code> that holds a <code>com.networknt.status.Status</code> object describing the error.</p>
-<h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
+<h2 id="usage-19"><a class="header" href="#usage-19">Usage</a></h2>
 <h3 id="creating-results"><a class="header" href="#creating-results">Creating Results</a></h3>
 <p>You can create success or failure results using the static factory methods:</p>
 <pre><code class="language-java">import com.networknt.monad.Result;
@@ -2566,7 +3989,7 @@ Result&lt;String&gt; combined = result1.lift(result2, (r1, r2) -&gt; r1 + " " + 
 <li><strong>Improved Readability</strong>: Functional chaining (map, flatMap) leads to cleaner logic compared to deeply nested if-else blocks.</li>
 <li><strong>Composability</strong>: It is easy to combine multiple operations into a single result using <code>flatMap</code> and <code>lift</code>.</li>
 </ol>
-<h2 id="dependency-4"><a class="header" href="#dependency-4">Dependency</a></h2>
+<h2 id="dependency-6"><a class="header" href="#dependency-6">Dependency</a></h2>
 <p>Add the following to your <code>pom.xml</code>:</p>
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;com.networknt&lt;/groupId&gt;
@@ -2609,7 +4032,7 @@ json:
     "$.password": ""
     "$.creditCard.number": "^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})$"
 </code></pre>
-<h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
+<h2 id="usage-20"><a class="header" href="#usage-20">Usage</a></h2>
 <p>The <code>com.networknt.mask.Mask</code> utility class provides static methods to apply masking based on the configuration above.</p>
 <h3 id="1-mask-with-string"><a class="header" href="#1-mask-with-string">1. Mask with String</a></h3>
 <p>Used for simple replacements, typically in URIs or query parameters.</p>
@@ -2633,7 +4056,7 @@ String maskedJson = Mask.maskJson(json, "user");
 </code></pre>
 <h4 id="masking-listsarrays"><a class="header" href="#masking-listsarrays">Masking Lists/Arrays</a></h4>
 <p>The JSON masking logic automatically handles arrays if the JSON Path targets an array element (e.g., <code>$.items[*].id</code>). It ensures that only the values are masked while preserving the array structure.</p>
-<h2 id="dependency-5"><a class="header" href="#dependency-5">Dependency</a></h2>
+<h2 id="dependency-7"><a class="header" href="#dependency-7">Dependency</a></h2>
 <p>Add the following to your <code>pom.xml</code>:</p>
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;com.networknt&lt;/groupId&gt;
@@ -2645,79 +4068,86 @@ String maskedJson = Mask.maskJson(json, "user");
 <p>The <code>mask</code> module registers itself with the <code>ModuleRegistry</code> automatically when the configuration is loaded. You can verify the loaded masking rules through the <a href="/concern/admin/server-info.html">Server Info</a> endpoint.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="portal-registry"><a class="header" href="#portal-registry">Portal Registry</a></h1>
-<p>The <code>portal-registry</code> module is a decentralized service registry and discovery implementation designed to replace external tools like Consul or Etcd. It connects directly to the <code>light-controller</code>, which acts as the centralized control panel for the light-portal ecosystem.</p>
-<h3 id="why-portal-registry"><a class="header" href="#why-portal-registry">Why Portal Registry?</a></h3>
-<p>While Consul is a popular choice for service discovery, <code>portal-registry</code> was developed to address several pain points:</p>
+<p>The <code>portal-registry</code> module enables light-4j services to self-register with a centralized Light Portal controller (light-controller) instead of using local agents like Consul. It addresses the issues of resource utilization, long polling inefficiencies, and complex setup associated with Consul.</p>
+<h2 id="key-features-1"><a class="header" href="#key-features-1">Key Features</a></h2>
 <ol>
-<li><strong>Resource Efficiency</strong>: Eliminates the need for local Consul agents on every node, reducing infrastructure overhead.</li>
-<li><strong>WebSocket-Based Updates</strong>: Unlike Consul’s long-polling (blocking queries) for discovery updates, <code>portal-registry</code> uses WebSockets. This significantly reduces thread utilization in cloud environments.</li>
-<li><strong>Simpler Procurement</strong>: Provides an out-of-the-box solution within the <code>light-platform</code>, avoiding lengthy enterprise software approval cycles often required for third-party tools.</li>
+<li><strong>Centralized Registration</strong>: Services register directly with the controller cluster.</li>
+<li><strong>WebSocket Discovery</strong>: Instead of HTTP blocking queries/long polling, the client opens a WebSocket connection to the controller to receive real-time updates about service instances. This significantly reduces thread usage and network overhead.</li>
+<li><strong>No Local Agent</strong>: Eliminates the need for a sidecar or node-level agent.</li>
 </ol>
-<h3 id="implementation-guide"><a class="header" href="#implementation-guide">Implementation Guide</a></h3>
-<p>To use the portal registry in your <code>light-4j</code> service, follow these steps:</p>
-<h4 id="1-dependency-management"><a class="header" href="#1-dependency-management">1. Dependency Management</a></h4>
-<p>Add the following dependency to your <code>pom.xml</code>:</p>
+<h2 id="configuration-21"><a class="header" href="#configuration-21">Configuration</a></h2>
+<p>To switch from Consul to Portal Registry, you need to update <code>pom.xml</code>, <code>service.yml</code>, and add <code>portal-registry.yml</code>.</p>
+<h3 id="1-pomxml"><a class="header" href="#1-pomxml">1. <code>pom.xml</code></a></h3>
+<p>Replace <code>consul</code> dependency with <code>portal-registry</code>.</p>
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;com.networknt&lt;/groupId&gt;
     &lt;artifactId&gt;portal-registry&lt;/artifactId&gt;
     &lt;version&gt;${version.light-4j}&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
-<h4 id="2-enable-registry-in-serveryml"><a class="header" href="#2-enable-registry-in-serveryml">2. Enable Registry in server.yml</a></h4>
-<p>Ensure that registry support is enabled in your <code>server.yml</code> or via <code>values.yml</code>:</p>
-<pre><code class="language-yaml">enableRegistry: ${server.enableRegistry:true}
-</code></pre>
-<h4 id="3-service-configuration-serviceyml"><a class="header" href="#3-service-configuration-serviceyml">3. Service Configuration (service.yml)</a></h4>
-<p>Update your <code>service.yml</code> to use <code>PortalRegistry</code> as the registry implementation. Note the use of the <code>light</code> protocol in the URL configuration.</p>
+<h3 id="2-serviceyml"><a class="header" href="#2-serviceyml">2. <code>service.yml</code></a></h3>
+<p>Configure the <code>Registry</code> singleton to use <code>PortalRegistry</code>.</p>
 <pre><code class="language-yaml">singletons:
-- com.networknt.registry.URL:
-  - com.networknt.registry.URLImpl:
-      protocol: light
-      host: localhost
-      port: 8080
-      path: portal
-      parameters:
-        registryRetryPeriod: '30000'
-- com.networknt.portal.registry.client.PortalRegistryClient:
-  - com.networknt.portal.registry.client.PortalRegistryClientImpl
-- com.networknt.registry.Registry:
-  - com.networknt.portal.registry.PortalRegistry
-- com.networknt.balance.LoadBalance:
-  - com.networknt.balance.RoundRobinLoadBalance
-- com.networknt.cluster.Cluster:
-  - com.networknt.cluster.LightCluster
+  # Define the URL parameters for the registry connection
+  - com.networknt.registry.URL:
+      - com.networknt.registry.URLImpl:
+          protocol: light
+          host: localhost
+          port: 8080
+          path: portal
+          parameters:
+            registryRetryPeriod: '30000'
+  # The client implementation (connects to Portal)
+  - com.networknt.portal.registry.client.PortalRegistryClient:
+      - com.networknt.portal.registry.client.PortalRegistryClientImpl
+  # The Registry interface implementation
+  - com.networknt.registry.Registry:
+      - com.networknt.portal.registry.PortalRegistry
 </code></pre>
-<h4 id="4-module-configuration-portal-registryyml"><a class="header" href="#4-module-configuration-portal-registryyml">4. Module Configuration (portal-registry.yml)</a></h4>
-<p>Create or update the <code>portal-registry.yml</code> file to configure connectivity to the controller.</p>
-<pre><code class="language-yaml">---
-# Portal URL for accessing controller API. 
-portalUrl: ${portalRegistry.portalUrl:https://localhost:8443}
-
-# JWT token for authorized access to the light-controller.
-portalToken: ${portalRegistry.portalToken:}
-
-# Max requests before resetting connection (HTTP/2 optimization).
-maxReqPerConn: ${portalRegistry.maxReqPerConn:1000000}
-
-# Timing for critical health state and de-registration.
-deregisterAfter: ${portalRegistry.deregisterAfter:120000}
-checkInterval: ${portalRegistry.checkInterval:10000}
-
-# Health Check Mechanisms
-httpCheck: ${portalRegistry.httpCheck:false}
-ttlCheck: ${portalRegistry.ttlCheck:true}
-healthPath: ${portalRegistry.healthPath:/health/}
+<h3 id="3-portal-registryyml"><a class="header" href="#3-portal-registryyml">3. <code>portal-registry.yml</code></a></h3>
+<p>This module has its own configuration file.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">Property</th><th style="text-align: left">Description</th><th style="text-align: left">Default</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left"><code>portalUrl</code></td><td style="text-align: left">URL of the light-controller (e.g., <code>https://lightapi.net</code> or <code>https://light-controller</code>).</td><td style="text-align: left"><code>https://lightapi.net</code></td></tr>
+<tr><td style="text-align: left"><code>portalToken</code></td><td style="text-align: left">Bootstrap token for accessing the controller.</td><td style="text-align: left">-</td></tr>
+<tr><td style="text-align: left"><code>checkInterval</code></td><td style="text-align: left">Interval for health checks (e.g., <code>10s</code>).</td><td style="text-align: left"><code>10000</code> (ms)</td></tr>
+<tr><td style="text-align: left"><code>deregisterAfter</code></td><td style="text-align: left">Time to wait after failure before deregistering.</td><td style="text-align: left"><code>120000</code> (ms)</td></tr>
+<tr><td style="text-align: left"><code>httpCheck</code></td><td style="text-align: left">Enable HTTP health check (Controller polls Service).</td><td style="text-align: left"><code>false</code></td></tr>
+<tr><td style="text-align: left"><code>ttlCheck</code></td><td style="text-align: left">Enable TTL heartbeat (Service calls Controller).</td><td style="text-align: left"><code>true</code></td></tr>
+<tr><td style="text-align: left"><code>healthPath</code></td><td style="text-align: left">Path for HTTP health check (e.g., <code>/health/</code>).</td><td style="text-align: left"><code>/health/</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Example <code>portal-registry.yml</code>:</strong></p>
+<pre><code class="language-yaml">portalUrl: https://light-controller-test.networknt.com
+portalToken: ${portalRegistry.portalToken}
+ttlCheck: true
 </code></pre>
-<h3 id="operational-workflow"><a class="header" href="#operational-workflow">Operational Workflow</a></h3>
-<h4 id="registry-service-side"><a class="header" href="#registry-service-side">Registry (Service-Side)</a></h4>
-<p>When a service starts, it registers itself with the <code>light-controller</code>. During heartbeats (TTL) or polling (HTTP), the controller maintains the service status. When the service shuts down gracefully, it unregisters itself to remove stale nodes immediately.</p>
-<h4 id="discovery-consumer-side"><a class="header" href="#discovery-consumer-side">Discovery (Consumer-Side)</a></h4>
+<h3 id="4-serveryml"><a class="header" href="#4-serveryml">4. <code>server.yml</code></a></h3>
+<p>Ensure registry is enabled.</p>
+<pre><code class="language-yaml">enableRegistry: true
+serviceId: com.networknt.petstore-1.0.0
+</code></pre>
+<h2 id="how-it-works-2"><a class="header" href="#how-it-works-2">How It Works</a></h2>
+<h3 id="registration-service-startup"><a class="header" href="#registration-service-startup">Registration (Service Startup)</a></h3>
+<p>When a service starts, <code>PortalRegistry</code> sends a registration request to the <code>portalUrl</code>. It includes the simplified service metadata (host, port, serviceId, environment).
+Depending on configuration:</p>
+<ul>
+<li><strong>TTL Check</strong>: The service starts a background thread (<code>PortalRegistryHeartbeatManager</code>) to send periodic heartbeats to the controller.</li>
+<li><strong>HTTP Check</strong>: The controller is expected to poll the service’s <code>healthPath</code>.</li>
+</ul>
+<h3 id="discovery-client-side"><a class="header" href="#discovery-client-side">Discovery (Client Side)</a></h3>
+<p>When a client (like <code>light-router</code>) needs to find a service:</p>
 <ol>
-<li><strong>Initial Query</strong>: On the first request to a downstream service, the consumer queries the <code>light-controller</code> for available nodes based on <code>serviceId</code> and environment tags.</li>
-<li><strong>Streaming Updates</strong>: After the initial lookup, the <code>portal-registry</code> opens a WebSocket connection to the controller. Any changes to the downstream service instances (new nodes, failures, or de-registrations) are pushed to the consumer in real-time to update its local cache.</li>
+<li><strong>Initial Lookup</strong>: It queries the controller for the current list of healthy instances for a given <code>serviceId</code> and <code>tag</code>.</li>
+<li><strong>Subscription</strong>: It establishes a WebSocket connection to <code>wss://{portalUrl}/ws</code>.</li>
+<li><strong>Real-time Updates</strong>: When service instances change (up/down/scaling), the controller pushes the new list to the client via the WebSocket. The client updates its local cache immediately.</li>
 </ol>
-<h3 id="auto-registration--security"><a class="header" href="#auto-registration--security">Auto-Registration &amp; Security</a></h3>
-<p>The module automatically registers itself with the <code>ModuleRegistry</code> during configuration loading. This allows you to inspect the registry status and configuration via the <a href="/concern/admin/server-info.html">Server Info</a> endpoint. Sensitive tokens like <code>portalToken</code> are automatically masked in these logs/endpoints.</p>
+<p>This WebSocket approach is much more efficient than Consul’s blocking query, especially when subscribing to many services, as it multiplexes updates over a single connection.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="direct-registry"><a class="header" href="#direct-registry">Direct Registry</a></h1>
 <p>If you don’t have Consul or the Light Portal deployed for service registry and discovery, you can use the built-in <code>DirectRegistry</code> as a temporary solution. It provides a simple way to define service-to-host mappings and allows for an easy transition to more robust enterprise registry solutions later.</p>
@@ -2794,7 +4224,7 @@ directUrls:
 </code></pre>
 <h3 id="auto-registration--visibility"><a class="header" href="#auto-registration--visibility">Auto-Registration &amp; Visibility</a></h3>
 <p>The <code>direct-registry</code> module now implements auto-registration via the <code>DirectRegistryConfig</code> singleton. The current active mappings and configuration parameters can be inspected at runtime via the <a href="/concern/admin/server-info.html">Server Info</a> endpoint.</p>
-<h3 id="dependency-6"><a class="header" href="#dependency-6">Dependency</a></h3>
+<h3 id="dependency-8"><a class="header" href="#dependency-8">Dependency</a></h3>
 <p>Add the following to your <code>pom.xml</code>:</p>
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;com.networknt&lt;/groupId&gt;
@@ -2805,9 +4235,9 @@ directUrls:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="rule-loader"><a class="header" href="#rule-loader">Rule Loader</a></h1>
 <p>The <code>rule-loader</code> is a vital infrastructure module in <code>light-4j</code> that enables services to dynamically load and manage business logic rules during startup. It serves as the bridge between the <a href="/library/yaml-rule">YAML Rule Engine</a> and the specific service endpoints, allowing for flexible, rule-based request and response processing.</p>
-<h3 id="overview-1"><a class="header" href="#overview-1">Overview</a></h3>
+<h3 id="overview-5"><a class="header" href="#overview-5">Overview</a></h3>
 <p>Rules in the <code>light-4j</code> ecosystem are often shared across multiple lines of business or organizations. By centralizing these rules in the <code>light-portal</code>, applications can subscribe to them and have them automatically fetched and instantiated at runtime.</p>
-<h3 id="features-7"><a class="header" href="#features-7">Features</a></h3>
+<h3 id="features-10"><a class="header" href="#features-10">Features</a></h3>
 <ul>
 <li><strong>Dual Rule Sources</strong>: Fetch rules from the <code>light-portal</code> for production environments or load them from a local <code>rules.yml</code> file for offline testing.</li>
 <li><strong>Startup Integration</strong>: Uses a standard <code>StartupHookProvider</code> to ensuring all rules are ready before the server starts accepting traffic.</li>
@@ -2848,7 +4278,7 @@ portalHost: ${rule-loader.portalToken:}
 <p>In this mode, the loader interacts with the portal API to fetch the latest rules authorized for the service based on the <code>hostId</code>, <code>apiId</code>, and <code>apiVersion</code> defined in <code>values.yml</code> or <code>server.yml</code>. The fetched rules are cached locally in the target configuration directory as <code>rules.yml</code> for resilience.</p>
 <h4 id="2-config-folder-config-folder"><a class="header" href="#2-config-folder-config-folder">2. Config Folder (<code>config-folder</code>)</a></h4>
 <p>This mode is ideal for local development or air-gapped environments. The loader looks for a <code>rules.yml</code> file in the configuration directory and uses the <code>endpointRules</code> map defined in <code>rule-loader.yml</code> to link endpoints to rule IDs.</p>
-<h3 id="setup-6"><a class="header" href="#setup-6">Setup</a></h3>
+<h3 id="setup-7"><a class="header" href="#setup-7">Setup</a></h3>
 <h4 id="1-add-dependency-4"><a class="header" href="#1-add-dependency-4">1. Add Dependency</a></h4>
 <p>Include the <code>rule-loader</code> in your <code>pom.xml</code>:</p>
 <pre><code class="language-xml">&lt;dependency&gt;
@@ -2966,9 +4396,9 @@ Implement <code>com.networknt.server.ShutdownHookProvider</code> and register vi
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="access-control"><a class="header" href="#access-control">Access Control</a></h1>
 <p>The <code>AccessControlHandler</code> is a business middleware handler designed for the <code>light-rest-4j</code> framework. It provides fine-grained, rule-based authorization at the endpoint level, allowing developers to define complex access policies that go beyond simple scope-based security.</p>
-<h2 id="overview-2"><a class="header" href="#overview-2">Overview</a></h2>
+<h2 id="overview-6"><a class="header" href="#overview-6">Overview</a></h2>
 <p>Unlike standard security handlers that verify tokens and scopes, the Access Control handler interacts with the <strong>Rule Engine</strong> to evaluate business-specific logic. It typically runs late in the middleware chain, after technical concerns like security and validation are handled, and right before the request reaches the business logic or proxy.</p>
-<h3 id="key-features-1"><a class="header" href="#key-features-1">Key Features</a></h3>
+<h3 id="key-features-2"><a class="header" href="#key-features-2">Key Features</a></h3>
 <ul>
 <li><strong>Rule-Based Evaluation</strong>: Leverage the Power of the YAML-based Rule Engine.</li>
 <li><strong>Dynamic Configuration</strong>: Supports hot-reloading of both configuration and rules.</li>
@@ -3009,7 +4439,7 @@ skipPathPrefixes:
 </tbody>
 </table>
 </div>
-<h2 id="how-it-works-2"><a class="header" href="#how-it-works-2">How it Works</a></h2>
+<h2 id="how-it-works-3"><a class="header" href="#how-it-works-3">How it Works</a></h2>
 <h3 id="1-rule-loading"><a class="header" href="#1-rule-loading">1. Rule Loading</a></h3>
 <p>Rules are loaded during server startup via the <code>RuleLoaderStartupHook</code>. This hook caches the rules in memory for high-performance evaluation.</p>
 <h3 id="2-request-context"><a class="header" href="#2-request-context">2. Request Context</a></h3>
@@ -3040,9 +4470,9 @@ skipPathPrefixes:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="openapi-meta"><a class="header" href="#openapi-meta">OpenAPI Meta</a></h1>
 <p>The <code>OpenApiHandler</code> is a core middleware handler in the <code>light-rest-4j</code> framework. It is responsible for parsing the OpenAPI specification, matching the incoming request to a specific operation defined in the spec, and attaching that metadata to the request context.</p>
-<h2 id="overview-3"><a class="header" href="#overview-3">Overview</a></h2>
+<h2 id="overview-7"><a class="header" href="#overview-7">Overview</a></h2>
 <p>The <code>OpenApiHandler</code> acts as the “brain” for RESTful services. By identifying the exact endpoint and operation (e.g., <code>GET /pets/{petId}</code>) at the start of the request chain, it enables subsequent handlers—such as Security, Validator, and Metrics—to perform their tasks efficiently without re-parsing the request or the specification.</p>
-<h3 id="key-features-2"><a class="header" href="#key-features-2">Key Features</a></h3>
+<h3 id="key-features-3"><a class="header" href="#key-features-3">Key Features</a></h3>
 <ul>
 <li><strong>Operation Identification</strong>: Matches URI and HTTP method to OpenAPI operations.</li>
 <li><strong>Support for Multiple Specs</strong>: Can host multiple OpenAPI specifications in a single instance using path-based routing.</li>
@@ -3081,7 +4511,7 @@ pathSpecMapping:
 </tbody>
 </table>
 </div>
-<h2 id="how-it-works-3"><a class="header" href="#how-it-works-3">How it Works</a></h2>
+<h2 id="how-it-works-4"><a class="header" href="#how-it-works-4">How it Works</a></h2>
 <h3 id="1-specification-loading"><a class="header" href="#1-specification-loading">1. Specification Loading</a></h3>
 <p>At startup, the handler loads the specification(s). If <code>multipleSpec</code> is disabled, it looks for <code>openapi.yml</code>. If enabled, it loads all specs defined in <code>pathSpecMapping</code>. It also checks for <code>openapi-inject.yml</code> to merge common definitions.</p>
 <h3 id="2-request-matching"><a class="header" href="#2-request-matching">2. Request Matching</a></h3>
@@ -3114,7 +4544,7 @@ pathSpecMapping:
 <h2 id="description-openapi-security-module"><a class="header" href="#description-openapi-security-module">description: OpenAPI Security Module</a></h2>
 <h1 id="openapi-security"><a class="header" href="#openapi-security">OpenAPI Security</a></h1>
 <p>The <code>openapi-security</code> module is a fundamental component of the <code>light-rest-4j</code> framework, specifically designed to protect RESTful APIs defined with OpenAPI Specification 3.0. It provides several middleware handlers that integrate with the framework’s security infrastructure to ensure that only authorized requests reach your business logic.</p>
-<h2 id="overview-4"><a class="header" href="#overview-4">Overview</a></h2>
+<h2 id="overview-8"><a class="header" href="#overview-8">Overview</a></h2>
 <p>Modern web services often require robust security mechanisms such as OAuth 2.0. The <code>openapi-security</code> module simplifies the implementation of these standards by providing out-of-the-box handlers for token verification and authorization based on the OpenAPI specification.</p>
 <h2 id="core-handlers"><a class="header" href="#core-handlers">Core Handlers</a></h2>
 <h3 id="jwtverifyhandler"><a class="header" href="#jwtverifyhandler">JwtVerifyHandler</a></h3>
@@ -3128,7 +4558,7 @@ pathSpecMapping:
 <p>The <code>SimpleJwtVerifyHandler</code> is a lightweight alternative to the standard <code>JwtVerifyHandler</code>. It is used when scope validation is not required. It still verifies the JWT signature and expiration but skips the complex authorization checks against the OpenAPI spec.</p>
 <h3 id="swtverifyhandler"><a class="header" href="#swtverifyhandler">SwtVerifyHandler</a></h3>
 <p>The <code>SwtVerifyHandler</code> is designed for Simple Web Tokens (SWT). Unlike JWTs, which are self-contained, SWTs often require token introspection against an OAuth 2.0 provider. This handler manages the introspection process and validates the token’s validity and associated scopes.</p>
-<h2 id="configuration-7"><a class="header" href="#configuration-7">Configuration</a></h2>
+<h2 id="configuration-22"><a class="header" href="#configuration-22">Configuration</a></h2>
 <p>The security handlers are primarily configured via <code>security.yml</code>. Key configuration options include:</p>
 <ul>
 <li><strong>enableVerifyJwt</strong>: Toggle for JWT verification.</li>
@@ -3144,7 +4574,7 @@ pathSpecMapping:
 <p>All handlers in the <code>openapi-security</code> module support hot-reloading of their configurations. If the <code>security.yml</code> or related configuration files are updated on the file system, the handlers will automatically detect the changes and re-initialize their verifiers without requiring a server restart.</p>
 <h2 id="integration-with-openapi-meta"><a class="header" href="#integration-with-openapi-meta">Integration with OpenAPI Meta</a></h2>
 <p>The <code>openapi-security</code> handlers depend on the <code>OpenApiHandler</code> (from the <code>openapi-meta</code> module) being placed earlier in the request chain. The <code>OpenApiHandler</code> identifies the matching operation in the specification and attaches it to the request, which the security handlers then use for validation.</p>
-<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
+<h2 id="best-practices-3"><a class="header" href="#best-practices-3">Best Practices</a></h2>
 <ol>
 <li><strong>Enable Scope Verification</strong>: Always define required scopes in your OpenAPI specification and ensure <code>enableVerifyScope</code> is set to <code>true</code>.</li>
 <li><strong>Use Skip Paths Sparingly</strong>: Only skip security for public-facing informational endpoints.</li>
@@ -3156,7 +4586,7 @@ pathSpecMapping:
 <h2 id="description-openapi-validator-module"><a class="header" href="#description-openapi-validator-module">description: OpenAPI Validator Module</a></h2>
 <h1 id="openapi-validator"><a class="header" href="#openapi-validator">OpenAPI Validator</a></h1>
 <p>The <code>openapi-validator</code> module provides comprehensive request and response validation against an OpenAPI Specification 3.0. It ensures that incoming requests and outgoing responses adhere to the schemas, parameters, and constraints defined in your API specification.</p>
-<h2 id="overview-5"><a class="header" href="#overview-5">Overview</a></h2>
+<h2 id="overview-9"><a class="header" href="#overview-9">Overview</a></h2>
 <p>In a contract-first development approach, the OpenAPI specification serves as the “source of truth.” The <code>openapi-validator</code> middleware automates the enforcement of this contract, reducing the need for manual validation logic in your business handlers and improving API reliability.</p>
 <h2 id="core-components-1"><a class="header" href="#core-components-1">Core Components</a></h2>
 <h3 id="validatorhandler"><a class="header" href="#validatorhandler">ValidatorHandler</a></h3>
@@ -3174,7 +4604,7 @@ pathSpecMapping:
 <p>Validates the outgoing response from the server. This is typically disabled in production for performance reasons but is invaluable during development and testing to ensure the server respects its own contract.</p>
 <h3 id="schemavalidator"><a class="header" href="#schemavalidator">SchemaValidator</a></h3>
 <p>The underlying engine (built on <code>networknt/json-schema-validator</code>) that performs the actual JSON Schema validation for bodies and complex parameters.</p>
-<h2 id="configuration-8"><a class="header" href="#configuration-8">Configuration</a></h2>
+<h2 id="configuration-23"><a class="header" href="#configuration-23">Configuration</a></h2>
 <p>The module is configured via <code>openapi-validator.yml</code>.</p>
 <h3 id="key-properties"><a class="header" href="#key-properties">Key Properties</a></h3>
 <div class="table-wrapper">
@@ -3193,7 +4623,7 @@ pathSpecMapping:
 </tbody>
 </table>
 </div>
-<h2 id="features-8"><a class="header" href="#features-8">Features</a></h2>
+<h2 id="features-11"><a class="header" href="#features-11">Features</a></h2>
 <h3 id="hot-reload-support-1"><a class="header" href="#hot-reload-support-1">Hot Reload Support</a></h3>
 <p>The validator supports hot-reloading. If the <code>openapi-validator.yml</code> or the underlying <code>openapi.yml</code> specification is updated on the filesystem, the handler will automatically detect the change and re-initialize the internal validators without a server restart.</p>
 <h3 id="multiple-specification-support"><a class="header" href="#multiple-specification-support">Multiple Specification Support</a></h3>
@@ -3202,7 +4632,7 @@ pathSpecMapping:
 <p>The <code>RequestValidator</code> automatically retrieves the parsed body from the <code>BodyHandler</code>. To validate the request body, ensure that <code>BodyHandler</code> is placed before <code>ValidatorHandler</code> in your handler chain.</p>
 <h2 id="error-handling-1"><a class="header" href="#error-handling-1">Error Handling</a></h2>
 <p>When validation fails, the handler returns a standardized error response with a <code>400 Bad Request</code> status (for requests) or logs an error (for responses). The error body follows the standard <code>light-4j</code> status format, including a unique error code and a descriptive message pointing to the specific field that failed validation.</p>
-<h2 id="best-practices-2"><a class="header" href="#best-practices-2">Best Practices</a></h2>
+<h2 id="best-practices-4"><a class="header" href="#best-practices-4">Best Practices</a></h2>
 <ol>
 <li><strong>Development vs. Production</strong>: Always enable <code>validateResponse</code> during development and CI/CD testing, but consider disabling it in production for high-throughput services.</li>
 <li><strong>Contract-First</strong>: Keep your <code>openapi.yml</code> accurate. The validator is only as good as the specification it follows.</li>
@@ -3214,21 +4644,21 @@ pathSpecMapping:
 <h2 id="description-specification-module"><a class="header" href="#description-specification-module">description: Specification Module</a></h2>
 <h1 id="specification-module"><a class="header" href="#specification-module">Specification Module</a></h1>
 <p>The <code>specification</code> module in <code>light-rest-4j</code> provides a set of handlers to serve and display the API specification (Swagger/OpenAPI) of the service. This is particularly useful for exposing documentation endpoints directly from the running service.</p>
-<h2 id="overview-6"><a class="header" href="#overview-6">Overview</a></h2>
+<h2 id="overview-10"><a class="header" href="#overview-10">Overview</a></h2>
 <p>Exposing the API contract via the service itself ensures that the documentation is always in sync with the deployed version. The <code>specification</code> module provides handlers for:</p>
 <ul>
 <li>Serving the raw specification file (e.g., <code>openapi.yaml</code>).</li>
 <li>Rendering a Swagger UI instance to interact with the API.</li>
 <li>Serving a favicon for the UI.</li>
 </ul>
-<h2 id="components"><a class="header" href="#components">Components</a></h2>
+<h2 id="components-1"><a class="header" href="#components-1">Components</a></h2>
 <h3 id="specdisplayhandler"><a class="header" href="#specdisplayhandler">SpecDisplayHandler</a></h3>
 <p>Serves the raw content of the specification file. It supports different content types (defaulting to <code>text/yaml</code>) and loads the file directly from the filesystem or configuration folder.</p>
 <h3 id="specswaggeruihandler"><a class="header" href="#specswaggeruihandler">SpecSwaggerUIHandler</a></h3>
 <p>Renders a simple HTML page that embeds Swagger UI (via CDN). It is pre-configured to point to the <code>/spec.yaml</code> endpoint (served by <code>SpecDisplayHandler</code>) to load the API definition.</p>
 <h3 id="faviconhandler"><a class="header" href="#faviconhandler">FaviconHandler</a></h3>
 <p>A utility handler that serves a <code>favicon.ico</code> file, commonly requested by browsers when accessing the Swagger UI.</p>
-<h2 id="configuration-9"><a class="header" href="#configuration-9">Configuration</a></h2>
+<h2 id="configuration-24"><a class="header" href="#configuration-24">Configuration</a></h2>
 <p>The module is configured via <code>specification.yml</code>.</p>
 <h3 id="properties"><a class="header" href="#properties">Properties</a></h3>
 <div class="table-wrapper">
@@ -3242,12 +4672,12 @@ pathSpecMapping:
 </tbody>
 </table>
 </div>
-<h2 id="features-9"><a class="header" href="#features-9">Features</a></h2>
+<h2 id="features-12"><a class="header" href="#features-12">Features</a></h2>
 <h3 id="hot-reload-support-2"><a class="header" href="#hot-reload-support-2">Hot Reload support</a></h3>
 <p>The <code>specification</code> module fully supports standardized hot-reloading. If the <code>specification.yml</code> is updated, the handlers will automatically refresh their internal configuration without requiring a server restart.</p>
 <h3 id="integration-with-moduleregistry"><a class="header" href="#integration-with-moduleregistry">Integration with ModuleRegistry</a></h3>
 <p>All handlers in this module register themselves with the <code>ModuleRegistry</code> on startup. This allows administrators to verify the loaded configuration via the <code>/server/info</code> endpoint.</p>
-<h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
+<h2 id="usage-21"><a class="header" href="#usage-21">Usage</a></h2>
 <p>To use these handlers, you need to register them in your <code>handler.yml</code>.</p>
 <h3 id="example-handleryml-registration"><a class="header" href="#example-handleryml-registration">Example <code>handler.yml</code> registration:</a></h3>
 <pre><code class="language-yaml">handlers:
@@ -3276,7 +4706,7 @@ paths:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="rpc-router"><a class="header" href="#rpc-router">RPC Router</a></h1>
 <p>The <code>rpc-router</code> is a core module of the <code>light-hybrid-4j</code> framework. It provides a high-performance routing and validation mechanism that enables a single server instance to host multiple, independent service handlers (RPC-style).</p>
-<h2 id="overview-7"><a class="header" href="#overview-7">Overview</a></h2>
+<h2 id="overview-11"><a class="header" href="#overview-11">Overview</a></h2>
 <p>In the <code>light-hybrid-4j</code> architecture, the <code>rpc-router</code> serves as the primary dispatcher for incoming requests. Unlike traditional RESTful routing based on URL paths and HTTP verbs, the RPC router typically uses a single endpoint (e.g., <code>/api/json</code>) and determines the target logic based on a <code>serviceId</code> (or <code>cmd</code>) specified in the request payload.</p>
 <h3 id="key-responsibilities"><a class="header" href="#key-responsibilities">Key Responsibilities:</a></h3>
 <ul>
@@ -3362,7 +4792,7 @@ action:
           id: { type: integer }
         required: [id]
 </code></pre>
-<h2 id="best-practices-3"><a class="header" href="#best-practices-3">Best Practices</a></h2>
+<h2 id="best-practices-5"><a class="header" href="#best-practices-5">Best Practices</a></h2>
 <ol>
 <li><strong>Restrict Scanning</strong>: Always specify <code>handlerPackages</code> in <code>rpc-router.yml</code> to minimize startup time.</li>
 <li><strong>Contract-First</strong>: Define your <code>spec.yaml</code> rigorously. The router uses these schemas to protect your handlers from invalid data.</li>
@@ -3371,7 +4801,7 @@ action:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="rpc-security"><a class="header" href="#rpc-security">RPC Security</a></h1>
 <p>The <code>rpc-security</code> module in <code>light-hybrid-4j</code> provides security handlers specifically designed for the hybrid framework’s routing mechanism. It extends the core security capabilities of <code>light-4j</code> to work seamlessly with the <code>rpc-router</code>’s service dispatching model.</p>
-<h2 id="overview-8"><a class="header" href="#overview-8">Overview</a></h2>
+<h2 id="overview-12"><a class="header" href="#overview-12">Overview</a></h2>
 <p>In <code>light-hybrid-4j</code>, requests are routed based on a service ID in the payload (e.g., <code>lightapi.net/petstore/getPetById/1.0.0</code>) rather than URL paths. This difference requires specialized security handlers that can:</p>
 <ol>
 <li>Verify JWT tokens protecting the RPC endpoint.</li>
@@ -3392,7 +4822,7 @@ action:
 <li><strong>Rule-Based Access</strong>: Can enforce complex authorization rules (e.g., “deny if IP is X” or “allow if time is Y”) beyond simple RBAC.</li>
 <li><strong>Runtime Configuration</strong>: Supports hot-reloading of access control rules and settings via <code>access-control.yml</code>.</li>
 </ul>
-<h2 id="configuration-10"><a class="header" href="#configuration-10">Configuration</a></h2>
+<h2 id="configuration-25"><a class="header" href="#configuration-25">Configuration</a></h2>
 <p>This module relies on <code>security.yml</code> (shared with the core framework) and specific service definitions in <code>spec.yaml</code>.</p>
 <h3 id="securityyml"><a class="header" href="#securityyml"><code>security.yml</code></a></h3>
 <p>Standard configuration for JWT verification:</p>
@@ -3465,7 +4895,7 @@ action:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="kafka-common"><a class="header" href="#kafka-common">Kafka Common</a></h1>
 <p>The <code>kafka-common</code> module is a core shared library for <code>light-kafka</code> and its related microservices (like the kafka-sidecar). It encapsulates common configuration management, serialization/deserialization utilities, and shared constants.</p>
-<h2 id="key-features-3"><a class="header" href="#key-features-3">Key Features</a></h2>
+<h2 id="key-features-4"><a class="header" href="#key-features-4">Key Features</a></h2>
 <ul>
 <li><strong>Centralized Configuration</strong>:
 <ul>
@@ -3530,7 +4960,7 @@ action:
 <p>An interface defining the contract for consumer implementations, potentially allowing for different underlying consumer strategies (though <code>KafkaConsumerManager</code> is the primary implementation).</p>
 <h3 id="kafkaconsumerreadtask"><a class="header" href="#kafkaconsumerreadtask">KafkaConsumerReadTask</a></h3>
 <p>Encapsulates a single read request. It iterates over the Kafka consumer records, buffering them until the response size criteria (min/max bytes) are met or a timeout occurs.</p>
-<h2 id="configuration-11"><a class="header" href="#configuration-11">Configuration</a></h2>
+<h2 id="configuration-26"><a class="header" href="#configuration-26">Configuration</a></h2>
 <p>This module relies on <code>kafka-consumer.yml</code>, managed by <code>KafkaConsumerConfig</code> (from the <code>kafka-common</code> module).</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3538,7 +4968,7 @@ action:
 <li><code>server.id</code>: Unique identifier for the server instance, used for consumer naming.</li>
 <li><code>consumer.instance.timeout.ms</code>: Idle timeout for consumer instances.</li>
 </ul>
-<h2 id="usage-8"><a class="header" href="#usage-8">Usage</a></h2>
+<h2 id="usage-22"><a class="header" href="#usage-22">Usage</a></h2>
 <p>This module is typically used by the <code>kafka-sidecar</code> or other microservices that need to expose Kafka consumption over HTTP/REST.</p>
 <p>The <code>KafkaConsumerManager</code> is usually initialized at application startup:</p>
 <pre><code class="language-java">KafkaConsumerConfig config = KafkaConsumerConfig.load();
@@ -3563,7 +4993,7 @@ KafkaConsumerManager manager = new KafkaConsumerManager(config);
 <p>An interface extension which exposes the underlying <code>KafkaProducer</code> instance.</p>
 <h3 id="serializedkeyandvalue"><a class="header" href="#serializedkeyandvalue">SerializedKeyAndValue</a></h3>
 <p>Helper class that holds the serialized bytes for key and value along with target partition and headers.</p>
-<h2 id="configuration-12"><a class="header" href="#configuration-12">Configuration</a></h2>
+<h2 id="configuration-27"><a class="header" href="#configuration-27">Configuration</a></h2>
 <p>This module relies on <code>kafka-producer.yml</code>, managed by <code>KafkaProducerConfig</code> (from the <code>kafka-common</code> module).</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3572,7 +5002,7 @@ KafkaConsumerManager manager = new KafkaConsumerManager(config);
 <li><code>auditEnabled</code>: Toggle for audit logging.</li>
 <li><code>injectOpenTracing</code>: Optional integration with OpenTracing.</li>
 </ul>
-<h2 id="usage-9"><a class="header" href="#usage-9">Usage</a></h2>
+<h2 id="usage-23"><a class="header" href="#usage-23">Usage</a></h2>
 <p>Initialize <code>SidecarProducer</code> at application startup. It automatically loads configuration and registers itself.</p>
 <pre><code class="language-java">NativeLightProducer producer = new SidecarProducer();
 producer.open();
@@ -3592,7 +5022,7 @@ producer.produceWithSchema(topic, serviceId, partition, request, headers, auditL
 <li><strong>getKafkaValueByKey()</strong>: A utility to query state stores (interactive queries) with retry logic for handling rebalances.</li>
 <li><strong>getAllKafkaValue()</strong>: Queries all values from a state store.</li>
 </ul>
-<h2 id="configuration-13"><a class="header" href="#configuration-13">Configuration</a></h2>
+<h2 id="configuration-28"><a class="header" href="#configuration-28">Configuration</a></h2>
 <p>This module relies on <code>kafka-streams.yml</code>, managed by <code>KafkaStreamsConfig</code> (from the <code>kafka-common</code> module).</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3602,7 +5032,7 @@ producer.produceWithSchema(topic, serviceId, partition, request, headers, auditL
 <li><code>auditEnabled</code>: When true, an “AuditSink” is added to the topology to capture audit events.</li>
 <li><code>deadLetterEnabled</code>: When true, automatically configures DLQ sinks for error handling based on provided metadata.</li>
 </ul>
-<h2 id="usage-10"><a class="header" href="#usage-10">Usage</a></h2>
+<h2 id="usage-24"><a class="header" href="#usage-24">Usage</a></h2>
 <p>To use this module, implement <code>LightStreams</code> or call its default methods from your startup logic:</p>
 <pre><code class="language-java">// Load config
 KafkaStreamsConfig config = KafkaStreamsConfig.load();
@@ -3629,7 +5059,7 @@ KafkaStreams streams = startStream(ip, port, topology, config, dlqMap, auditPare
 </ul>
 <h3 id="msalexchangeconfig"><a class="header" href="#msalexchangeconfig">MsalExchangeConfig</a></h3>
 <p>Configuration class that loads settings from <code>msal-exchange.yml</code>. It supports hot reloading and module registration.</p>
-<h2 id="configuration-14"><a class="header" href="#configuration-14">Configuration</a></h2>
+<h2 id="configuration-29"><a class="header" href="#configuration-29">Configuration</a></h2>
 <p>The module is configured via <code>msal-exchange.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3665,7 +5095,7 @@ rememberMeTimeout: 604800
 </ul>
 <h3 id="statelessauthconfig"><a class="header" href="#statelessauthconfig">StatelessAuthConfig</a></h3>
 <p>Configuration class that loads settings from <code>statelessAuth.yml</code>. Supports hot reloading and module registration.</p>
-<h2 id="configuration-15"><a class="header" href="#configuration-15">Configuration</a></h2>
+<h2 id="configuration-30"><a class="header" href="#configuration-30">Configuration</a></h2>
 <p>The module is configured via <code>statelessAuth.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3716,7 +5146,7 @@ The configuration also includes sections for configuring social login providers 
 <li><strong>LatencyAssault</strong>: Injects artificial delays (latency) into requests.</li>
 <li><strong>MemoryAssault</strong>: Consumes heaps memory to simulate memory pressure/leaks.</li>
 </ul>
-<h2 id="configuration-16"><a class="header" href="#configuration-16">Configuration</a></h2>
+<h2 id="configuration-31"><a class="header" href="#configuration-31">Configuration</a></h2>
 <p>The module itself is configured via <code>chaos-monkey.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3741,7 +5171,7 @@ The configuration also includes sections for configuring social login providers 
 </ul>
 <h3 id="exceptionassaultconfig"><a class="header" href="#exceptionassaultconfig">ExceptionAssaultConfig</a></h3>
 <p>Configuration class that loads settings from <code>exception-assault.yml</code>.</p>
-<h2 id="configuration-17"><a class="header" href="#configuration-17">Configuration</a></h2>
+<h2 id="configuration-32"><a class="header" href="#configuration-32">Configuration</a></h2>
 <p>The module is configured via <code>exception-assault.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3771,7 +5201,7 @@ level: 5
 </ul>
 <h3 id="killappassaultconfig"><a class="header" href="#killappassaultconfig">KillappAssaultConfig</a></h3>
 <p>Configuration class that loads settings from <code>killapp-assault.yml</code>.</p>
-<h2 id="configuration-18"><a class="header" href="#configuration-18">Configuration</a></h2>
+<h2 id="configuration-33"><a class="header" href="#configuration-33">Configuration</a></h2>
 <p>The module is configured via <code>killapp-assault.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3801,7 +5231,7 @@ level: 100
 </ul>
 <h3 id="latencyassaultconfig"><a class="header" href="#latencyassaultconfig">LatencyAssaultConfig</a></h3>
 <p>Configuration class that loads settings from <code>latency-assault.yml</code>.</p>
-<h2 id="configuration-19"><a class="header" href="#configuration-19">Configuration</a></h2>
+<h2 id="configuration-34"><a class="header" href="#configuration-34">Configuration</a></h2>
 <p>The module is configured via <code>latency-assault.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3835,7 +5265,7 @@ latencyRangeEnd: 2000
 </ul>
 <h3 id="memoryassaultconfig"><a class="header" href="#memoryassaultconfig">MemoryAssaultConfig</a></h3>
 <p>Configuration class that loads settings from <code>memory-assault.yml</code>.</p>
-<h2 id="configuration-20"><a class="header" href="#configuration-20">Configuration</a></h2>
+<h2 id="configuration-35"><a class="header" href="#configuration-35">Configuration</a></h2>
 <p>The module is configured via <code>memory-assault.yml</code>.</p>
 <p><strong>Key Settings:</strong></p>
 <ul>
@@ -3883,7 +5313,7 @@ memoryMillisecondsHoldFilledMemory: 60000
 <li><strong>Behavior</strong>: It converts the incoming <code>HttpServerExchange</code> into an <code>APIGatewayProxyRequestEvent</code>, invokes the configured Lambda function asynchronously using the <code>LambdaAsyncClient</code>, and then converts the <code>APIGatewayProxyResponseEvent</code> back into the HTTP response.</li>
 <li><strong>Metrics</strong>: If enabled, it records the total time spent in the Lambda invocation and injects it into the metrics handler.</li>
 </ul>
-<h2 id="configuration-21"><a class="header" href="#configuration-21">Configuration</a></h2>
+<h2 id="configuration-36"><a class="header" href="#configuration-36">Configuration</a></h2>
 <p>Example <code>lambda-invoker.yml</code>:</p>
 <pre><code class="language-yaml">region: us-east-1
 apiCallTimeout: 60000
@@ -3896,7 +5326,7 @@ functions:
 metricsInjection: true
 metricsName: lambda-response
 </code></pre>
-<h2 id="usage-11"><a class="header" href="#usage-11">Usage</a></h2>
+<h2 id="usage-25"><a class="header" href="#usage-25">Usage</a></h2>
 <p>To use the <code>LambdaFunctionHandler</code>, add it to your <code>handler.yml</code> chain:</p>
 <pre><code class="language-yaml">- com.networknt.aws.lambda.LambdaFunctionHandler@lambda
 </code></pre>
@@ -3915,7 +5345,7 @@ metricsName: lambda-response
 <h1 id="websocket-router"><a class="header" href="#websocket-router">WebSocket Router</a></h1>
 <p>The <code>WebSocketRouterHandler</code> is a middleware handler designed to route WebSocket connections to downstream services in a microservices architecture. It sits in the request chain and identifies WebSocket handshake requests either by a specific header (<code>service_id</code>) or by matching the request path against configured prefixes.</p>
 <p>When a request is identified as a WebSocket request targeted for routing, this handler performs the WebSocket handshake (upgrading the connection) and establishes a proxy connection to the appropriate downstream service. It manages the bi-directional traffic between the client and the downstream service.</p>
-<h2 id="configuration-22"><a class="header" href="#configuration-22">Configuration</a></h2>
+<h2 id="configuration-37"><a class="header" href="#configuration-37">Configuration</a></h2>
 <p>The configuration for the WebSocket Router Handler is located in <code>websocket-router.yml</code>.</p>
 <pre><code># Light websocket router configuration
 # Enable WebSocket Router Handler
@@ -3930,7 +5360,7 @@ pathPrefixService:
   /ws/chat: chat-service
   /ws/notification: notification-service
 </code></pre>
-<h2 id="usage-12"><a class="header" href="#usage-12">Usage</a></h2>
+<h2 id="usage-26"><a class="header" href="#usage-26">Usage</a></h2>
 <p>To use the <code>WebSocketRouterHandler</code>, you need to register it in your <code>handler.yml</code> configuration file. It should be placed in the middleware chain where you want to intercept and route WebSocket requests.</p>
 <h3 id="1-register-the-handler"><a class="header" href="#1-register-the-handler">1. Register the Handler</a></h3>
 <p>Add the fully qualified class name to the <code>handlers</code> list in <code>handler.yml</code>:</p>
@@ -3949,7 +5379,7 @@ pathPrefixService:
     - header
     - router
 </code></pre>
-<h2 id="how-it-works-4"><a class="header" href="#how-it-works-4">How it Works</a></h2>
+<h2 id="how-it-works-5"><a class="header" href="#how-it-works-5">How it Works</a></h2>
 <ol>
 <li><strong>Request Interception</strong>: The handler checks each incoming request.</li>
 <li><strong>Identification</strong>:
@@ -3993,7 +5423,7 @@ pathPrefixService:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="websocket-handler"><a class="header" href="#websocket-handler">WebSocket Handler</a></h1>
 <p>The <code>WebSocketHandler</code> is a middleware handler designed to process WebSocket messages on the server side (Light Gateway or Light 4J Service), rather than proxying them to downstream services. It enables the implementation of custom logic, such as Chat bots, GenAI integration, or real-time notifications, directly within the application.</p>
-<h2 id="configuration-23"><a class="header" href="#configuration-23">Configuration</a></h2>
+<h2 id="configuration-38"><a class="header" href="#configuration-38">Configuration</a></h2>
 <p>The configuration is located in <code>websocket-handler.yml</code>.</p>
 <div class="table-wrapper">
 <table>
@@ -4036,7 +5466,7 @@ public class ChatHandler implements WebSocketApplicationHandler {
     }
 }
 </code></pre>
-<h2 id="usage-13"><a class="header" href="#usage-13">Usage</a></h2>
+<h2 id="usage-27"><a class="header" href="#usage-27">Usage</a></h2>
 <p>To use the <code>WebSocketHandler</code>, you need to register it in your <code>handler.yml</code> configuration file.</p>
 <h3 id="1-register-the-handler-1"><a class="header" href="#1-register-the-handler-1">1. Register the Handler</a></h3>
 <p>Add the <code>WebSocketHandler</code> to your <code>handler.yml</code> configuration:</p>
@@ -4054,7 +5484,7 @@ public class ChatHandler implements WebSocketApplicationHandler {
     - WebSocketHandler
     # ... other handlers
 </code></pre>
-<h2 id="how-it-works-5"><a class="header" href="#how-it-works-5">How It Works</a></h2>
+<h2 id="how-it-works-6"><a class="header" href="#how-it-works-6">How It Works</a></h2>
 <ol>
 <li><strong>Matching</strong>: The handler checks if the request path starts with one of the configured <code>pathPrefixHandlers</code>.</li>
 <li><strong>Instantiation</strong>: It loads and instantiates the configured handler class singleton at startup.</li>
@@ -4082,7 +5512,7 @@ public class ChatHandler implements WebSocketApplicationHandler {
     &lt;version&gt;${version.light-4j}&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
-<h2 id="configuration-24"><a class="header" href="#configuration-24">Configuration</a></h2>
+<h2 id="configuration-39"><a class="header" href="#configuration-39">Configuration</a></h2>
 <p>The module is configured via <code>websocket-rendezvous.yml</code> (or <code>values.yml</code> overrides).</p>
 <p>The configuration key is <code>websocket-rendezvous</code>.</p>
 <div class="table-wrapper">
@@ -4117,7 +5547,7 @@ handler.paths:
     exec:
       - rendezvous
 </code></pre>
-<h2 id="how-it-works-6"><a class="header" href="#how-it-works-6">How It Works</a></h2>
+<h2 id="how-it-works-7"><a class="header" href="#how-it-works-7">How It Works</a></h2>
 <ol>
 <li>
 <p><strong>Channel Identification</strong>: Both the Client and the Backend must provide a <code>channelId</code> to identify the session. This is typically done via the HTTP header <code>channel-group-id</code> or a query parameter <code>channelId</code> in the WebSocket upgrade request.</p>
@@ -4203,14 +5633,14 @@ Connection: Upgrade
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="ollama-client"><a class="header" href="#ollama-client">Ollama Client</a></h1>
 <p>The <code>ollama-client</code> module provides a non-blocking, asynchronous client for interacting with the Ollama API. It is part of the <code>light-genai-4j</code> library and leverages the Undertow HTTP client for efficient communication.</p>
-<h2 id="features-10"><a class="header" href="#features-10">Features</a></h2>
+<h2 id="features-13"><a class="header" href="#features-13">Features</a></h2>
 <ul>
 <li><strong>Non-blocking I/O</strong>: Uses Undertow’s asynchronous HTTP client for high throughput.</li>
 <li><strong>Streaming Support</strong>: Supports streaming responses (NDJSON) from Ollama for chat completions.</li>
 <li><strong>Configuration</strong>: externalizable configuration via <code>ollama.yml</code>.</li>
 <li><strong>Token Management</strong>: N/A (Ollama usually runs locally without auth, but can be proxied).</li>
 </ul>
-<h2 id="configuration-25"><a class="header" href="#configuration-25">Configuration</a></h2>
+<h2 id="configuration-40"><a class="header" href="#configuration-40">Configuration</a></h2>
 <p>The client is configured via <code>ollama.yml</code> in the <code>src/main/resources/config</code> directory (or externalized config folder).</p>
 <h3 id="properties-1"><a class="header" href="#properties-1">Properties</a></h3>
 <div class="table-wrapper">
@@ -4228,7 +5658,7 @@ Connection: Upgrade
 <pre><code class="language-yaml">ollamaUrl: http://localhost:11434
 model: llama3.2
 </code></pre>
-<h2 id="usage-14"><a class="header" href="#usage-14">Usage</a></h2>
+<h2 id="usage-28"><a class="header" href="#usage-28">Usage</a></h2>
 <h3 id="sync-chat-non-streaming"><a class="header" href="#sync-chat-non-streaming">Sync Chat (Non-Streaming)</a></h3>
 <pre><code class="language-java">GenAiClient client = new OllamaClient();
 List&lt;ChatMessage&gt; messages = new ArrayList&lt;&gt;();
@@ -4268,13 +5698,13 @@ client.chatStream(messages, new StreamCallback() {
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="openai-client"><a class="header" href="#openai-client">OpenAI Client</a></h1>
 <p>The <code>OpenAiClient</code> is an implementation of <code>GenAiClient</code> that interacts with the OpenAI API (GPT models). It supports both synchronous chat and asynchronous streaming chat.</p>
-<h2 id="features-11"><a class="header" href="#features-11">Features</a></h2>
+<h2 id="features-14"><a class="header" href="#features-14">Features</a></h2>
 <ul>
 <li><strong>Synchronous Chat</strong>: Sends a prompt to the model and waits for the full response.</li>
 <li><strong>Streaming Chat</strong>: streams the response from the model token by token, suitable for real-time applications.</li>
 <li><strong>Non-Blocking I/O</strong>: Uses XNIO and Undertow’s asynchronous client to prevent blocking threads during I/O operations.</li>
 </ul>
-<h2 id="configuration-26"><a class="header" href="#configuration-26">Configuration</a></h2>
+<h2 id="configuration-41"><a class="header" href="#configuration-41">Configuration</a></h2>
 <p>The client is configured via <code>openai.yml</code>.</p>
 <h3 id="properties-2"><a class="header" href="#properties-2">Properties</a></h3>
 <div class="table-wrapper">
@@ -4294,7 +5724,7 @@ client.chatStream(messages, new StreamCallback() {
 model: gpt-3.5-turbo
 apiKey: your-openai-api-key
 </code></pre>
-<h2 id="usage-15"><a class="header" href="#usage-15">Usage</a></h2>
+<h2 id="usage-29"><a class="header" href="#usage-29">Usage</a></h2>
 <h3 id="injection"><a class="header" href="#injection">Injection</a></h3>
 <p>You can inject the <code>OpenAiClient</code> as a <code>GenAiClient</code> implementation.</p>
 <pre><code class="language-java">GenAiClient client = new OpenAiClient();
@@ -4329,13 +5759,13 @@ client.chatStream(messages, new StreamCallback() {
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="gemini-client"><a class="header" href="#gemini-client">Gemini Client</a></h1>
 <p>The <code>GeminiClient</code> is an implementation of <code>GenAiClient</code> that interacts with Google’s Gemini API. It supports both synchronous chat and asynchronous streaming chat.</p>
-<h2 id="features-12"><a class="header" href="#features-12">Features</a></h2>
+<h2 id="features-15"><a class="header" href="#features-15">Features</a></h2>
 <ul>
 <li><strong>Synchronous Chat</strong>: Sends a prompt to the model and waits for the full response.</li>
 <li><strong>Streaming Chat</strong>: streams the response from the model chunk by chunk, suitable for real-time applications.</li>
 <li><strong>Non-Blocking I/O</strong>: Uses XNIO and Undertow’s asynchronous client to prevent blocking threads during I/O operations.</li>
 </ul>
-<h2 id="configuration-27"><a class="header" href="#configuration-27">Configuration</a></h2>
+<h2 id="configuration-42"><a class="header" href="#configuration-42">Configuration</a></h2>
 <p>The client is configured via <code>gemini.yml</code>.</p>
 <h3 id="properties-3"><a class="header" href="#properties-3">Properties</a></h3>
 <div class="table-wrapper">
@@ -4355,7 +5785,7 @@ client.chatStream(messages, new StreamCallback() {
 model: gemini-pro
 apiKey: your-google-api-key
 </code></pre>
-<h2 id="usage-16"><a class="header" href="#usage-16">Usage</a></h2>
+<h2 id="usage-30"><a class="header" href="#usage-30">Usage</a></h2>
 <h3 id="injection-1"><a class="header" href="#injection-1">Injection</a></h3>
 <p>You can inject the <code>GeminiClient</code> as a <code>GenAiClient</code> implementation.</p>
 <pre><code class="language-java">GenAiClient client = new GeminiClient();
@@ -4390,13 +5820,13 @@ client.chatStream(messages, new StreamCallback() {
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="bedrock-client"><a class="header" href="#bedrock-client">Bedrock Client</a></h1>
 <p>The <code>BedrockClient</code> is an implementation of <code>GenAiClient</code> that interacts with AWS Bedrock. It supports both synchronous chat and asynchronous streaming chat via the AWS SDK for Java 2.x.</p>
-<h2 id="features-13"><a class="header" href="#features-13">Features</a></h2>
+<h2 id="features-16"><a class="header" href="#features-16">Features</a></h2>
 <ul>
 <li><strong>Synchronous Chat</strong>: Sends a prompt to the model and waits for the full response.</li>
 <li><strong>Streaming Chat</strong>: streams the response from the model chunk by chunk, suitable for real-time applications.</li>
 <li><strong>Non-Blocking I/O</strong>: Leverages <code>BedrockRuntimeAsyncClient</code> and JDK <code>CompletableFuture</code> for non-blocking operations.</li>
 </ul>
-<h2 id="configuration-28"><a class="header" href="#configuration-28">Configuration</a></h2>
+<h2 id="configuration-43"><a class="header" href="#configuration-43">Configuration</a></h2>
 <p>The client is configured via <code>bedrock.yml</code>.</p>
 <h3 id="properties-4"><a class="header" href="#properties-4">Properties</a></h3>
 <div class="table-wrapper">
@@ -4414,7 +5844,7 @@ client.chatStream(messages, new StreamCallback() {
 <pre><code class="language-yaml">region: us-east-1
 modelId: anthropic.claude-v2
 </code></pre>
-<h2 id="usage-17"><a class="header" href="#usage-17">Usage</a></h2>
+<h2 id="usage-31"><a class="header" href="#usage-31">Usage</a></h2>
 <h3 id="injection-2"><a class="header" href="#injection-2">Injection</a></h3>
 <p>You can inject the <code>BedrockClient</code> as a <code>GenAiClient</code> implementation.</p>
 <pre><code class="language-java">GenAiClient client = new BedrockClient();
@@ -4494,7 +5924,7 @@ client.chatStream(messages, new StreamCallback() {
     void clearHistory(String sessionId);
 }
 </code></pre>
-<h2 id="implementations-1"><a class="header" href="#implementations-1">Implementations</a></h2>
+<h2 id="implementations-2"><a class="header" href="#implementations-2">Implementations</a></h2>
 <h3 id="in-memory-default"><a class="header" href="#in-memory-default">In-Memory (Default)</a></h3>
 <p>The initial implementation provides in-memory storage using concurrent maps. This is suitable for single-instance deployments or testing.</p>
 <ul>
@@ -4508,7 +5938,7 @@ client.chatStream(messages, new StreamCallback() {
 <li><strong>Redis</strong>: Shared cache for clustered deployments (session affinity not required).</li>
 <li><strong>Hazelcast</strong>: In-memory data grid for distributed caching.</li>
 </ul>
-<h2 id="configuration-29"><a class="header" href="#configuration-29">Configuration</a></h2>
+<h2 id="configuration-44"><a class="header" href="#configuration-44">Configuration</a></h2>
 <p>The implementation to use can be configured via <code>service.yml</code> (using Light-4J’s Service/Module loading) or dedicated config files.</p>
 <p>Example <code>service.yml</code> for In-Memory:</p>
 <pre><code class="language-yaml">- com.networknt.genai.handler.ChatHistoryRepository:
@@ -4525,7 +5955,7 @@ client.chatStream(messages, new StreamCallback() {
 </ol>
 <p>This ensures that the client receives complete lines or paragraphs, resulting in a cleaner user experience.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="example-1"><a class="header" href="#example-1">Example</a></h1>
+<h1 id="example-2"><a class="header" href="#example-2">Example</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="light-websocket-4j-1"><a class="header" href="#light-websocket-4j-1">Light-websocket-4j</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -4538,7 +5968,7 @@ client.chatStream(messages, new StreamCallback() {
 <li>maven 3.6.0 or above</li>
 <li><a href="https://ollama.ai/">Ollama</a> running locally (for the default configuration) with a model pulled (e.g., <code>qwen3:14b</code> or <code>llama3</code>).</li>
 </ul>
-<h2 id="configuration-30"><a class="header" href="#configuration-30">Configuration</a></h2>
+<h2 id="configuration-45"><a class="header" href="#configuration-45">Configuration</a></h2>
 <p>The server configuration is consolidated in <code>src/main/resources/config/values.yml</code>.</p>
 <h3 id="server--handler"><a class="header" href="#server--handler">Server &amp; Handler</a></h3>
 <p>The server runs on HTTP port 8080 and defines two main paths:</p>
@@ -4586,7 +6016,7 @@ mvn clean install exec:java
 </code></pre>
 </li>
 </ol>
-<h2 id="usage-18"><a class="header" href="#usage-18">Usage</a></h2>
+<h2 id="usage-32"><a class="header" href="#usage-32">Usage</a></h2>
 <h3 id="web-ui"><a class="header" href="#web-ui">Web UI</a></h3>
 <p>Open your browser and navigate to <code>http://localhost:8080</code>. You should see a simple chat interface where you can type messages and receive streaming responses from the LLM.</p>
 <h3 id="websocket-client-1"><a class="header" href="#websocket-client-1">WebSocket Client</a></h3>
@@ -4610,7 +6040,7 @@ mvn clean install exec:java
 <li><strong>Backend</strong>: <code>llmchat-server</code> running on HTTP port 8080.</li>
 <li><strong>Routing</strong>: Uses <code>WebSocketRouterHandler</code> to forward messages based on path or serviceId. Also uses <code>DirectRegistry</code> for service discovery.</li>
 </ul>
-<h2 id="configuration-31"><a class="header" href="#configuration-31">Configuration</a></h2>
+<h2 id="configuration-46"><a class="header" href="#configuration-46">Configuration</a></h2>
 <p>The configuration is located in <code>src/main/resources/config/values.yml</code>.</p>
 <h3 id="server--handler-1"><a class="header" href="#server--handler-1">Server &amp; Handler</a></h3>
 <p>Configured for HTTPS on port 8443.</p>
@@ -4657,7 +6087,7 @@ From <code>light-example-4j/websocket/llmchat-gateway</code>:
 </code></pre>
 (Note: ensure you have built it first with <code>mvn clean install</code>)</li>
 </ol>
-<h2 id="usage-19"><a class="header" href="#usage-19">Usage</a></h2>
+<h2 id="usage-33"><a class="header" href="#usage-33">Usage</a></h2>
 <p>Open your browser and navigate to <strong>https://localhost:8443</strong>.</p>
 <ul>
 <li>You might see a security warning because the <code>server.keystore</code> uses a self-signed certificate. Accept it to proceed.</li>

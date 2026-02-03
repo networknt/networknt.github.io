@@ -35,10 +35,10 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-c897d3c8.js";
+            window.path_to_searchindex_js = "../../searchindex-6e9b1757.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-43ecedf9.js"></script>
+        <script src="../../toc-3b56448d.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -186,8 +186,7 @@
 </thead>
 <tbody>
 <tr><td style="text-align: left"><code>enabled</code></td><td style="text-align: left">boolean</td><td style="text-align: left"><code>true</code></td><td style="text-align: left">Enable or disable the MCP Router Handler.</td></tr>
-<tr><td style="text-align: left"><code>ssePath</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp/sse</code></td><td style="text-align: left">The endpoint path for establishing the MCP Server-Sent Events (SSE) connection.</td></tr>
-<tr><td style="text-align: left"><code>messagePath</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp/message</code></td><td style="text-align: left">The endpoint path for sending MCP JSON-RPC messages (POST).</td></tr>
+<tr><td style="text-align: left"><code>path</code></td><td style="text-align: left">string</td><td style="text-align: left"><code>/mcp</code></td><td style="text-align: left">The unified endpoint path for both connection establishment (SSE via GET) and JSON-RPC messages (POST).</td></tr>
 <tr><td style="text-align: left"><code>tools</code></td><td style="text-align: left">list</td><td style="text-align: left"><code>null</code></td><td style="text-align: left">A list of tools exposed by this router. Each tool maps to a downstream HTTP service.</td></tr>
 </tbody>
 </table>
@@ -196,11 +195,8 @@
 <pre><code class="language-yaml"># Enable MCP Router Handler
 enabled: true
 
-# Path for MCP Server-Sent Events (SSE) endpoint
-ssePath: /mcp/sse
-
-# Path for MCP JSON-RPC message endpoint
-messagePath: /mcp/message
+# Path for MCP endpoint (Streamable HTTP)
+path: /mcp
 
 # Define tools exposed by this router
 tools:
@@ -212,10 +208,10 @@ tools:
     # inputSchema is optional; default is type: object
 </code></pre>
 <h2 id="architecture"><a class="header" href="#architecture">Architecture</a></h2>
-<p>The MCP Router implements the MCP HTTP transport specification:</p>
+<p>The MCP Router implements the MCP HTTP transport specification using a <strong>Single Path</strong> architecture:</p>
 <ol>
-<li><strong>Connection</strong>: Clients connect to the <code>ssePath</code> (default <code>/mcp/sse</code>) via GET to establish an SSE session. The server responds with an endpoint event containing the URI for message submission.</li>
-<li><strong>Messaging</strong>: Clients send JSON-RPC 2.0 messages to the <code>messagePath</code> (default <code>/mcp/message</code>) via POST.</li>
+<li><strong>Connection</strong>: Clients connect to the configured <code>path</code> (default <code>/mcp</code>) via <strong>GET</strong> to establish an SSE session. The server generates a unique session ID and responds with an <code>endpoint</code> event containing the URI for message submission (e.g., <code>/mcp?sessionId=uuid</code>).</li>
+<li><strong>Messaging</strong>: Clients send JSON-RPC 2.0 messages to the same <code>path</code> (default <code>/mcp</code>) via <strong>POST</strong>. The session context is maintained via the <code>sessionId</code> query parameter or header.</li>
 <li><strong>Tool Execution</strong>: The router translates <code>tools/call</code> requests into HTTP requests to the configured downstream services (<code>host</code> + <code>path</code>).</li>
 </ol>
 <h2 id="supported-methods"><a class="header" href="#supported-methods">Supported Methods</a></h2>
@@ -227,18 +223,35 @@ tools:
 <li><code>tools/call</code>: Executes a specific tool by name. The <code>arguments</code> in the request are passed to the downstream service.</li>
 </ul>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
-<p>Register the <code>McpHandler</code> in your <code>handler.yml</code> chain. Ensure the <code>ssePath</code> and <code>messagePath</code> are accessible.</p>
-<p>Example</p>
+<p>Register the <code>McpHandler</code> in your <code>handler.yml</code> chain.</p>
+<p>Example:</p>
 <pre><code class="language-yaml">paths:
-  - path: '/mcp/sse'
+  - path: '/mcp'
     method: 'GET'
     exec:
       - mcp-router
-  - path: '/mcp/message'
+  - path: '/mcp'
     method: 'POST'
     exec:
       - mcp-router
 </code></pre>
+<h2 id="verification-with-verify_mcppy"><a class="header" href="#verification-with-verify_mcppy">Verification with verify_mcp.py</a></h2>
+<p>To assist with testing and verification, a Python script <code>verify_mcp.py</code> is available in the <code>light-gateway</code> root directory (and potentially other project roots). This script simulates an MCP client to ensure the router is correctly configured and routing requests.</p>
+<h3 id="prerequisite"><a class="header" href="#prerequisite">Prerequisite</a></h3>
+<p>Install the required Python packages:</p>
+<pre><code class="language-bash">pip install requests sseclient-py
+</code></pre>
+<h3 id="running-the-script"><a class="header" href="#running-the-script">Running the Script</a></h3>
+<p>Run the script against your running gateway instance (default <code>https://localhost:8443</code>):</p>
+<pre><code class="language-bash">python3 verify_mcp.py
+</code></pre>
+<h3 id="what-it-does"><a class="header" href="#what-it-does">What it does</a></h3>
+<ol>
+<li><strong>Connects to SSE</strong>: Initiates a GET request to <code>/mcp</code> and listens for server sent events. It confirms receipt of the <code>endpoint</code> event.</li>
+<li><strong>Initializes</strong>: Sends a POST request with the <code>initialize</code> JSON-RPC method to verify protocol negotiation.</li>
+<li><strong>Lists Tools</strong>: Sends a <code>tools/list</code> request to verify that configured tools are being correctly exposed by the router.</li>
+</ol>
+<p>If successful, you will see output confirming the SSE connection, the endpoint event, and the JSON responses for initialization and tool listing.</p>
 
                     </main>
 
