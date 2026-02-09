@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Ldap Utility - Light-4j Platform</title>
+        <title>docker-remote-debugging - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-6e9b1757.js";
+            window.path_to_searchindex_js = "../../searchindex-169700ab.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-3b56448d.js"></script>
+        <script src="../../toc-6bf46bc5.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,19 +174,104 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="ldap-utility"><a class="header" href="#ldap-utility">Ldap Utility</a></h1>
+                        <h1 id="docker-remote-debugging"><a class="header" href="#docker-remote-debugging">Docker Remote Debugging</a></h1>
+<p>Light-4j applications are standalone Java applications without any JEE container and can be debugged inside <a href="/tutorial/common/debug/idea">IntelliJ</a> or <a href="/tutorial/common/debug/eclipse">Eclipse</a> directly. Most of the time, we are going to debug the application before dockerizing it to ensure it is functioning. Sometimes, an application works when starting with <code>java -jar xxx.jar</code> but when running with a docker container, it stops working. Most cases, this is due to the docker network issue.</p>
+<p>In case this happens, it would be great if we can debug the application running inside the Docker container remotely from your favorite IDE. In this tutorial, we are going to walk through the steps with IntelliJ IDEA. For developers who are using Eclipse, the process should be very similar.</p>
+<h2 id="create-dockerfile-debug"><a class="header" href="#create-dockerfile-debug">Create Dockerfile-Debug</a></h2>
+<p>First, we need to create a Dockerfile with debug agent in the java command line.</p>
+<p>Here is the original Dockerfile for light-router.</p>
+<pre><code class="language-dockerfile">FROM openjdk:11.0.3-slim
+ADD /target/light-router.jar server.jar
+CMD ["/bin/sh","-c","java -Dlight-4j-config-dir=/config -Dlogback.configurationFile=/config/logback.xml -jar /server.jar"]
+</code></pre>
+<p>Let’s create a <code>Dockerfile-Debug</code> with the following modifications. If necessary, we are going to create this Dockerfile-Debug from light-codegen for all generated projects.</p>
+<pre><code class="language-dockerfile">FROM openjdk:11.0.3-slim
+ADD /target/light-router.jar server.jar
+CMD ["/bin/sh","-c","java -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005 -Dlight-4j-config-dir=/config -Dlogback.configurationFile=/config/logback.xml -jar /server.jar"]
+</code></pre>
+<h2 id="build-debug-image"><a class="header" href="#build-debug-image">Build Debug Image</a></h2>
+<p>Once the Dockerfile-Debug is created, let’s build an alternative image with it locally without publishing it to Docker Hub.</p>
+<pre><code class="language-bash">docker build -t networknt/light-router:latest -f ./docker/Dockerfile-Debug .
+</code></pre>
+<h2 id="prepare-environment"><a class="header" href="#prepare-environment">Prepare Environment</a></h2>
+<p>Before running the docker-compose, we need to make sure that Consul docker-compose is running (if your service depends on it).</p>
+<pre><code class="language-bash">cd ~/networknt/light-docker
+docker-compose -f docker-compose-consul.yml up -d
+</code></pre>
+<p>Now, the local image for the light-router is the debug image. Let’s take a look at the docker-compose file that started two instances of light-codegen and light-router. This file can be found in the <a href="https://github.com/networknt/light-config-test/tree/master/light-codegen">light-config-test</a> along with all configurations.</p>
+<pre><code class="language-yaml">version: "2"
+
+services:
+  2_0_x:
+    image: networknt/codegen-server-1.0.0
+    volumes:
+      - ./2_0_x/config:/config
+      - ./2_0_x/service:/service
+    ports:
+      - 8440:8440
+    environment:
+      - STATUS_HOST_IP=${DOCKER_HOST_IP}
+    network_mode: host    
+
+  1_6_x:
+    image: networknt/codegen-server-1.0.0
+    volumes:
+      - ./1_6_x/config:/config
+      - ./1_6_x/service:/service
+    ports:
+      - 8439:8439
+    environment:
+      - STATUS_HOST_IP=${DOCKER_HOST_IP}
+    network_mode: host    
+
+  light-router:
+    image:  networknt/light-router:latest
+    environment:
+      - STATUS_HOST_IP=${DOCKER_HOST_IP}
+    network_mode: host    
+    ports:
+      - 443:8443
+    volumes:
+      - ./router/config:/config
+      - ./codegen-web/build:/codegen-web/build
+</code></pre>
+<h2 id="start-debugging"><a class="header" href="#start-debugging">Start Debugging</a></h2>
+<p>Before starting the docker-compose, we might need to run <code>docker-compose rm</code> to remove the reference to the old image.</p>
+<pre><code class="language-bash">cd ~/networknt/light-config-test/light-codegen
+docker-compose up
+</code></pre>
+<p>You will notice that the <code>light-router</code> application within the container is not up and running but outputs the following line:</p>
+<pre><code>light-router_1  | Listening for transport dt_socket at address: 5005
+</code></pre>
+<p>This line indicates that the application inside the container is waiting for IDE debug connection on port number 5005. Let’s open the light-router project in IDEA. To set up the remote debug, follow the steps below.</p>
+<ol>
+<li>
+<p>Click <code>Run</code> tab and <code>Debug Configuration</code> menu.</p>
+</li>
+<li>
+<p>Click <code>+</code> to add a remote application called <code>remote</code>.</p>
+</li>
+<li>
+<p>Setup the parameters as below:</p>
+<p><img src="/images/idea-remote-debug.png" alt="idea-remote-debug"></p>
+</li>
+<li>
+<p>Click <code>Apply</code> and <code>OK</code> to close the popup window.</p>
+</li>
+<li>
+<p>Click <code>Run</code> tab and <code>Debug</code> menu and select <code>remote</code> in the popup dropdown to start the debug session.</p>
+</li>
+</ol>
+<p>You can set the breakpoints in the initialization code if you want to debug the logic during the server startup. Once the debug session is started, the light-router application inside the container will be started and running as usual. The rest of the debug is the same as you are debugging a standalone application.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/utility/utility.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../tutorial/common.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/module/module.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -194,13 +279,10 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/utility/utility.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../tutorial/common.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/module/module.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                    </a>
             </nav>
 
         </div>

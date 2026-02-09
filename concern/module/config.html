@@ -35,10 +35,10 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-6e9b1757.js";
+            window.path_to_searchindex_js = "../../searchindex-169700ab.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-3b56448d.js"></script>
+        <script src="../../toc-6bf46bc5.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -232,6 +232,20 @@ InputStream is = Config.getInstance().getInputStreamFromFile("primary.crt");
 <p><code>values.yml</code>:</p>
 <pre><code class="language-yaml">SERVER_SERVICEID: com.networknt.petstore-2.0.0
 </code></pre>
+<h3 id="injecting-environment-variables-into-valuesyml"><a class="header" href="#injecting-environment-variables-into-valuesyml">Injecting Environment Variables into values.yml</a></h3>
+<p>You can also inject environment variables directly into <code>values.yml</code>. This allows for a two-stage injection where environment variables populate <code>values.yml</code>, and <code>values.yml</code> populates other configuration files. This is particularly useful when using secret management tools (like HashiCorp Vault) that populate environment variables, allowing you to manage sensitive data without committing it to the code repository.</p>
+<p><code>values.yml</code>:</p>
+<pre><code class="language-yaml">router.hostWhitelist:
+  - 192.168.0.*
+  - localhost
+  - ${DOCKER_HOST_IP}
+</code></pre>
+<p>If the environment variable <code>DOCKER_HOST_IP</code> is set to <code>192.168.5.10</code>, the final loaded configuration for <code>router.hostWhitelist</code> will include <code>192.168.5.10</code>.</p>
+<p><strong>Benefits:</strong></p>
+<ul>
+<li><strong>Security</strong>: Sensitive information (IPs, credentials) remains in environment variables/secrets engine.</li>
+<li><strong>Flexibility</strong>: You can use the same <code>values.yml</code> structure across environments, populated by environment-specific variables.</li>
+</ul>
 <h2 id="handling-secrets"><a class="header" href="#handling-secrets">Handling Secrets</a></h2>
 <p>Release 1.6.0+ supports transparent decryption of sensitive values.</p>
 <h3 id="setup"><a class="header" href="#setup">Setup</a></h3>
@@ -257,7 +271,7 @@ InputStream is = Config.getInstance().getInputStreamFromFile("primary.crt");
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/module/consul-registry.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/module/common.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
@@ -271,7 +285,7 @@ InputStream is = Config.getInstance().getInputStreamFromFile("primary.crt");
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/module/consul-registry.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/module/common.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 

@@ -1,0 +1,605 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Client Simple Pool - Light-4j Platform</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex-169700ab.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-6bf46bc5.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Light-4j Platform</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="client-simplepool-design"><a class="header" href="#client-simplepool-design">Client SimplePool Design</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>The SimplePool is a lightweight HTTP connection pooling implementation in the light-4j client module. It was contributed by a customer to address connection management issues in high-throughput scenarios. The implementation provides a robust connection pooling mechanism with support for both HTTP/1.1 and HTTP/2 connections.</p>
+<h2 id="architecture"><a class="header" href="#architecture">Architecture</a></h2>
+<p>The SimplePool follows a layered architecture with clear separation of concerns:</p>
+<pre class="mermaid">graph TB
+    subgraph "Public API"
+        SCP[SimpleConnectionPool]
+    end
+    
+    subgraph "URI-Level Pool"
+        SUCP[SimpleURIConnectionPool]
+    end
+    
+    subgraph "Connection Management"
+        SCH[SimpleConnectionHolder]
+        CT[ConnectionToken]
+    end
+    
+    subgraph "Abstraction Layer"
+        SC[SimpleConnection Interface]
+        SCM[SimpleConnectionMaker Interface]
+    end
+    
+    subgraph "Undertow Implementation"
+        SCC[SimpleClientConnection]
+        SCCM[SimpleClientConnectionMaker]
+    end
+    
+    SCP --&gt; SUCP
+    SUCP --&gt; SCH
+    SCH --&gt; CT
+    SCH --&gt; SC
+    SCH --&gt; SCM
+    SC --&gt; SCC
+    SCM --&gt; SCCM
+</pre>
+
+<h2 id="core-components"><a class="header" href="#core-components">Core Components</a></h2>
+<h3 id="simpleconnection-interface"><a class="header" href="#simpleconnection-interface">SimpleConnection (Interface)</a></h3>
+<p>A protocol-agnostic interface that wraps raw connections:</p>
+<ul>
+<li><code>isOpen()</code> - Check if connection is still open</li>
+<li><code>getRawConnection()</code> - Access the underlying connection object</li>
+<li><code>isMultiplexingSupported()</code> - Detect HTTP/2 capability</li>
+<li><code>getLocalAddress()</code> - Get client-side address</li>
+<li><code>safeClose()</code> - Safely close the connection</li>
+</ul>
+<h3 id="simpleconnectionholder"><a class="header" href="#simpleconnectionholder">SimpleConnectionHolder</a></h3>
+<p>The central state management component that wraps a <code>SimpleConnection</code> and tracks its lifecycle:</p>
+<p><strong>Connection States:</strong></p>
+<ul>
+<li><code>NOT_BORROWED_VALID</code> - Available for borrowing</li>
+<li><code>BORROWED_VALID</code> - Currently in use</li>
+<li><code>NOT_BORROWED_EXPIRED</code> - Expired, ready for cleanup</li>
+<li><code>BORROWED_EXPIRED</code> - Expired but still in use</li>
+<li><code>CLOSED</code> - Connection terminated</li>
+</ul>
+<p><strong>State Machine:</strong></p>
+<pre><code>                    |
+                   \/
+         [ NOT_BORROWED_VALID ] --(borrow)--&gt;   [ BORROWED_VALID ]
+                   |            &lt;-(restore)--           |
+                   |                                    |
+                (expire)                             (expire)
+                   |                                    |
+                  \/                                   \/
+         [ NOT_BORROWED_EXPIRED ] &lt;-(restore)-- [ BORROWED_EXPIRED ]
+                  |
+               (close)
+                 |
+                \/
+             [ CLOSED ]
+</code></pre>
+<p><strong>Key Features:</strong></p>
+<ul>
+<li><strong>Connection Tokens</strong>: Track borrows with <code>ConnectionToken</code> objects</li>
+<li><strong>Time-Freezing</strong>: All state checks use a consistent “now” timestamp to prevent race conditions</li>
+<li><strong>Thread-Safe</strong>: All state transitions are <code>synchronized</code></li>
+<li><strong>HTTP/2 Multiplexing</strong>: HTTP/2 connections support unlimited borrows; HTTP/1.1 limited to 1</li>
+</ul>
+<h3 id="simpleuriconnectionpool"><a class="header" href="#simpleuriconnectionpool">SimpleURIConnectionPool</a></h3>
+<p>Manages connections for a single URI with multiple tracking sets:</p>
+<ul>
+<li><code>allCreatedConnections</code> - All connections created by connection makers</li>
+<li><code>allKnownConnections</code> - All connections tracked by the pool</li>
+<li><code>borrowable</code> - Connections available for borrowing</li>
+<li><code>borrowed</code> - Connections with outstanding tokens</li>
+<li><code>notBorrowedExpired</code> - Connections ready for cleanup</li>
+</ul>
+<p><strong>Key Features:</strong></p>
+<ul>
+<li>Random selection from borrowable connections for load distribution</li>
+<li>Automatic cleanup of expired connections during borrow/restore operations</li>
+<li>Leaked connection detection and cleanup</li>
+</ul>
+<h3 id="simpleconnectionpool"><a class="header" href="#simpleconnectionpool">SimpleConnectionPool</a></h3>
+<p>Top-level pool that manages <code>SimpleURIConnectionPool</code> instances per URI:</p>
+<ul>
+<li>Thread-safe map of URI to connection pools</li>
+<li>Lazy initialization of per-URI pools</li>
+<li>Delegates borrow/restore to appropriate URI pool</li>
+</ul>
+<h3 id="simpleconnectionmaker-interface"><a class="header" href="#simpleconnectionmaker-interface">SimpleConnectionMaker (Interface)</a></h3>
+<p>Factory interface for creating connections with two creation modes:</p>
+<ol>
+<li>Simplified mode using <code>isHttp2</code> boolean</li>
+<li>Full control mode with XnioWorker, SSL, ByteBufferPool, and OptionMap</li>
+</ol>
+<h3 id="undertow-implementation"><a class="header" href="#undertow-implementation">Undertow Implementation</a></h3>
+<ul>
+<li><strong>SimpleClientConnection</strong>: Wraps Undertow’s <code>ClientConnection</code></li>
+<li><strong>SimpleClientConnectionMaker</strong>: Creates connections using <code>UndertowClient</code> or <code>Http2Client</code></li>
+</ul>
+<h2 id="integration-with-http2client"><a class="header" href="#integration-with-http2client">Integration with Http2Client</a></h2>
+<p>The <code>Http2Client</code> class integrates SimplePool via:</p>
+<ul>
+<li><code>borrow(URI, XnioWorker, ByteBufferPool, ...)</code> methods - Get connection token</li>
+<li><code>restore(ConnectionToken)</code> method - Return connection to pool</li>
+</ul>
+<pre><code class="language-java">// Usage pattern
+ConnectionToken token = http2Client.borrow(uri, worker, bufferPool, isHttp2);
+try {
+    ClientConnection connection = (ClientConnection) token.getRawConnection();
+    // Use connection...
+} finally {
+    http2Client.restore(token);
+}
+</code></pre>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>The pool behavior is controlled via <code>ClientConfig</code>:</p>
+<ul>
+<li><code>connectionExpireTime</code> - How long connections remain valid (default from config)</li>
+<li><code>connectionPoolSize</code> - Maximum connections per URI (default from config)</li>
+<li><code>request.connectTimeout</code> - Connection creation timeout</li>
+</ul>
+<h2 id="code-review-findings"><a class="header" href="#code-review-findings">Code Review Findings</a></h2>
+<h3 id="strengths"><a class="header" href="#strengths">Strengths</a></h3>
+<ol>
+<li>
+<p><strong>Well-Documented State Machine</strong>: The connection state transitions are clearly documented with diagrams in code comments.</p>
+</li>
+<li>
+<p><strong>Thread Safety</strong>: Proper synchronization with <code>synchronized</code> methods and <code>ConcurrentHashMap</code> usage.</p>
+</li>
+<li>
+<p><strong>Time-Freezing Pattern</strong>: Excellent approach to prevent time-of-check-time-of-use (TOCTOU) race conditions by passing a consistent <code>now</code> value.</p>
+</li>
+<li>
+<p><strong>Leak Detection</strong>: The <code>findAndCloseLeakedConnections()</code> method handles edge cases where connections are created but not properly tracked.</p>
+</li>
+<li>
+<p><strong>HTTP/2 Multiplexing Support</strong>: Proper differentiation between HTTP/1.1 (single borrow) and HTTP/2 (unlimited borrows).</p>
+</li>
+<li>
+<p><strong>Random Connection Selection</strong>: Uses <code>ThreadLocalRandom</code> for efficient, fair distribution of connections.</p>
+</li>
+<li>
+<p><strong>Comprehensive Logging</strong>: Detailed debug logging with connection port and state information.</p>
+</li>
+</ol>
+<h3 id="resolved-issues"><a class="header" href="#resolved-issues">Resolved Issues</a></h3>
+<p>The following issues were identified during code review and have been fixed:</p>
+<h4 id="1-race-condition-in-simpleconnectionpoolborrow--fixed"><a class="header" href="#1-race-condition-in-simpleconnectionpoolborrow--fixed">1. Race Condition in SimpleConnectionPool.borrow() ✅ Fixed</a></h4>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/SimpleConnectionPool.java">SimpleConnectionPool.java</a></p>
+<p><strong>Issue</strong>: Double-checked locking had a subtle race condition.</p>
+<p><strong>Fix</strong>: Replaced with atomic <code>computeIfAbsent()</code>:</p>
+<pre><code class="language-java">SimpleURIConnectionPool pool = pools.computeIfAbsent(uri,
+    u -&gt; new SimpleURIConnectionPool(u, expireTime, poolSize, connectionMaker));
+return pool.borrow(createConnectionTimeout);
+</code></pre>
+<h4 id="2-unused-ishttp2-parameter--fixed"><a class="header" href="#2-unused-ishttp2-parameter--fixed">2. Unused isHttp2 Parameter ✅ Fixed</a></h4>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/SimpleConnectionPool.java">SimpleConnectionPool.java</a></p>
+<p><strong>Fix</strong>: Removed the unused <code>isHttp2</code> parameter from the <code>borrow()</code> method signature.</p>
+<h4 id="3-npe-risk-in-http2clientrestore--fixed"><a class="header" href="#3-npe-risk-in-http2clientrestore--fixed">3. NPE Risk in Http2Client.restore() ✅ Fixed</a></h4>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/Http2Client.java">Http2Client.java</a></p>
+<p><strong>Fix</strong>: Added null check before calling restore:</p>
+<pre><code class="language-java">SimpleURIConnectionPool pool = pools.get(token.uri());
+if(pool != null) pool.restore(token);
+</code></pre>
+<h4 id="4-singleton-pattern-thread-safety--fixed"><a class="header" href="#4-singleton-pattern-thread-safety--fixed">4. Singleton Pattern Thread Safety ✅ Fixed</a></h4>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleClientConnectionMaker.java">SimpleClientConnectionMaker.java</a></p>
+<p><strong>Fix</strong>: Implemented thread-safe singleton using the Holder pattern:</p>
+<pre><code class="language-java">private static class Holder {
+    static final SimpleClientConnectionMaker INSTANCE = new SimpleClientConnectionMaker();
+}
+public static SimpleConnectionMaker instance() {
+    return Holder.INSTANCE;
+}
+</code></pre>
+<h4 id="5-missing-null-check-in-simpleconnectionpoolrestore--fixed"><a class="header" href="#5-missing-null-check-in-simpleconnectionpoolrestore--fixed">5. Missing Null Check in SimpleConnectionPool.restore() ✅ Fixed</a></h4>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/SimpleConnectionPool.java">SimpleConnectionPool.java</a></p>
+<p><strong>Fix</strong>: Added null checks for both the connection token and the pool:</p>
+<pre><code class="language-java">if(connectionToken == null) return;
+SimpleURIConnectionPool pool = pools.get(connectionToken.uri());
+if(pool != null) pool.restore(connectionToken);
+</code></pre>
+<h4 id="6-hardcoded-worker-configuration--improved"><a class="header" href="#6-hardcoded-worker-configuration--improved">6. Hardcoded Worker Configuration ✅ Improved</a></h4>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleClientConnectionMaker.java">SimpleClientConnectionMaker.java</a></p>
+<p><strong>Fix</strong>: Extracted hardcoded value to a named constant for clarity:</p>
+<pre><code class="language-java">private static final int DEFAULT_WORKER_IO_THREADS = 8;
+</code></pre>
+<blockquote class="blockquote-tag blockquote-tag-note">
+<p class="blockquote-tag-title"><svg viewbox="0 0 16 16" width="18" height="18"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>Note</p>
+<p>The Static Worker and SSL Reuse concern (TODO comments about reusing WORKER and SSL) remains as a documented consideration for future enhancement if configuration reloading becomes a requirement.</p>
+</blockquote>
+<h2 id="best-practices-observed"><a class="header" href="#best-practices-observed">Best Practices Observed</a></h2>
+<ol>
+<li>
+<p><strong>Functional Interface with Lambda</strong>: The <code>RemoveFromAllKnownConnections</code> interface provides flexibility for Iterator-based or direct removal.</p>
+</li>
+<li>
+<p><strong>Explicit State Assertions</strong>: Using <code>IllegalStateException</code> for invalid state transitions aids debugging.</p>
+</li>
+<li>
+<p><strong>Comprehensive Javadoc</strong>: Methods include detailed documentation about thread safety and usage patterns.</p>
+</li>
+<li>
+<p><strong>Connection Token Pattern</strong>: Ensures connections can be tracked and returned correctly, preventing leaks when used properly.</p>
+</li>
+</ol>
+<h2 id="summary"><a class="header" href="#summary">Summary</a></h2>
+<p>The SimplePool implementation is a well-designed, production-quality connection pool with excellent documentation and careful attention to thread safety. All identified issues have been resolved. The implementation successfully handles:</p>
+<ul>
+<li>Connection lifecycle management</li>
+<li>HTTP/1.1 and HTTP/2 protocol differences</li>
+<li>Connection expiration and cleanup</li>
+<li>Leak detection and prevention</li>
+<li>Thread-safe concurrent access</li>
+</ul>
+<h2 id="new-features"><a class="header" href="#new-features">New Features</a></h2>
+<h3 id="pool-metrics"><a class="header" href="#pool-metrics">Pool Metrics</a></h3>
+<p>Connection pool metrics can be enabled via configuration to track:</p>
+<ul>
+<li>Total borrows and restores per URI</li>
+<li>Connection creation and closure counts</li>
+<li>Borrow failures</li>
+<li>Current active connection count</li>
+</ul>
+<pre><code class="language-yaml">client:
+  request:
+    poolMetricsEnabled: true
+</code></pre>
+<h4 id="metrics-usage-examples"><a class="header" href="#metrics-usage-examples">Metrics Usage Examples</a></h4>
+<p><strong>Basic metrics access:</strong></p>
+<pre><code class="language-java">Http2Client client = Http2Client.getInstance();
+SimplePoolMetrics metrics = client.getPoolMetrics();
+if (metrics != null) {
+    // Get summary for logging
+    logger.info(metrics.getSummary());
+    
+    // Access per-URI metrics
+    for (Map.Entry&lt;URI, SimplePoolMetrics.UriMetrics&gt; entry : metrics.getAllMetrics().entrySet()) {
+        URI uri = entry.getKey();
+        SimplePoolMetrics.UriMetrics uriMetrics = entry.getValue();
+        
+        logger.info("Pool {} - active: {}, borrows: {}, restores: {}, created: {}, closed: {}, failures: {}",
+            uri,
+            uriMetrics.getActiveConnections(),
+            uriMetrics.getTotalBorrows(),
+            uriMetrics.getTotalRestores(),
+            uriMetrics.getTotalCreated(),
+            uriMetrics.getTotalClosed(),
+            uriMetrics.getBorrowFailures());
+    }
+}
+</code></pre>
+<p><strong>Periodic metrics logging (e.g., every 5 minutes):</strong></p>
+<pre><code class="language-java">ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+scheduler.scheduleAtFixedRate(() -&gt; {
+    SimplePoolMetrics metrics = Http2Client.getInstance().getPoolMetrics();
+    if (metrics != null) {
+        logger.info(metrics.getSummary());
+    }
+}, 5, 5, TimeUnit.MINUTES);
+</code></pre>
+<p><strong>Exposing metrics via REST endpoint:</strong></p>
+<pre><code class="language-java">@GET
+@Path("/pool/metrics")
+public Response getPoolMetrics() {
+    SimplePoolMetrics metrics = Http2Client.getInstance().getPoolMetrics();
+    if (metrics == null) {
+        return Response.status(503).entity("Metrics not enabled").build();
+    }
+    
+    Map&lt;String, Object&gt; result = new HashMap&lt;&gt;();
+    for (Map.Entry&lt;URI, SimplePoolMetrics.UriMetrics&gt; entry : metrics.getAllMetrics().entrySet()) {
+        SimplePoolMetrics.UriMetrics m = entry.getValue();
+        result.put(entry.getKey().toString(), Map.of(
+            "active", m.getActiveConnections(),
+            "borrows", m.getTotalBorrows(),
+            "restores", m.getTotalRestores(),
+            "created", m.getTotalCreated(),
+            "closed", m.getTotalClosed(),
+            "failures", m.getBorrowFailures()
+        ));
+    }
+    return Response.ok(result).build();
+}
+</code></pre>
+<h3 id="pool-warm-up"><a class="header" href="#pool-warm-up">Pool Warm-Up</a></h3>
+<p>Pre-establish connections to reduce latency on first request:</p>
+<pre><code class="language-yaml">client:
+  request:
+    poolWarmUpEnabled: true
+    poolWarmUpSize: 2
+</code></pre>
+<p>Programmatic warm-up:</p>
+<pre><code class="language-java">Http2Client client = Http2Client.getInstance();
+client.warmUpPool(URI.create("https://api.example.com:8443"));
+</code></pre>
+<h3 id="connection-health-checks"><a class="header" href="#connection-health-checks">Connection Health Checks</a></h3>
+<p>Background thread validates idle connections and removes stale ones:</p>
+<pre><code class="language-yaml">client:
+  request:
+    healthCheckEnabled: true
+    healthCheckIntervalMs: 30000
+</code></pre>
+<h4 id="health-check-usage-examples"><a class="header" href="#health-check-usage-examples">Health Check Usage Examples</a></h4>
+<p><strong>Graceful shutdown:</strong></p>
+<pre><code class="language-java">// In your application shutdown hook
+Runtime.getRuntime().addShutdownHook(new Thread(() -&gt; {
+    Http2Client.getInstance().shutdown();
+    logger.info("Http2Client shutdown complete");
+}));
+</code></pre>
+<p><strong>With Server module shutdown listener:</strong></p>
+<pre><code class="language-java">public class ClientShutdownListener implements ShutdownHookProvider {
+    @Override
+    public void onShutdown() {
+        Http2Client.getInstance().shutdown();
+    }
+}
+</code></pre>
+<p><strong>Monitoring pool health programmatically:</strong></p>
+<pre><code class="language-java">Http2Client client = Http2Client.getInstance();
+Map&lt;URI, SimpleURIConnectionPool&gt; pools = client.getPools();
+
+for (Map.Entry&lt;URI, SimpleURIConnectionPool&gt; entry : pools.entrySet()) {
+    SimpleURIConnectionPool pool = entry.getValue();
+    logger.info("Pool {} - active: {}, borrowable: {}, borrowed: {}",
+        entry.getKey(),
+        pool.getActiveConnectionCount(),
+        pool.getBorrowableCount(),
+        pool.getBorrowedCount());
+}
+</code></pre>
+<p><strong>Complete configuration example:</strong></p>
+<pre><code class="language-yaml">client:
+  request:
+    # Connection timeouts
+    connectTimeout: 10000
+    timeout: 3000
+    
+    # Pool sizing
+    connectionPoolSize: 10
+    connectionExpireTime: 1800000
+    
+    # Metrics (disabled by default)
+    poolMetricsEnabled: true
+    
+    # Warm-up (disabled by default)
+    poolWarmUpEnabled: true
+    poolWarmUpSize: 2
+    
+    # Health checks (enabled by default)
+    healthCheckEnabled: true
+    healthCheckIntervalMs: 30000
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../design/ccac-exchange.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../design/remove-simplejwtverify.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../design/ccac-exchange.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../design/remove-simplejwtverify.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../mermaid-eefea253.min.js"></script>
+        <script src="../mermaid-init-ccf746f1.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

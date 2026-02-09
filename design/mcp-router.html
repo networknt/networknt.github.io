@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-6e9b1757.js";
+            window.path_to_searchindex_js = "../searchindex-169700ab.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-3b56448d.js"></script>
+        <script src="../toc-6bf46bc5.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -239,6 +239,18 @@
 </ol>
 <h4 id="step-4-governance-the-agentic-layer"><a class="header" href="#step-4-governance-the-agentic-layer">Step 4: Governance (The “Agentic” Layer)</a></h4>
 <p>Add a “Critique” or “Guardrail” check. Since this is at the gateway, we can inspect the tool output. If the LLM requested sensitive data, the Gateway can mask it before the agent sees it.</p>
+<h4 id="step-5-mcp-proxy-support"><a class="header" href="#step-5-mcp-proxy-support">Step 5: MCP Proxy Support</a></h4>
+<p>The MCP Router supports acting as a proxy for backend MCP servers.</p>
+<ul>
+<li><strong>Configuration:</strong> Tools can be configured with a <code>protocol</code> field (<code>http</code> or <code>mcp</code>).</li>
+<li><strong>Behavior:</strong>
+<ul>
+<li><code>http</code> (default): Transforming MCP tool calls to REST requests (JSON translation).</li>
+<li><code>mcp</code>: Forwarding JSON-RPC requests directly to a backend MCP server via HTTP POST.</li>
+</ul>
+</li>
+<li><strong>Use Case:</strong> This allows integrating existing MCP servers (e.g., Node.js, Python) into the light-4j gateway without rewriting them implementation.</li>
+</ul>
 <hr>
 <h3 id="4-potential-challenges-to-watch"><a class="header" href="#4-potential-challenges-to-watch">4. Potential Challenges to Watch</a></h3>
 <ol>
