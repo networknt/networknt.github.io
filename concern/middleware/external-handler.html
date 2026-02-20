@@ -35,10 +35,10 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-b768940d.js";
+            window.path_to_searchindex_js = "../../searchindex-a1dad1de.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-dc2df11c.js"></script>
+        <script src="../../toc-f46484e0.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -200,6 +200,7 @@
 <tr><td style="text-align: left"><code>connectTimeout</code></td><td style="text-align: left">Connection timeout in milliseconds.</td><td style="text-align: left"><code>3000</code></td></tr>
 <tr><td style="text-align: left"><code>timeout</code></td><td style="text-align: left">Request timeout in milliseconds.</td><td style="text-align: left"><code>5000</code></td></tr>
 <tr><td style="text-align: left"><code>enableHttp2</code></td><td style="text-align: left">Use HTTP/2 for the external connection.</td><td style="text-align: left"><code>false</code></td></tr>
+<tr><td style="text-align: left"><code>verifyHostname</code></td><td style="text-align: left">Enable hostname verification for TLS/SSL connections. Set to <code>false</code> for self-signed certs.</td><td style="text-align: left"><code>true</code></td></tr>
 <tr><td style="text-align: left"><code>pathPrefixes</code></td><td style="text-align: left">A list of objects defining path-to-host mapping and specific timeouts.</td><td style="text-align: left"><code>[]</code></td></tr>
 <tr><td style="text-align: left"><code>pathHostMappings</code></td><td style="text-align: left">Only legacy simple mapping. Use <code>pathPrefixes</code> instead.</td><td style="text-align: left"><code>null</code></td></tr>
 <tr><td style="text-align: left"><code>urlRewriteRules</code></td><td style="text-align: left">Regex rules to rewrite the URL path before sending to upstream.</td><td style="text-align: left"><code>[]</code></td></tr>
@@ -215,6 +216,9 @@ proxyPort: 8080
 # Global Timeouts
 connectTimeout: 2000
 timeout: 5000
+
+# TLS Configuration
+verifyHostname: true
 
 # Mapping Paths to External Hosts
 pathPrefixes:

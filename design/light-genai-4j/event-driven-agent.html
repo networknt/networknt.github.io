@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>llmchat-gateway - Light-4j Platform</title>
+        <title>Event Driven Agent - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,80 +174,108 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="llm-chat-gateway"><a class="header" href="#llm-chat-gateway">LLM Chat Gateway</a></h1>
-<p>The <code>llmchat-gateway</code> is an example application that demonstrates how to usage <code>websocket-router</code> to create a gateway for the <a href="./llmchat-server.html">LLM Chat Server</a>.</p>
-<p>It acts as a secure entry point (HTTPS) that proxies WebSocket traffic to the backend chat server.</p>
-<h2 id="architecture"><a class="header" href="#architecture">Architecture</a></h2>
-<ul>
-<li><strong>Gateway</strong>: Listens on HTTPS port 8443. Serves the static UI and routes <code>/chat</code> WebSocket connections to the backend.</li>
-<li><strong>Backend</strong>: <code>llmchat-server</code> running on HTTP port 8080.</li>
-<li><strong>Routing</strong>: Uses <code>WebSocketRouterHandler</code> to forward messages based on path or serviceId. Also uses <code>DirectRegistry</code> for service discovery.</li>
-</ul>
-<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
-<p>The configuration is located in <code>src/main/resources/config/values.yml</code>.</p>
-<h3 id="server--handler"><a class="header" href="#server--handler">Server &amp; Handler</a></h3>
-<p>Configured for HTTPS on port 8443.</p>
-<pre><code class="language-yaml">server.httpsPort: 8443
-server.enableHttp: false
-server.enableHttps: true
-
-handler.paths:
-  - path: '/'
-    method: 'GET'
-    exec:
-      - resource
-  - path: '/chat'
-    method: 'GET'
-    exec:
-      - router
-</code></pre>
-<h3 id="websocket-router"><a class="header" href="#websocket-router">WebSocket Router</a></h3>
-<p>Maps requests to the backend service.</p>
-<pre><code class="language-yaml">websocket-router.pathPrefixService:
-  /chat: com.networknt.llmchat-1.0.0
-</code></pre>
-<h3 id="service-registry"><a class="header" href="#service-registry">Service Registry</a></h3>
-<p>Uses <code>DirectRegistry</code> to locate the backend server (llmchat-server) at <code>http://localhost:8080</code>.</p>
-<pre><code class="language-yaml">service.singletons:
-  - com.networknt.registry.Registry:
-    - com.networknt.registry.support.DirectRegistry
-
-direct-registry:
-  com.networknt.llmchat-1.0.0:
-    - http://localhost:8080
-</code></pre>
-<h2 id="running-the-example"><a class="header" href="#running-the-example">Running the Example</a></h2>
+                        <h1 id="event-driven-agent-architecture"><a class="header" href="#event-driven-agent-architecture">Event-Driven Agent Architecture</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>This document details the <strong>Event-Driven Architecture (EDA)</strong> for the <code>light-genai-4j</code> agent system. This architecture decouples agent invocation from execution, enabling high scalability, resilience, and asynchronous processing suitable for enterprise workloads.</p>
+<h2 id="1-core-architecture"><a class="header" href="#1-core-architecture">1. Core Architecture</a></h2>
+<p>While SQL defines <em>what</em> a skill is (see <a href="agent-skill.html">Agent Skill Design</a>), the implementation for enterprise usage leverages an <strong>Event-Driven Architecture (EDA)</strong>. This decouples the agent requesting the skill (the “invoker”) from the agent or service executing the skill (the “worker”).</p>
+<h3 id="11-core-components"><a class="header" href="#11-core-components">1.1 Core Components</a></h3>
 <ol>
-<li><strong>Start Ollama</strong>: Ensure Ollama is running.</li>
-<li><strong>Start Backend</strong>:
-From <code>light-example-4j/websocket/llmchat-server</code>:
-<pre><code class="language-bash">mvn exec:java
-</code></pre>
-</li>
-<li><strong>Start Gateway</strong>:
-From <code>light-example-4j/websocket/llmchat-gateway</code>:
-<pre><code class="language-bash">mvn exec:java
-</code></pre>
-(Note: ensure you have built it first with <code>mvn clean install</code>)</li>
-</ol>
-<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
-<p>Open your browser and navigate to <strong>https://localhost:8443</strong>.</p>
+<li><strong>Invoker Agent</strong>: The agent that decides to call a tool/skill.</li>
+<li><strong>A2A Service (<code>genai-agentic-kafka</code>)</strong>: The bridge between the synchronous <code>AgentExecutor</code> and the asynchronous message bus.</li>
+<li><strong>Topic Topology</strong>:
 <ul>
-<li>You might see a security warning because the <code>server.keystore</code> uses a self-signed certificate. Accept it to proceed.</li>
-<li>The chat interface is served from the gateway.</li>
-<li>When you click “Connect”, it opens a secure WebSocket (<code>wss://</code>) to the gateway.</li>
-<li>The gateway routes frames to <code>llmchat-server</code>, which invokes the LLM and streams the response back.</li>
+<li><code>agent-commands</code>: Topics where agents publish intent/skill execution requests.</li>
+<li><code>agent-events</code>: Topics where agents/workers publish completion events.</li>
 </ul>
+</li>
+</ol>
+<h3 id="12-execution-flow"><a class="header" href="#12-execution-flow">1.2 Execution Flow</a></h3>
+<ol>
+<li><strong>LLM Decision</strong>: The LLM outputs a <code>ToolExecutionRequest</code>.</li>
+<li><strong>Interception</strong>: The <code>AgentExecutor</code>’s <code>A2AService</code> implementation intercepts this request.</li>
+<li><strong>Command Emission</strong>:
+<ul>
+<li>Instead of executing a Java method directly, it constructs a <code>SkillInvocationEvent</code> containing:
+<ul>
+<li><code>correlationId</code>: Unique ID for this interaction.</li>
+<li><code>skillName</code>: Name of the skill to execute.</li>
+<li><code>arguments</code>: JSON payload of arguments.</li>
+<li><code>replyTo</code>: Topic to send the result to.</li>
+</ul>
+</li>
+<li>This event is published to the <code>agent-commands</code> topic.</li>
+</ul>
+</li>
+<li><strong>Async Wait</strong>: The <code>AgentExecutor</code> returns an <code>AsyncResponse</code> (a <code>CompletableFuture</code>) and suspends the agent’s execution thread (virtually, if using Virtual Threads).</li>
+<li><strong>Worker Execution</strong>:
+<ul>
+<li>A subscribed “Skill Worker” (which could be another Generic Agent or a dedicated microservice) picks up the event.</li>
+<li>It executes the logic (DB query, API call, calculation).</li>
+</ul>
+</li>
+<li><strong>Response Emission</strong>:
+<ul>
+<li>The worker publishes a <code>SkillCompletionEvent</code> to the <code>replyTo</code> topic.</li>
+<li>Payload includes <code>correlationId</code> and the result/error.</li>
+</ul>
+</li>
+<li><strong>Resumption</strong>:
+<ul>
+<li>The original <code>A2AService</code> consumes the completion event.</li>
+<li>It matches the <code>correlationId</code> and completes the pending <code>CompletableFuture</code>.</li>
+<li>The Agent resumes generation with the tool output.</li>
+</ul>
+</li>
+</ol>
+<h3 id="13-benefits"><a class="header" href="#13-benefits">1.3 Benefits</a></h3>
+<ul>
+<li><strong>Scalability</strong>: Heavy skills (e.g., “Generate Report”) don’t block the lightweight Agent Commander.</li>
+<li><strong>Resilience</strong>: If the Worker is down, the command persists in Kafka.</li>
+<li><strong>Decoupling</strong>: Agents don’t need to know the network location of skills.</li>
+</ul>
+<h2 id="2-relationship-with-mcp-model-context-protocol"><a class="header" href="#2-relationship-with-mcp-model-context-protocol">2. Relationship with MCP (Model Context Protocol)</a></h2>
+<p>With this design, the agent system <strong>does not require</strong> an MCP server architecture. The <code>skills</code> table allows direct invocation of any capability (Java code, REST APIs, GraphQL, scripts) without the overhead or complexity of the MCP protocol.</p>
+<h3 id="21-comparison"><a class="header" href="#21-comparison">2.1 Comparison</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Feature</th><th>Light GenAI 4j Design</th><th>MCP Server Architecture</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Execution</strong></td><td>In-process (Java) or <strong>Event-Driven</strong></td><td>Networked JSON-RPC</td></tr>
+<tr><td><strong>Latency</strong></td><td>Near-zero (local) / Async (EDA)</td><td>HTTP/Network round-trip</td></tr>
+<tr><td><strong>Control</strong></td><td>Full SQL schema &amp; validation</td><td>Remote server definition</td></tr>
+<tr><td><strong>Complexity</strong></td><td>Low (Unified DB/Kafka)</td><td>High (Separate servers/processes)</td></tr>
+<tr><td><strong>Ecosystem</strong></td><td>Custom integrations</td><td>Community-maintained tools</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="3-implementation-guidelines"><a class="header" href="#3-implementation-guidelines">3. Implementation Guidelines</a></h2>
+<h3 id="31-dependencies"><a class="header" href="#31-dependencies">3.1 Dependencies</a></h3>
+<pre><code class="language-xml">&lt;!-- pom.xml --&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;genai-agentic-kafka&lt;/artifactId&gt; &lt;!-- Future Module --&gt;
+    &lt;version&gt;${project.version}&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<h3 id="32-design-principles"><a class="header" href="#32-design-principles">3.2 Design Principles</a></h3>
+<ol>
+<li><strong>Asynchrony</strong>: Default to async/event-driven for any I/O heavy skill.</li>
+<li><strong>Correlation</strong>: Use <code>correlationId</code> rigorously to track request/response pairs across the bus.</li>
+<li><strong>Idempotency</strong>: Workers should handle duplicate events gracefully.</li>
+</ol>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../example/light-websocket-4j/llmchat-server.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../design/light-genai-4j/agent-skill.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../tutorial.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../design/mcp-router.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -257,11 +285,11 @@ From <code>light-example-4j/websocket/llmchat-gateway</code>:
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../example/light-websocket-4j/llmchat-server.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../design/light-genai-4j/agent-skill.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../tutorial.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../design/mcp-router.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

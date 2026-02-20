@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b768940d.js";
+            window.path_to_searchindex_js = "searchindex-a1dad1de.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-dc2df11c.js"></script>
+        <script src="toc-f46484e0.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -580,7 +580,7 @@ CREATE TABLE skills (
     category_id UUID REFERENCES skill_categories(id),
     
     -- Implementation Details
-    implementation_type VARCHAR(50) NOT NULL, -- 'java', 'python', 'javascript', 'rest', 'mcp'
+    implementation_type VARCHAR(50) NOT NULL, -- 'java', 'eda', 'rest', 'python', 'javascript', 'mcp'
     implementation_class VARCHAR(500),        -- Fully qualified Java class name (for 'java')
     script_content TEXT,                      -- Actual source code (for 'python'/'javascript')
     api_endpoint VARCHAR(1024),               -- URL (for 'rest')
@@ -665,31 +665,14 @@ WHERE s.is_enabled = true
 ORDER BY s.description_embedding &lt;=&gt; ?
 LIMIT 5;
 </code></pre>
-<h2 id="2-relationship-with-mcp-model-context-protocol"><a class="header" href="#2-relationship-with-mcp-model-context-protocol">2. Relationship with MCP (Model Context Protocol)</a></h2>
-<p>With this design, the agent system <strong>does not require</strong> an MCP server architecture. The <code>skills</code> table allows direct invocation of any capability (Java code, REST APIs, GraphQL, scripts) without the overhead or complexity of the MCP protocol.</p>
-<h3 id="21-comparison"><a class="header" href="#21-comparison">2.1 Comparison</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Feature</th><th>Light GenAI 4j Design</th><th>MCP Server Architecture</th></tr>
-</thead>
-<tbody>
-<tr><td><strong>Execution</strong></td><td>In-process (Java) or Direct I/O</td><td>Networked JSON-RPC</td></tr>
-<tr><td><strong>Latency</strong></td><td>Near-zero (function call)</td><td>HTTP/Network round-trip</td></tr>
-<tr><td><strong>Control</strong></td><td>Full SQL schema &amp; validation</td><td>Remote server definition</td></tr>
-<tr><td><strong>Complexity</strong></td><td>Low (Unified DB table)</td><td>High (Separate servers/processes)</td></tr>
-<tr><td><strong>Ecosystem</strong></td><td>Custom integrations</td><td>Community-maintained tools</td></tr>
-</tbody>
-</table>
-</div>
-<h3 id="22-recommendation-mcp-as-an-implementation-type"><a class="header" href="#22-recommendation-mcp-as-an-implementation-type">2.2 Recommendation: MCP as an Implementation Type</a></h3>
-<p>While the architecture replaces the <em>need</em> for MCP, it is recommended to support <code>mcp</code> as a valid <code>implementation_type</code> in the <code>skills</code> table. This allows the agent to consume existing third-party MCP servers (e.g., Google Drive, Slack, GitHub) without rewriting integration logic.</p>
-<p><strong>Updated <code>skills</code> implementation types</strong>:</p>
+<h2 id="2-implementation-types"><a class="header" href="#2-implementation-types">2. Implementation Types</a></h2>
+<p>The <code>skills</code> table supports various <code>implementation_type</code> values to determine how a skill is executed.</p>
 <ul>
-<li><code>java</code>: Local Java class execution (Fastest, Primary)</li>
-<li><code>rest</code>: Direct HTTP/REST API calls</li>
-<li><code>python</code>/<code>javascript</code>: Dynamic script execution</li>
-<li><code>mcp</code>: Connect to an external MCP server (Optional, for 3rd party tools)</li>
+<li><strong><code>java</code></strong>: Local Java class execution (Fastest, Primary).</li>
+<li><strong><code>eda</code></strong>: Event-Driven Skill. See <a href="#event-driven-agent-architecture">Event-Driven Agent Architecture</a> for details on how these are executed via Kafka.</li>
+<li><strong><code>rest</code></strong>: Direct HTTP/REST API calls.</li>
+<li><strong><code>python</code>/<code>javascript</code></strong>: Dynamic script execution.</li>
+<li><strong><code>mcp</code></strong>: Connect to an external MCP server (Optional, for 3rd party tools).</li>
 </ul>
 <h2 id="3-implementation-guidelines"><a class="header" href="#3-implementation-guidelines">3. Implementation Guidelines</a></h2>
 <h3 id="31-dependencies"><a class="header" href="#31-dependencies">3.1 Dependencies</a></h3>
@@ -705,6 +688,99 @@ LIMIT 5;
 <li><strong>Separate Concerns</strong>: Vector DB for semantic search, SQL for structured data.</li>
 <li><strong>Explicit Definitions</strong>: Skills are defined by code/API, not just prompt text.</li>
 <li><strong>Dependency Management</strong>: Use <code>skill_dependencies</code> to chain complex operations safely.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="event-driven-agent-architecture"><a class="header" href="#event-driven-agent-architecture">Event-Driven Agent Architecture</a></h1>
+<h2 id="overview-2"><a class="header" href="#overview-2">Overview</a></h2>
+<p>This document details the <strong>Event-Driven Architecture (EDA)</strong> for the <code>light-genai-4j</code> agent system. This architecture decouples agent invocation from execution, enabling high scalability, resilience, and asynchronous processing suitable for enterprise workloads.</p>
+<h2 id="1-core-architecture"><a class="header" href="#1-core-architecture">1. Core Architecture</a></h2>
+<p>While SQL defines <em>what</em> a skill is (see <a href="#agent-skill-design">Agent Skill Design</a>), the implementation for enterprise usage leverages an <strong>Event-Driven Architecture (EDA)</strong>. This decouples the agent requesting the skill (the “invoker”) from the agent or service executing the skill (the “worker”).</p>
+<h3 id="11-core-components"><a class="header" href="#11-core-components">1.1 Core Components</a></h3>
+<ol>
+<li><strong>Invoker Agent</strong>: The agent that decides to call a tool/skill.</li>
+<li><strong>A2A Service (<code>genai-agentic-kafka</code>)</strong>: The bridge between the synchronous <code>AgentExecutor</code> and the asynchronous message bus.</li>
+<li><strong>Topic Topology</strong>:
+<ul>
+<li><code>agent-commands</code>: Topics where agents publish intent/skill execution requests.</li>
+<li><code>agent-events</code>: Topics where agents/workers publish completion events.</li>
+</ul>
+</li>
+</ol>
+<h3 id="12-execution-flow"><a class="header" href="#12-execution-flow">1.2 Execution Flow</a></h3>
+<ol>
+<li><strong>LLM Decision</strong>: The LLM outputs a <code>ToolExecutionRequest</code>.</li>
+<li><strong>Interception</strong>: The <code>AgentExecutor</code>’s <code>A2AService</code> implementation intercepts this request.</li>
+<li><strong>Command Emission</strong>:
+<ul>
+<li>Instead of executing a Java method directly, it constructs a <code>SkillInvocationEvent</code> containing:
+<ul>
+<li><code>correlationId</code>: Unique ID for this interaction.</li>
+<li><code>skillName</code>: Name of the skill to execute.</li>
+<li><code>arguments</code>: JSON payload of arguments.</li>
+<li><code>replyTo</code>: Topic to send the result to.</li>
+</ul>
+</li>
+<li>This event is published to the <code>agent-commands</code> topic.</li>
+</ul>
+</li>
+<li><strong>Async Wait</strong>: The <code>AgentExecutor</code> returns an <code>AsyncResponse</code> (a <code>CompletableFuture</code>) and suspends the agent’s execution thread (virtually, if using Virtual Threads).</li>
+<li><strong>Worker Execution</strong>:
+<ul>
+<li>A subscribed “Skill Worker” (which could be another Generic Agent or a dedicated microservice) picks up the event.</li>
+<li>It executes the logic (DB query, API call, calculation).</li>
+</ul>
+</li>
+<li><strong>Response Emission</strong>:
+<ul>
+<li>The worker publishes a <code>SkillCompletionEvent</code> to the <code>replyTo</code> topic.</li>
+<li>Payload includes <code>correlationId</code> and the result/error.</li>
+</ul>
+</li>
+<li><strong>Resumption</strong>:
+<ul>
+<li>The original <code>A2AService</code> consumes the completion event.</li>
+<li>It matches the <code>correlationId</code> and completes the pending <code>CompletableFuture</code>.</li>
+<li>The Agent resumes generation with the tool output.</li>
+</ul>
+</li>
+</ol>
+<h3 id="13-benefits"><a class="header" href="#13-benefits">1.3 Benefits</a></h3>
+<ul>
+<li><strong>Scalability</strong>: Heavy skills (e.g., “Generate Report”) don’t block the lightweight Agent Commander.</li>
+<li><strong>Resilience</strong>: If the Worker is down, the command persists in Kafka.</li>
+<li><strong>Decoupling</strong>: Agents don’t need to know the network location of skills.</li>
+</ul>
+<h2 id="2-relationship-with-mcp-model-context-protocol"><a class="header" href="#2-relationship-with-mcp-model-context-protocol">2. Relationship with MCP (Model Context Protocol)</a></h2>
+<p>With this design, the agent system <strong>does not require</strong> an MCP server architecture. The <code>skills</code> table allows direct invocation of any capability (Java code, REST APIs, GraphQL, scripts) without the overhead or complexity of the MCP protocol.</p>
+<h3 id="21-comparison"><a class="header" href="#21-comparison">2.1 Comparison</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Feature</th><th>Light GenAI 4j Design</th><th>MCP Server Architecture</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Execution</strong></td><td>In-process (Java) or <strong>Event-Driven</strong></td><td>Networked JSON-RPC</td></tr>
+<tr><td><strong>Latency</strong></td><td>Near-zero (local) / Async (EDA)</td><td>HTTP/Network round-trip</td></tr>
+<tr><td><strong>Control</strong></td><td>Full SQL schema &amp; validation</td><td>Remote server definition</td></tr>
+<tr><td><strong>Complexity</strong></td><td>Low (Unified DB/Kafka)</td><td>High (Separate servers/processes)</td></tr>
+<tr><td><strong>Ecosystem</strong></td><td>Custom integrations</td><td>Community-maintained tools</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="3-implementation-guidelines-1"><a class="header" href="#3-implementation-guidelines-1">3. Implementation Guidelines</a></h2>
+<h3 id="31-dependencies-1"><a class="header" href="#31-dependencies-1">3.1 Dependencies</a></h3>
+<pre><code class="language-xml">&lt;!-- pom.xml --&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.networknt&lt;/groupId&gt;
+    &lt;artifactId&gt;genai-agentic-kafka&lt;/artifactId&gt; &lt;!-- Future Module --&gt;
+    &lt;version&gt;${project.version}&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<h3 id="32-design-principles-1"><a class="header" href="#32-design-principles-1">3.2 Design Principles</a></h3>
+<ol>
+<li><strong>Asynchrony</strong>: Default to async/event-driven for any I/O heavy skill.</li>
+<li><strong>Correlation</strong>: Use <code>correlationId</code> rigorously to track request/response pairs across the bus.</li>
+<li><strong>Idempotency</strong>: Workers should handle duplicate events gracefully.</li>
 </ol>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="mcp-router"><a class="header" href="#mcp-router">MCP Router</a></h1>
@@ -1664,7 +1740,7 @@ String response2 = client.chat(messages);
 </ol>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="client-simplepool-design"><a class="header" href="#client-simplepool-design">Client SimplePool Design</a></h1>
-<h2 id="overview-2"><a class="header" href="#overview-2">Overview</a></h2>
+<h2 id="overview-3"><a class="header" href="#overview-3">Overview</a></h2>
 <p>The SimplePool is a lightweight HTTP connection pooling implementation in the light-4j client module. It was contributed by a customer to address connection management issues in high-throughput scenarios. The implementation provides a robust connection pooling mechanism with support for both HTTP/1.1 and HTTP/2 connections.</p>
 <h2 id="architecture-4"><a class="header" href="#architecture-4">Architecture</a></h2>
 <p>The SimplePool follows a layered architecture with clear separation of concerns:</p>
@@ -1678,7 +1754,7 @@ String response2 = client.chat(messages);
     end
     
     subgraph "Connection Management"
-        SCH[SimpleConnectionHolder]
+        SCS[SimpleConnectionState]
         CT[ConnectionToken]
     end
     
@@ -1688,17 +1764,17 @@ String response2 = client.chat(messages);
     end
     
     subgraph "Undertow Implementation"
-        SCC[SimpleClientConnection]
-        SCCM[SimpleClientConnectionMaker]
+        SUC[SimpleUndertowConnection]
+        SUCM[SimpleUndertowConnectionMaker]
     end
     
     SCP --&gt; SUCP
-    SUCP --&gt; SCH
-    SCH --&gt; CT
-    SCH --&gt; SC
-    SCH --&gt; SCM
-    SC --&gt; SCC
-    SCM --&gt; SCCM
+    SUCP --&gt; SCS
+    SCS --&gt; CT
+    SCS --&gt; SC
+    SCS --&gt; SCM
+    SC --&gt; SUC
+    SCM --&gt; SUCM
 </pre>
 
 <h2 id="core-components"><a class="header" href="#core-components">Core Components</a></h2>
@@ -1711,7 +1787,7 @@ String response2 = client.chat(messages);
 <li><code>getLocalAddress()</code> - Get client-side address</li>
 <li><code>safeClose()</code> - Safely close the connection</li>
 </ul>
-<h3 id="simpleconnectionholder"><a class="header" href="#simpleconnectionholder">SimpleConnectionHolder</a></h3>
+<h3 id="simpleconnectionstate"><a class="header" href="#simpleconnectionstate">SimpleConnectionState</a></h3>
 <p>The central state management component that wraps a <code>SimpleConnection</code> and tracks its lifecycle:</p>
 <p><strong>Connection States:</strong></p>
 <ul>
@@ -1774,8 +1850,8 @@ String response2 = client.chat(messages);
 </ol>
 <h3 id="undertow-implementation"><a class="header" href="#undertow-implementation">Undertow Implementation</a></h3>
 <ul>
-<li><strong>SimpleClientConnection</strong>: Wraps Undertow’s <code>ClientConnection</code></li>
-<li><strong>SimpleClientConnectionMaker</strong>: Creates connections using <code>UndertowClient</code> or <code>Http2Client</code></li>
+<li><strong>SimpleUndertowConnection</strong>: Wraps Undertow’s <code>ClientConnection</code></li>
+<li><strong>SimpleUndertowConnectionMaker</strong>: Creates connections using <code>UndertowClient</code> or <code>Http2Client</code></li>
 </ul>
 <h2 id="integration-with-http2client"><a class="header" href="#integration-with-http2client">Integration with Http2Client</a></h2>
 <p>The <code>Http2Client</code> class integrates SimplePool via:</p>
@@ -1844,10 +1920,10 @@ return pool.borrow(createConnectionTimeout);
 if(pool != null) pool.restore(token);
 </code></pre>
 <h4 id="4-singleton-pattern-thread-safety--fixed"><a class="header" href="#4-singleton-pattern-thread-safety--fixed">4. Singleton Pattern Thread Safety ✅ Fixed</a></h4>
-<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleClientConnectionMaker.java">SimpleClientConnectionMaker.java</a></p>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleUndertowConnectionMaker.java">SimpleUndertowConnectionMaker.java</a></p>
 <p><strong>Fix</strong>: Implemented thread-safe singleton using the Holder pattern:</p>
 <pre><code class="language-java">private static class Holder {
-    static final SimpleClientConnectionMaker INSTANCE = new SimpleClientConnectionMaker();
+    static final SimpleUndertowConnectionMaker INSTANCE = new SimpleUndertowConnectionMaker();
 }
 public static SimpleConnectionMaker instance() {
     return Holder.INSTANCE;
@@ -1861,7 +1937,7 @@ SimpleURIConnectionPool pool = pools.get(connectionToken.uri());
 if(pool != null) pool.restore(connectionToken);
 </code></pre>
 <h4 id="6-hardcoded-worker-configuration--improved"><a class="header" href="#6-hardcoded-worker-configuration--improved">6. Hardcoded Worker Configuration ✅ Improved</a></h4>
-<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleClientConnectionMaker.java">SimpleClientConnectionMaker.java</a></p>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleUndertowConnectionMaker.java">SimpleUndertowConnectionMaker.java</a></p>
 <p><strong>Fix</strong>: Extracted hardcoded value to a named constant for clarity:</p>
 <pre><code class="language-java">private static final int DEFAULT_WORKER_IO_THREADS = 8;
 </code></pre>
@@ -3582,6 +3658,7 @@ chains:
 <tr><td style="text-align: left"><code>connectTimeout</code></td><td style="text-align: left">Connection timeout in milliseconds.</td><td style="text-align: left"><code>3000</code></td></tr>
 <tr><td style="text-align: left"><code>timeout</code></td><td style="text-align: left">Request timeout in milliseconds.</td><td style="text-align: left"><code>5000</code></td></tr>
 <tr><td style="text-align: left"><code>enableHttp2</code></td><td style="text-align: left">Use HTTP/2 for the external connection.</td><td style="text-align: left"><code>false</code></td></tr>
+<tr><td style="text-align: left"><code>verifyHostname</code></td><td style="text-align: left">Enable hostname verification for TLS/SSL connections. Set to <code>false</code> for self-signed certs.</td><td style="text-align: left"><code>true</code></td></tr>
 <tr><td style="text-align: left"><code>pathPrefixes</code></td><td style="text-align: left">A list of objects defining path-to-host mapping and specific timeouts.</td><td style="text-align: left"><code>[]</code></td></tr>
 <tr><td style="text-align: left"><code>pathHostMappings</code></td><td style="text-align: left">Only legacy simple mapping. Use <code>pathPrefixes</code> instead.</td><td style="text-align: left"><code>null</code></td></tr>
 <tr><td style="text-align: left"><code>urlRewriteRules</code></td><td style="text-align: left">Regex rules to rewrite the URL path before sending to upstream.</td><td style="text-align: left"><code>[]</code></td></tr>
@@ -3597,6 +3674,9 @@ proxyPort: 8080
 # Global Timeouts
 connectTimeout: 2000
 timeout: 5000
+
+# TLS Configuration
+verifyHostname: true
 
 # Mapping Paths to External Hosts
 pathPrefixes:
@@ -4713,7 +4793,7 @@ pathPrefixAuths:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sidecar-handler"><a class="header" href="#sidecar-handler">Sidecar Handler</a></h1>
 <p>The <code>sidecar</code> module provides a set of middleware handlers designed to operate in a sidecar or gateway environment. It enables the separation of cross-cutting concerns from business logic, allowing the light-sidecar to act as a micro-gateway for both incoming (ingress) and outgoing (egress) traffic.</p>
-<h2 id="overview-3"><a class="header" href="#overview-3">Overview</a></h2>
+<h2 id="overview-4"><a class="header" href="#overview-4">Overview</a></h2>
 <p>In a sidecar deployment (typically within a Kubernetes Pod), the <code>sidecar</code> module manages traffic between the backend service and the external network. It allows the backend service—regardless of the language or framework it’s built with—to benefit from light-4j features like security, discovery, and observability.</p>
 <h2 id="configuration-sidecaryml"><a class="header" href="#configuration-sidecaryml">Configuration (sidecar.yml)</a></h2>
 <p>The behavior of the sidecar handlers is controlled via <code>sidecar.yml</code>. This configuration is mapped to the <code>SidecarConfig</code> class.</p>
@@ -5420,7 +5500,7 @@ chains:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="cache-explorer"><a class="header" href="#cache-explorer">Cache Explorer</a></h1>
 <p>The <code>CacheExplorerHandler</code> is an admin endpoint that allows developers and operators to inspect the contents of the application’s internal caches. It is particularly useful for debugging and verifying that data (such as JWKs, ensuring config reloading, etc.) is correctly cached.</p>
-<h2 id="overview-4"><a class="header" href="#overview-4">Overview</a></h2>
+<h2 id="overview-5"><a class="header" href="#overview-5">Overview</a></h2>
 <ul>
 <li><strong>Type</strong>: Admin Handler</li>
 <li><strong>Class</strong>: <code>com.networknt.cache.CacheExplorerHandler</code></li>
@@ -6127,7 +6207,7 @@ SwitcherUtil.setSwitcherValue("maintenanceMode", true);
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="consul-registry"><a class="header" href="#consul-registry">Consul Registry</a></h1>
 <p>The <code>consul</code> module integrates with HashiCorp Consul to provide service registry and discovery for the light-4j framework. It allows services to automatically register themselves upon startup and discovering other services using client-side load balancing.</p>
-<h2 id="overview-5"><a class="header" href="#overview-5">Overview</a></h2>
+<h2 id="overview-6"><a class="header" href="#overview-6">Overview</a></h2>
 <ul>
 <li><strong>Registry</strong>: When a service starts, it registers itself with the Consul agent. It deregisters on graceful shutdown.</li>
 <li><strong>Discovery</strong>: Clients using <code>Cluster</code> and <code>LoadBalance</code> modules can discover available service instances. The <code>ConsulRegistry</code> implementation uses blocking queries (long polling) to receive real-time updates from Consul about service health and availability.</li>
@@ -6449,7 +6529,7 @@ cacheManager.removeCache("userCache");
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="data-source"><a class="header" href="#data-source">Data Source</a></h1>
 <p>The <code>data-source</code> module provides a flexible way to configure and manage JDBC data sources in light-4j applications. It wraps <a href="https://github.com/brettwooldridge/HikariCP">HikariCP</a> to provide high-performance connection pooling.</p>
-<h2 id="overview-6"><a class="header" href="#overview-6">Overview</a></h2>
+<h2 id="overview-7"><a class="header" href="#overview-7">Overview</a></h2>
 <p>Unlike the simple <code>javax.sql.DataSource</code> configuration in <code>service.yml</code>, the <code>data-source</code> module offers:</p>
 <ul>
 <li>Support for multiple data sources.</li>
@@ -6554,7 +6634,7 @@ GenericDataSource postgres = (GenericDataSource) SingletonServiceFactory.getBean
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="db-provider"><a class="header" href="#db-provider">DB Provider</a></h1>
 <p>The <code>db-provider</code> module is a lightweight database provider designed to simplify the initialization of a generic SQL/JDBC data source, typically for internal services or control plane components (like <code>light-portal</code> or <code>light-config-server</code>) that need a single, primary database connection.</p>
-<h2 id="overview-7"><a class="header" href="#overview-7">Overview</a></h2>
+<h2 id="overview-8"><a class="header" href="#overview-8">Overview</a></h2>
 <p>Unlike the more flexible <code>data-source</code> module which is designed for multiple, named data sources, <code>db-provider</code> focuses on providing a <strong>single, global</strong> <code>HikariDataSource</code> initialized at startup. It is often used in conjunction with a <code>StartupHookProvider</code> to ensure the database connection is ready before the server starts handling requests.</p>
 <h2 id="configuration-43"><a class="header" href="#configuration-43">Configuration</a></h2>
 <p>The module is configured via <code>db-provider.yml</code> (or <code>yaml</code>/<code>json</code>).</p>
@@ -6935,7 +7015,7 @@ Http2Client client = Http2Client.getInstance();
 </code></pre>
 <h3 id="making-a-request-recommended---simplepool"><a class="header" href="#making-a-request-recommended---simplepool">Making a Request (Recommended - SimplePool)</a></h3>
 <p>Use <code>borrow()</code> to get a connection token and <code>restore()</code> to return it.</p>
-<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionHolder.ConnectionToken;
+<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionState.ConnectionToken;
 import io.undertow.client.ClientConnection;
 import io.undertow.client.ClientRequest;
 import io.undertow.util.Methods;
@@ -7078,13 +7158,11 @@ try {
 </ul>
 <hr>
 <h2 id="migration-patterns"><a class="header" href="#migration-patterns">Migration Patterns</a></h2>
-<h3 id="pattern-1-simple-request"><a class="header" href="#pattern-1-simple-request">Pattern 1: Simple Request</a></h3>
+<h3 id="pattern-1-simple-borrowreturn-with-get"><a class="header" href="#pattern-1-simple-borrowreturn-with-get">Pattern 1: Simple Borrow/Return (with .get)</a></h3>
 <p><strong>Before:</strong></p>
-<pre><code class="language-java">Http2Client client = Http2Client.getInstance();
-ClientConnection connection = null;
+<pre><code class="language-java">ClientConnection connection = null;
 try {
-    connection = client.borrowConnection(10, uri, Http2Client.WORKER, 
-        Http2Client.BUFFER_POOL, OptionMap.create(UndertowOptions.ENABLE_HTTP2, true));
+    connection = client.borrowConnection(uri, worker, pool, options).get();
     
     // Send request
     connection.sendRequest(request, callback);
@@ -7096,10 +7174,11 @@ try {
 }
 </code></pre>
 <p><strong>After:</strong></p>
-<pre><code class="language-java">Http2Client client = Http2Client.getInstance();
-SimpleConnectionHolder.ConnectionToken token = null;
+<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionState;
+
+SimpleConnectionState.ConnectionToken token = null;
 try {
-    token = client.borrow(uri, Http2Client.WORKER, Http2Client.BUFFER_POOL, true);
+    token = client.borrow(uri, worker, pool, options);
     ClientConnection connection = token.connection().getRawConnection();
     
     // Send request
@@ -7111,25 +7190,24 @@ try {
     }
 }
 </code></pre>
-<h3 id="pattern-2-with-optionmap"><a class="header" href="#pattern-2-with-optionmap">Pattern 2: With OptionMap</a></h3>
+<h3 id="pattern-2-with-timeout"><a class="header" href="#pattern-2-with-timeout">Pattern 2: With Timeout</a></h3>
+<p>The new <code>borrow()</code> method handles timeouts internally through configuration rather than as a method parameter.</p>
 <p><strong>Before:</strong></p>
-<pre><code class="language-java">OptionMap options = OptionMap.builder()
-    .set(UndertowOptions.ENABLE_HTTP2, true)
-    .set(Options.KEEP_ALIVE, true)
-    .getMap();
-    
-ClientConnection conn = client.borrowConnection(10, uri, worker, bufferPool, options);
+<pre><code class="language-java">// Note: The deprecated method took a timeout parameter (e.g., 10 seconds)
+ClientConnection connection = client.borrowConnection(10, uri, worker, pool, options);
 </code></pre>
 <p><strong>After:</strong></p>
-<pre><code class="language-java">OptionMap options = OptionMap.builder()
-    .set(UndertowOptions.ENABLE_HTTP2, true)
-    .set(Options.KEEP_ALIVE, true)
-    .getMap();
-    
-ConnectionToken token = client.borrow(uri, worker, bufferPool, options);
-ClientConnection conn = token.connection().getRawConnection();
+<pre><code class="language-java">// Note: timeout parameter is removed in the new API
+ConnectionToken token = client.borrow(uri, worker, pool, options);
+ClientConnection connection = token.connection().getRawConnection();
 </code></pre>
-<h3 id="pattern-3-http11-vs-http2"><a class="header" href="#pattern-3-http11-vs-http2">Pattern 3: HTTP/1.1 vs HTTP/2</a></h3>
+<h3 id="pattern-3-async-iofuture"><a class="header" href="#pattern-3-async-iofuture">Pattern 3: Async (IoFuture)</a></h3>
+<p><strong>Before:</strong></p>
+<pre><code class="language-java">IoFuture&lt;ClientConnection&gt; future = client.borrowConnection(uri, worker, pool, options);
+</code></pre>
+<p><strong>Migration Rule:</strong>
+The async <code>IoFuture&lt;ClientConnection&gt;</code> pattern <strong>cannot</strong> be directly migrated because the new <code>borrow()</code> method is synchronous. These usages should be migrated to a different async pattern or kept on the old API until fully deprecated.</p>
+<h3 id="pattern-4-http11-vs-http2"><a class="header" href="#pattern-4-http11-vs-http2">Pattern 4: HTTP/1.1 vs HTTP/2</a></h3>
 <pre><code class="language-java">// HTTP/2 (multiplexed)
 ConnectionToken token = client.borrow(uri, worker, bufferPool, true);
 
@@ -7212,7 +7290,7 @@ client.warmUpPool(URI.create("https://api.example.com:443"));
 </ul>
 <h3 id="import_changes"><a class="header" href="#import_changes">IMPORT_CHANGES</a></h3>
 <p>Add:</p>
-<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionHolder;
+<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionState;
 </code></pre>
 <hr>
 <h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
@@ -7226,6 +7304,21 @@ try {
     // use connection
 } finally {
     if (token != null) client.restore(token);
+}
+</code></pre>
+<h3 id="cannot-find-symbol-connectiontoken"><a class="header" href="#cannot-find-symbol-connectiontoken">Cannot find symbol ConnectionToken</a></h3>
+<p><strong>Symptom:</strong> Compilation error stating <code>Cannot find symbol class ConnectionToken</code>.</p>
+<p><strong>Cause:</strong> Missing import for <code>SimpleConnectionState</code>.</p>
+<p><strong>Fix:</strong> Add the required import:</p>
+<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionState;
+</code></pre>
+<h3 id="getrawconnection-returns-null"><a class="header" href="#getrawconnection-returns-null">getRawConnection() returns null</a></h3>
+<p><strong>Symptom:</strong> <code>NullPointerException</code> or unexpected behavior because <code>token.connection().getRawConnection()</code> returns <code>null</code>.</p>
+<p><strong>Cause:</strong> The connection has not been properly established yet.</p>
+<p><strong>Fix:</strong> Check <code>token.connection().isOpen()</code> before attempting to use the raw connection:</p>
+<pre><code class="language-java">if (token.connection().isOpen()) {
+    ClientConnection connection = token.connection().getRawConnection();
+    // use connection
 }
 </code></pre>
 <h3 id="metrics-show-zero"><a class="header" href="#metrics-show-zero">Metrics Show Zero</a></h3>
@@ -7548,7 +7641,7 @@ directUrls:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="rule-loader"><a class="header" href="#rule-loader">Rule Loader</a></h1>
 <p>The <code>rule-loader</code> is a vital infrastructure module in <code>light-4j</code> that enables services to dynamically load and manage business logic rules during startup. It serves as the bridge between the <a href="/library/yaml-rule">YAML Rule Engine</a> and the specific service endpoints, allowing for flexible, rule-based request and response processing.</p>
-<h3 id="overview-8"><a class="header" href="#overview-8">Overview</a></h3>
+<h3 id="overview-9"><a class="header" href="#overview-9">Overview</a></h3>
 <p>Rules in the <code>light-4j</code> ecosystem are often shared across multiple lines of business or organizations. By centralizing these rules in the <code>light-portal</code>, applications can subscribe to them and have them automatically fetched and instantiated at runtime.</p>
 <h3 id="features-13"><a class="header" href="#features-13">Features</a></h3>
 <ul>
@@ -7709,7 +7802,7 @@ Implement <code>com.networknt.server.ShutdownHookProvider</code> and register vi
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="access-control"><a class="header" href="#access-control">Access Control</a></h1>
 <p>The <code>AccessControlHandler</code> is a business middleware handler designed for the <code>light-rest-4j</code> framework. It provides fine-grained, rule-based authorization at the endpoint level, allowing developers to define complex access policies that go beyond simple scope-based security.</p>
-<h2 id="overview-9"><a class="header" href="#overview-9">Overview</a></h2>
+<h2 id="overview-10"><a class="header" href="#overview-10">Overview</a></h2>
 <p>Unlike standard security handlers that verify tokens and scopes, the Access Control handler interacts with the <strong>Rule Engine</strong> to evaluate business-specific logic. It typically runs late in the middleware chain, after technical concerns like security and validation are handled, and right before the request reaches the business logic or proxy.</p>
 <h3 id="key-features-2"><a class="header" href="#key-features-2">Key Features</a></h3>
 <ul>
@@ -7783,7 +7876,7 @@ skipPathPrefixes:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="openapi-meta"><a class="header" href="#openapi-meta">OpenAPI Meta</a></h1>
 <p>The <code>OpenApiHandler</code> is a core middleware handler in the <code>light-rest-4j</code> framework. It is responsible for parsing the OpenAPI specification, matching the incoming request to a specific operation defined in the spec, and attaching that metadata to the request context.</p>
-<h2 id="overview-10"><a class="header" href="#overview-10">Overview</a></h2>
+<h2 id="overview-11"><a class="header" href="#overview-11">Overview</a></h2>
 <p>The <code>OpenApiHandler</code> acts as the “brain” for RESTful services. By identifying the exact endpoint and operation (e.g., <code>GET /pets/{petId}</code>) at the start of the request chain, it enables subsequent handlers—such as Security, Validator, and Metrics—to perform their tasks efficiently without re-parsing the request or the specification.</p>
 <h3 id="key-features-3"><a class="header" href="#key-features-3">Key Features</a></h3>
 <ul>
@@ -7857,7 +7950,7 @@ pathSpecMapping:
 <h2 id="description-openapi-security-module"><a class="header" href="#description-openapi-security-module">description: OpenAPI Security Module</a></h2>
 <h1 id="openapi-security"><a class="header" href="#openapi-security">OpenAPI Security</a></h1>
 <p>The <code>openapi-security</code> module is a fundamental component of the <code>light-rest-4j</code> framework, specifically designed to protect RESTful APIs defined with OpenAPI Specification 3.0. It provides several middleware handlers that integrate with the framework’s security infrastructure to ensure that only authorized requests reach your business logic.</p>
-<h2 id="overview-11"><a class="header" href="#overview-11">Overview</a></h2>
+<h2 id="overview-12"><a class="header" href="#overview-12">Overview</a></h2>
 <p>Modern web services often require robust security mechanisms such as OAuth 2.0. The <code>openapi-security</code> module simplifies the implementation of these standards by providing out-of-the-box handlers for token verification and authorization based on the OpenAPI specification.</p>
 <h2 id="core-handlers"><a class="header" href="#core-handlers">Core Handlers</a></h2>
 <h3 id="jwtverifyhandler"><a class="header" href="#jwtverifyhandler">JwtVerifyHandler</a></h3>
@@ -7899,7 +7992,7 @@ pathSpecMapping:
 <h2 id="description-openapi-validator-module"><a class="header" href="#description-openapi-validator-module">description: OpenAPI Validator Module</a></h2>
 <h1 id="openapi-validator"><a class="header" href="#openapi-validator">OpenAPI Validator</a></h1>
 <p>The <code>openapi-validator</code> module provides comprehensive request and response validation against an OpenAPI Specification 3.0. It ensures that incoming requests and outgoing responses adhere to the schemas, parameters, and constraints defined in your API specification.</p>
-<h2 id="overview-12"><a class="header" href="#overview-12">Overview</a></h2>
+<h2 id="overview-13"><a class="header" href="#overview-13">Overview</a></h2>
 <p>In a contract-first development approach, the OpenAPI specification serves as the “source of truth.” The <code>openapi-validator</code> middleware automates the enforcement of this contract, reducing the need for manual validation logic in your business handlers and improving API reliability.</p>
 <h2 id="core-components-2"><a class="header" href="#core-components-2">Core Components</a></h2>
 <h3 id="validatorhandler"><a class="header" href="#validatorhandler">ValidatorHandler</a></h3>
@@ -7957,7 +8050,7 @@ pathSpecMapping:
 <h2 id="description-specification-module"><a class="header" href="#description-specification-module">description: Specification Module</a></h2>
 <h1 id="specification-module"><a class="header" href="#specification-module">Specification Module</a></h1>
 <p>The <code>specification</code> module in <code>light-rest-4j</code> provides a set of handlers to serve and display the API specification (Swagger/OpenAPI) of the service. This is particularly useful for exposing documentation endpoints directly from the running service.</p>
-<h2 id="overview-13"><a class="header" href="#overview-13">Overview</a></h2>
+<h2 id="overview-14"><a class="header" href="#overview-14">Overview</a></h2>
 <p>Exposing the API contract via the service itself ensures that the documentation is always in sync with the deployed version. The <code>specification</code> module provides handlers for:</p>
 <ul>
 <li>Serving the raw specification file (e.g., <code>openapi.yaml</code>).</li>
@@ -8019,7 +8112,7 @@ paths:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="rpc-router"><a class="header" href="#rpc-router">RPC Router</a></h1>
 <p>The <code>rpc-router</code> is a core module of the <code>light-hybrid-4j</code> framework. It provides a high-performance routing and validation mechanism that enables a single server instance to host multiple, independent service handlers (RPC-style).</p>
-<h2 id="overview-14"><a class="header" href="#overview-14">Overview</a></h2>
+<h2 id="overview-15"><a class="header" href="#overview-15">Overview</a></h2>
 <p>In the <code>light-hybrid-4j</code> architecture, the <code>rpc-router</code> serves as the primary dispatcher for incoming requests. Unlike traditional RESTful routing based on URL paths and HTTP verbs, the RPC router typically uses a single endpoint (e.g., <code>/api/json</code>) and determines the target logic based on a <code>serviceId</code> (or <code>cmd</code>) specified in the request payload.</p>
 <h3 id="key-responsibilities"><a class="header" href="#key-responsibilities">Key Responsibilities:</a></h3>
 <ul>
@@ -8114,7 +8207,7 @@ action:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="rpc-security"><a class="header" href="#rpc-security">RPC Security</a></h1>
 <p>The <code>rpc-security</code> module in <code>light-hybrid-4j</code> provides security handlers specifically designed for the hybrid framework’s routing mechanism. It extends the core security capabilities of <code>light-4j</code> to work seamlessly with the <code>rpc-router</code>’s service dispatching model.</p>
-<h2 id="overview-15"><a class="header" href="#overview-15">Overview</a></h2>
+<h2 id="overview-16"><a class="header" href="#overview-16">Overview</a></h2>
 <p>In <code>light-hybrid-4j</code>, requests are routed based on a service ID in the payload (e.g., <code>lightapi.net/petstore/getPetById/1.0.0</code>) rather than URL paths. This difference requires specialized security handlers that can:</p>
 <ol>
 <li>Verify JWT tokens protecting the RPC endpoint.</li>
@@ -9330,7 +9423,7 @@ client.chatStream(messages, new StreamCallback() {
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="code-executor-module"><a class="header" href="#code-executor-module">Code Executor Module</a></h1>
 <p>The <code>code-executor</code> module in <code>light-genai-4j</code> provides a robust environment for executing code snippets generated by LLMs. It leverages <a href="https://www.graalvm.org/latest/reference-manual/polyglot/">GraalVM Polyglot</a> to execute code in various languages (JavaScript, Python, Ruby, R, etc.) securely within the Java application.</p>
-<h2 id="overview-16"><a class="header" href="#overview-16">Overview</a></h2>
+<h2 id="overview-17"><a class="header" href="#overview-17">Overview</a></h2>
 <p>This module is designed to integrate seamlessly with <code>langchain4j</code> agents that require tool execution capabilities. By using GraalVM, it avoids the need for external execution environments or heavy Docker containers for many use cases, while still providing a degree of isolation and high performance.</p>
 <h2 id="dependencies-2"><a class="header" href="#dependencies-2">Dependencies</a></h2>
 <p>To use the code executor, add the following dependency to your <code>pom.xml</code>:</p>

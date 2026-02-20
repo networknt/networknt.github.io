@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-b768940d.js";
+            window.path_to_searchindex_js = "../searchindex-a1dad1de.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-dc2df11c.js"></script>
+        <script src="../toc-f46484e0.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -189,7 +189,7 @@
     end
     
     subgraph "Connection Management"
-        SCH[SimpleConnectionHolder]
+        SCS[SimpleConnectionState]
         CT[ConnectionToken]
     end
     
@@ -199,17 +199,17 @@
     end
     
     subgraph "Undertow Implementation"
-        SCC[SimpleClientConnection]
-        SCCM[SimpleClientConnectionMaker]
+        SUC[SimpleUndertowConnection]
+        SUCM[SimpleUndertowConnectionMaker]
     end
     
     SCP --&gt; SUCP
-    SUCP --&gt; SCH
-    SCH --&gt; CT
-    SCH --&gt; SC
-    SCH --&gt; SCM
-    SC --&gt; SCC
-    SCM --&gt; SCCM
+    SUCP --&gt; SCS
+    SCS --&gt; CT
+    SCS --&gt; SC
+    SCS --&gt; SCM
+    SC --&gt; SUC
+    SCM --&gt; SUCM
 </pre>
 
 <h2 id="core-components"><a class="header" href="#core-components">Core Components</a></h2>
@@ -222,7 +222,7 @@
 <li><code>getLocalAddress()</code> - Get client-side address</li>
 <li><code>safeClose()</code> - Safely close the connection</li>
 </ul>
-<h3 id="simpleconnectionholder"><a class="header" href="#simpleconnectionholder">SimpleConnectionHolder</a></h3>
+<h3 id="simpleconnectionstate"><a class="header" href="#simpleconnectionstate">SimpleConnectionState</a></h3>
 <p>The central state management component that wraps a <code>SimpleConnection</code> and tracks its lifecycle:</p>
 <p><strong>Connection States:</strong></p>
 <ul>
@@ -285,8 +285,8 @@
 </ol>
 <h3 id="undertow-implementation"><a class="header" href="#undertow-implementation">Undertow Implementation</a></h3>
 <ul>
-<li><strong>SimpleClientConnection</strong>: Wraps Undertow’s <code>ClientConnection</code></li>
-<li><strong>SimpleClientConnectionMaker</strong>: Creates connections using <code>UndertowClient</code> or <code>Http2Client</code></li>
+<li><strong>SimpleUndertowConnection</strong>: Wraps Undertow’s <code>ClientConnection</code></li>
+<li><strong>SimpleUndertowConnectionMaker</strong>: Creates connections using <code>UndertowClient</code> or <code>Http2Client</code></li>
 </ul>
 <h2 id="integration-with-http2client"><a class="header" href="#integration-with-http2client">Integration with Http2Client</a></h2>
 <p>The <code>Http2Client</code> class integrates SimplePool via:</p>
@@ -355,10 +355,10 @@ return pool.borrow(createConnectionTimeout);
 if(pool != null) pool.restore(token);
 </code></pre>
 <h4 id="4-singleton-pattern-thread-safety--fixed"><a class="header" href="#4-singleton-pattern-thread-safety--fixed">4. Singleton Pattern Thread Safety ✅ Fixed</a></h4>
-<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleClientConnectionMaker.java">SimpleClientConnectionMaker.java</a></p>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleUndertowConnectionMaker.java">SimpleUndertowConnectionMaker.java</a></p>
 <p><strong>Fix</strong>: Implemented thread-safe singleton using the Holder pattern:</p>
 <pre><code class="language-java">private static class Holder {
-    static final SimpleClientConnectionMaker INSTANCE = new SimpleClientConnectionMaker();
+    static final SimpleUndertowConnectionMaker INSTANCE = new SimpleUndertowConnectionMaker();
 }
 public static SimpleConnectionMaker instance() {
     return Holder.INSTANCE;
@@ -372,7 +372,7 @@ SimpleURIConnectionPool pool = pools.get(connectionToken.uri());
 if(pool != null) pool.restore(connectionToken);
 </code></pre>
 <h4 id="6-hardcoded-worker-configuration--improved"><a class="header" href="#6-hardcoded-worker-configuration--improved">6. Hardcoded Worker Configuration ✅ Improved</a></h4>
-<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleClientConnectionMaker.java">SimpleClientConnectionMaker.java</a></p>
+<p><strong>Location</strong>: <a href="file:///home/steve/networknt/light-4j/client/src/main/java/com/networknt/client/simplepool/undertow/SimpleUndertowConnectionMaker.java">SimpleUndertowConnectionMaker.java</a></p>
 <p><strong>Fix</strong>: Extracted hardcoded value to a named constant for clarity:</p>
 <pre><code class="language-java">private static final int DEFAULT_WORKER_IO_THREADS = 8;
 </code></pre>

@@ -35,10 +35,10 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-b768940d.js";
+            window.path_to_searchindex_js = "../../searchindex-a1dad1de.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-dc2df11c.js"></script>
+        <script src="../../toc-f46484e0.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -220,13 +220,11 @@ try {
 </ul>
 <hr>
 <h2 id="migration-patterns"><a class="header" href="#migration-patterns">Migration Patterns</a></h2>
-<h3 id="pattern-1-simple-request"><a class="header" href="#pattern-1-simple-request">Pattern 1: Simple Request</a></h3>
+<h3 id="pattern-1-simple-borrowreturn-with-get"><a class="header" href="#pattern-1-simple-borrowreturn-with-get">Pattern 1: Simple Borrow/Return (with .get)</a></h3>
 <p><strong>Before:</strong></p>
-<pre><code class="language-java">Http2Client client = Http2Client.getInstance();
-ClientConnection connection = null;
+<pre><code class="language-java">ClientConnection connection = null;
 try {
-    connection = client.borrowConnection(10, uri, Http2Client.WORKER, 
-        Http2Client.BUFFER_POOL, OptionMap.create(UndertowOptions.ENABLE_HTTP2, true));
+    connection = client.borrowConnection(uri, worker, pool, options).get();
     
     // Send request
     connection.sendRequest(request, callback);
@@ -238,10 +236,11 @@ try {
 }
 </code></pre>
 <p><strong>After:</strong></p>
-<pre><code class="language-java">Http2Client client = Http2Client.getInstance();
-SimpleConnectionHolder.ConnectionToken token = null;
+<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionState;
+
+SimpleConnectionState.ConnectionToken token = null;
 try {
-    token = client.borrow(uri, Http2Client.WORKER, Http2Client.BUFFER_POOL, true);
+    token = client.borrow(uri, worker, pool, options);
     ClientConnection connection = token.connection().getRawConnection();
     
     // Send request
@@ -253,25 +252,24 @@ try {
     }
 }
 </code></pre>
-<h3 id="pattern-2-with-optionmap"><a class="header" href="#pattern-2-with-optionmap">Pattern 2: With OptionMap</a></h3>
+<h3 id="pattern-2-with-timeout"><a class="header" href="#pattern-2-with-timeout">Pattern 2: With Timeout</a></h3>
+<p>The new <code>borrow()</code> method handles timeouts internally through configuration rather than as a method parameter.</p>
 <p><strong>Before:</strong></p>
-<pre><code class="language-java">OptionMap options = OptionMap.builder()
-    .set(UndertowOptions.ENABLE_HTTP2, true)
-    .set(Options.KEEP_ALIVE, true)
-    .getMap();
-    
-ClientConnection conn = client.borrowConnection(10, uri, worker, bufferPool, options);
+<pre><code class="language-java">// Note: The deprecated method took a timeout parameter (e.g., 10 seconds)
+ClientConnection connection = client.borrowConnection(10, uri, worker, pool, options);
 </code></pre>
 <p><strong>After:</strong></p>
-<pre><code class="language-java">OptionMap options = OptionMap.builder()
-    .set(UndertowOptions.ENABLE_HTTP2, true)
-    .set(Options.KEEP_ALIVE, true)
-    .getMap();
-    
-ConnectionToken token = client.borrow(uri, worker, bufferPool, options);
-ClientConnection conn = token.connection().getRawConnection();
+<pre><code class="language-java">// Note: timeout parameter is removed in the new API
+ConnectionToken token = client.borrow(uri, worker, pool, options);
+ClientConnection connection = token.connection().getRawConnection();
 </code></pre>
-<h3 id="pattern-3-http11-vs-http2"><a class="header" href="#pattern-3-http11-vs-http2">Pattern 3: HTTP/1.1 vs HTTP/2</a></h3>
+<h3 id="pattern-3-async-iofuture"><a class="header" href="#pattern-3-async-iofuture">Pattern 3: Async (IoFuture)</a></h3>
+<p><strong>Before:</strong></p>
+<pre><code class="language-java">IoFuture&lt;ClientConnection&gt; future = client.borrowConnection(uri, worker, pool, options);
+</code></pre>
+<p><strong>Migration Rule:</strong>
+The async <code>IoFuture&lt;ClientConnection&gt;</code> pattern <strong>cannot</strong> be directly migrated because the new <code>borrow()</code> method is synchronous. These usages should be migrated to a different async pattern or kept on the old API until fully deprecated.</p>
+<h3 id="pattern-4-http11-vs-http2"><a class="header" href="#pattern-4-http11-vs-http2">Pattern 4: HTTP/1.1 vs HTTP/2</a></h3>
 <pre><code class="language-java">// HTTP/2 (multiplexed)
 ConnectionToken token = client.borrow(uri, worker, bufferPool, true);
 
@@ -354,7 +352,7 @@ client.warmUpPool(URI.create("https://api.example.com:443"));
 </ul>
 <h3 id="import_changes"><a class="header" href="#import_changes">IMPORT_CHANGES</a></h3>
 <p>Add:</p>
-<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionHolder;
+<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionState;
 </code></pre>
 <hr>
 <h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
@@ -368,6 +366,21 @@ try {
     // use connection
 } finally {
     if (token != null) client.restore(token);
+}
+</code></pre>
+<h3 id="cannot-find-symbol-connectiontoken"><a class="header" href="#cannot-find-symbol-connectiontoken">Cannot find symbol ConnectionToken</a></h3>
+<p><strong>Symptom:</strong> Compilation error stating <code>Cannot find symbol class ConnectionToken</code>.</p>
+<p><strong>Cause:</strong> Missing import for <code>SimpleConnectionState</code>.</p>
+<p><strong>Fix:</strong> Add the required import:</p>
+<pre><code class="language-java">import com.networknt.client.simplepool.SimpleConnectionState;
+</code></pre>
+<h3 id="getrawconnection-returns-null"><a class="header" href="#getrawconnection-returns-null">getRawConnection() returns null</a></h3>
+<p><strong>Symptom:</strong> <code>NullPointerException</code> or unexpected behavior because <code>token.connection().getRawConnection()</code> returns <code>null</code>.</p>
+<p><strong>Cause:</strong> The connection has not been properly established yet.</p>
+<p><strong>Fix:</strong> Check <code>token.connection().isOpen()</code> before attempting to use the raw connection:</p>
+<pre><code class="language-java">if (token.connection().isOpen()) {
+    ClientConnection connection = token.connection().getRawConnection();
+    // use connection
 }
 </code></pre>
 <h3 id="metrics-show-zero"><a class="header" href="#metrics-show-zero">Metrics Show Zero</a></h3>
