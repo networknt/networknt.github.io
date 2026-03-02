@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-fade165c.js";
+            window.path_to_searchindex_js = "searchindex-458bd83c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-de1f09ea.js"></script>
@@ -8475,8 +8475,8 @@ KafkaStreams streams = startStream(ip, port, topology, config, dlqMap, auditPare
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="kafka-streams-health-check"><a class="header" href="#kafka-streams-health-check">Kafka Streams Health Check</a></h1>
 <p>When operating a Kafka sidecar that runs Kafka Streams applications, it is crucial to monitor the health of these streams. The <code>SidecarHealthHandler</code> provides a health check endpoint that verifies if all registered Kafka Streams instances are in <code>RUNNING</code> or <code>REBALANCING</code> state.</p>
-<h2 id="registering-kafka-streams"><a class="header" href="#registering-kafka-streams">Registering Kafka Streams</a></h2>
-<p>To enable health monitoring for your Kafka Streams application, you must verify that your streams instance is registered with the <code>KafkaStreamsRegistry</code>.</p>
+<h2 id="registering-and-unregistering-kafka-streams"><a class="header" href="#registering-and-unregistering-kafka-streams">Registering and Unregistering Kafka Streams</a></h2>
+<p>To enable health monitoring for your Kafka Streams application, you must verify that your streams instance is registered with the <code>KafkaStreamsRegistry</code>. You should also unregister it when the application shuts down.</p>
 <h3 id="usage-50"><a class="header" href="#usage-50">Usage</a></h3>
 <p>In your streams application startup hook or initialization logic, after starting the <code>KafkaStreams</code> instance, register it:</p>
 <pre><code class="language-java">import com.networknt.kafka.streams.KafkaStreamsRegistry;
@@ -8490,6 +8490,15 @@ streams.start();
 KafkaStreamsRegistry.register("my-streams-app", streams);
 </code></pre>
 <p>The <code>SidecarHealthHandler</code> will automatically discover all registered streams and include them in the health check. If any registered stream is not in a healthy state, the health check endpoint will return <code>ERROR</code> (status 500 equivalent logic, though specifically returning a string).</p>
+<p>To prevent the health check from returning an error during a graceful server shutdown, you should unregister the stream instance in your application’s shutdown hook or <code>close()</code> method:</p>
+<pre><code class="language-java">// ... inside shutdown hook or LightStreams close() loop ...
+
+if (streams != null) {
+    streams.close();
+}
+// Unregister the streams instance
+KafkaStreamsRegistry.unregister("my-streams-app");
+</code></pre>
 <h3 id="example-2"><a class="header" href="#example-2">Example</a></h3>
 <p>Here is an example from <code>WordCountStreams</code>:</p>
 <pre><code class="language-java">    @Override
@@ -8503,6 +8512,14 @@ KafkaStreamsRegistry.register("my-streams-app", streams);
         KafkaStreamsRegistry.register("WordCountStreams", wordCountStreams);
     }
 
+    @Override
+    public void close() {
+        if (wordCountStreams != null) {
+            wordCountStreams.close();
+        }
+        // Unregistration 
+        KafkaStreamsRegistry.unregister("WordCountStreams");
+    }
 </code></pre>
 <h2 id="example-applications"><a class="header" href="#example-applications">Example Applications</a></h2>
 <p>There are two example applications available in the <code>light-example-4j</code> repository that demonstrate how to implement Kafka Streams with health check registration:</p>
@@ -8529,6 +8546,7 @@ KafkaStreamsRegistry.register("my-streams-app", streams);
 <li>Configure the Kafka Streams application using <code>KafkaStreamsConfig</code>.</li>
 <li>Start the <code>KafkaStreams</code> instance.</li>
 <li>Register the instance with <code>KafkaStreamsRegistry</code> to enable health monitoring via <code>SidecarHealthHandler</code>.</li>
+<li>Unregister the instance during the application shutdown lifecycle using <code>KafkaStreamsRegistry.unregister()</code> to cleanly handle server shutdown.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="light-spa-4j"><a class="header" href="#light-spa-4j">Light-spa-4j</a></h1>
