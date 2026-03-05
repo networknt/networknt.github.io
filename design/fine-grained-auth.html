@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>OpenAPI Validator - Light-4j Platform</title>
+        <title>Fine-Grained Authorization - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -12,33 +12,33 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="../../favicon-de23e50b.svg">
-        <link rel="shortcut icon" href="../../favicon-8114d1fc.png">
-        <link rel="stylesheet" href="../../css/variables-8adf115d.css">
-        <link rel="stylesheet" href="../../css/general-2459343d.css">
-        <link rel="stylesheet" href="../../css/chrome-ae938929.css">
-        <link rel="stylesheet" href="../../css/print-9e4910d8.css" media="print">
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="../../fonts/fonts-9644e21d.css">
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="mdbook-highlight-css" href="../../highlight-493f70e1.css">
-        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../../tomorrow-night-4c0ae647.css">
-        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../../ayu-highlight-3fdfc3ac.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "../../";
+            const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-8698c645.js";
+            window.path_to_searchindex_js = "../searchindex-8698c645.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-a821ea2f.js"></script>
+        <script src="../toc-a821ea2f.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -105,7 +105,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
             </noscript>
             <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -140,7 +140,7 @@
                     <h1 class="menu-title">Light-4j Platform</h1>
 
                     <div class="right-buttons">
-                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
 
@@ -174,72 +174,67 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <hr>
-<h2 id="description-openapi-validator-module"><a class="header" href="#description-openapi-validator-module">description: OpenAPI Validator Module</a></h2>
-<h1 id="openapi-validator"><a class="header" href="#openapi-validator">OpenAPI Validator</a></h1>
-<p>The <code>openapi-validator</code> module provides comprehensive request and response validation against an OpenAPI Specification 3.0. It ensures that incoming requests and outgoing responses adhere to the schemas, parameters, and constraints defined in your API specification.</p>
-<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
-<p>In a contract-first development approach, the OpenAPI specification serves as the “source of truth.” The <code>openapi-validator</code> middleware automates the enforcement of this contract, reducing the need for manual validation logic in your business handlers and improving API reliability.</p>
+                        <h1 id="fine-grained-authorization-fga-design"><a class="header" href="#fine-grained-authorization-fga-design">Fine-Grained Authorization (FGA) Design</a></h1>
+<p>In the Light framework ecosystems (<code>light-rest-4j</code>, <code>light-hybrid-4j</code>, and <code>light-graphql-4j</code>), Coarse-Grained Authorization revolves around OAuth 2.0 JWT token scopes, primarily ensuring that users possess top-level access to broad endpoints.</p>
+<p>However, <strong>Fine-Grained Authorization (FGA)</strong> applies dynamic, rule-based business logic to requests—operating at the row or column level—to selectively filter attributes, enforce ownership constraints, or permit conditionally authorized actions based on arbitrary token claims or request payloads.</p>
+<p>This document outlines the architecture, components, and the integration flows supporting FGA.</p>
 <h2 id="core-components"><a class="header" href="#core-components">Core Components</a></h2>
-<h3 id="validatorhandler"><a class="header" href="#validatorhandler">ValidatorHandler</a></h3>
-<p>The main middleware entry point. It identifies whether validation is required for the current request and coordinates the <code>RequestValidator</code> and <code>ResponseValidator</code>.</p>
-<h3 id="requestvalidator"><a class="header" href="#requestvalidator">RequestValidator</a></h3>
-<p>Validates all aspects of an incoming HTTP request:</p>
+<p>The FGA system relies on the interplay of several core components structured to provide high performance (via local caching) while maintaining centralized policy definitions natively managed within the <code>light-portal</code>.</p>
+<h3 id="1-ruleengine"><a class="header" href="#1-ruleengine">1. <code>RuleEngine</code></a></h3>
+<p>The <code>RuleEngine</code> (housed in <code>yaml-rule</code>) evaluates incoming contextual payloads against a predefined set of YAML rules. The rules contain conditions structured around the business domain, granting binary (pass/fail) results or mutating payload structures.</p>
+<h3 id="2-ruleloaderstartuphook"><a class="header" href="#2-ruleloaderstartuphook">2. <code>RuleLoaderStartupHook</code></a></h3>
+<p>To prevent introducing network latency during live authorization checks, FGA operates completely in-memory.</p>
+<p>The <code>RuleLoaderStartupHook</code> (in <code>light-4j</code>) runs when a framework server starts up. It connects to the <code>light-portal</code> (acting as the control plane) to download all applicable YAML rules and API permissions specific to the host, API ID, and API version.</p>
 <ul>
-<li><strong>Path Parameters</strong>: Checks if path variables match the spec.</li>
-<li><strong>Query Parameters</strong>: Validates presence, type, and constraints of query strings.</li>
-<li><strong>Header Parameters</strong>: Validates required headers and their values.</li>
-<li><strong>Cookie Parameters</strong>: Validates cookie values if defined.</li>
-<li><strong>Request Body</strong>: Validates the JSON payload against the operation’s requestBody schema.</li>
+<li>It caches all endpoint mapped rules natively inside <code>RuleLoaderStartupHook.endpointRules</code>.</li>
+<li>It caches the YAML schemas dynamically parsed as <code>Rule</code> objects inside <code>RuleLoaderStartupHook.rules</code>.</li>
+<li>It initializes the <code>RuleEngine</code> Singleton.</li>
 </ul>
-<h3 id="responsevalidator"><a class="header" href="#responsevalidator">ResponseValidator</a></h3>
-<p>Validates the outgoing response from the server. This is typically disabled in production for performance reasons but is invaluable during development and testing to ensure the server respects its own contract.</p>
-<h3 id="schemavalidator"><a class="header" href="#schemavalidator">SchemaValidator</a></h3>
-<p>The underlying engine (built on <code>networknt/json-schema-validator</code>) that performs the actual JSON Schema validation for bodies and complex parameters.</p>
-<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
-<p>The module is configured via <code>openapi-validator.yml</code>.</p>
-<h3 id="key-properties"><a class="header" href="#key-properties">Key Properties</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Property</th><th>Default</th><th>Description</th></tr>
-</thead>
-<tbody>
-<tr><td><code>enabled</code></td><td><code>true</code></td><td>Globally enables or disables the validator.</td></tr>
-<tr><td><code>logError</code></td><td><code>true</code></td><td>If true, validation errors are logged to the console/file.</td></tr>
-<tr><td><code>legacyPathType</code></td><td><code>false</code></td><td>If true, uses the legacy dot-separated path format in error messages instead of JSON Pointers.</td></tr>
-<tr><td><code>skipBodyValidation</code></td><td><code>false</code></td><td>Useful for gateways or proxies that want to validate headers/parameters but pass the body through without parsing.</td></tr>
-<tr><td><code>validateResponse</code></td><td><code>false</code></td><td>Enables validation of outgoing responses.</td></tr>
-<tr><td><code>handleNullableField</code></td><td><code>true</code></td><td>If true, treats fields explicitly marked as <code>nullable: true</code> in the spec correctly.</td></tr>
-<tr><td><code>skipPathPrefixes</code></td><td><code>[]</code></td><td>A list of path prefixes to skip validation for (e.g., <code>/health</code>, <code>/info</code>).</td></tr>
-</tbody>
-</table>
-</div>
-<h2 id="features"><a class="header" href="#features">Features</a></h2>
-<h3 id="hot-reload-support"><a class="header" href="#hot-reload-support">Hot Reload Support</a></h3>
-<p>The validator supports hot-reloading. If the <code>openapi-validator.yml</code> or the underlying <code>openapi.yml</code> specification is updated on the filesystem, the handler will automatically detect the change and re-initialize the internal validators without a server restart.</p>
-<h3 id="multiple-specification-support"><a class="header" href="#multiple-specification-support">Multiple Specification Support</a></h3>
-<p>For gateway use cases where a single server might handle multiple APIs, the validator can maintain separate validation contexts for different path prefixes, each associated with its own OpenAPI specification.</p>
-<h3 id="integration-with-bodyhandler"><a class="header" href="#integration-with-bodyhandler">Integration with BodyHandler</a></h3>
-<p>The <code>RequestValidator</code> automatically retrieves the parsed body from the <code>BodyHandler</code>. To validate the request body, ensure that <code>BodyHandler</code> is placed before <code>ValidatorHandler</code> in your handler chain.</p>
-<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
-<p>When validation fails, the handler returns a standardized error response with a <code>400 Bad Request</code> status (for requests) or logs an error (for responses). The error body follows the standard <code>light-4j</code> status format, including a unique error code and a descriptive message pointing to the specific field that failed validation.</p>
-<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="3-accesscontrolhandler"><a class="header" href="#3-accesscontrolhandler">3. <code>AccessControlHandler</code></a></h3>
+<p>The <code>AccessControlHandler</code> operates as a crucial middleware in both <code>light-rest-4j</code> and <code>light-hybrid-4j</code> architectures. As a middleware handler injected after authentication mechanisms (like <code>JwtVerifyHandler</code>), it builds a contextual Request Payload encapsulating headers, query parameters, method types, and the deserialized JWT claims (found in <code>auditInfo</code>).</p>
+<p>It behaves iteratively:</p>
 <ol>
-<li><strong>Development vs. Production</strong>: Always enable <code>validateResponse</code> during development and CI/CD testing, but consider disabling it in production for high-throughput services.</li>
-<li><strong>Contract-First</strong>: Keep your <code>openapi.yml</code> accurate. The validator is only as good as the specification it follows.</li>
-<li><strong>Gateway Optimization</strong>: Use <code>skipBodyValidation: true</code> in gateways if the backend service is also performing validation, to save on CPU cycles spent parsing large JSON payloads twice.</li>
+<li><strong>Lookup</strong>: Resolves the exact endpoint being requested.</li>
+<li><strong>Match</strong>: Fetches the associated rules from the <code>RuleLoaderStartupHook</code> mappings for that endpoint.</li>
+<li><strong>Execute</strong>: Pipes the contextual payload through the <code>RuleEngine</code>.</li>
+<li><strong>Enforce</strong>: Depending on the server configuration (<code>accessRuleLogic</code>: <code>all</code> vs. <code>any</code>), the handler will either advance the HTTP Exchange to the next middleware or abort the request, dumping an <code>ERR10067</code> or <code>ERR10069</code> Status code indicating an access control failure or missing rule fallback.</li>
+</ol>
+<h2 id="refactoring-and-integration-gaps"><a class="header" href="#refactoring-and-integration-gaps">Refactoring and Integration Gaps</a></h2>
+<p>Historically, the <code>RuleLoaderStartupHook</code> depended on the <code>market</code> ecosystem to retrieve API endpoint rules. However, to modernize the control plane and decouple rule queries from the legacy marketplace components, Rule/Permission persistence has been shifted to specialized domain queries.</p>
+<h3 id="api-migration-map"><a class="header" href="#api-migration-map">API Migration Map</a></h3>
+<p>The <code>market</code> actions were deprecated and substituted with distinct domain boundaries:</p>
+<ul>
+<li><strong><code>getServiceRule</code></strong>: Migrated out of <code>market</code> and is now natively handled by <code>GetServiceRule.java</code> within the <code>service-query</code> module mapped to the <code>service</code> target endpoint.</li>
+<li><strong><code>getApiPermission</code></strong>: Migrated out of <code>market</code> and natively handled by <code>GetApiPermission.java</code> within the <code>service-query</code> module. (Note: <code>GetRuleByApiId.java</code> inside <code>rule-query</code> serves simple rule mappings, whereas the startup hook specifically requires the enriched unified schema containing <code>ruleBodies</code> provided by the structured <code>GetServiceRule</code>).</li>
+</ul>
+<h3 id="updates-required"><a class="header" href="#updates-required">Updates Required</a></h3>
+<p>Framework integrations must ensure their startup loops target the updated schema formats. Specifically, the <code>RuleLoaderStartupHook</code> payloads strictly hit the modernized endpoints:</p>
+<pre><code class="language-json">{
+  "host": "lightapi.net",
+  "service": "service",
+  "action": "getServiceRule",   // or getApiPermission
+  "version": "0.1.0",
+  "data": { ... }
+}
+</code></pre>
+<h2 id="testing-strategy"><a class="header" href="#testing-strategy">Testing Strategy</a></h2>
+<p>Validating FGA logic avoids reliance on complex networked setups by supplying the <code>RuleLoaderStartupHook</code> instances with mock configurations at test-time.</p>
+<p>For unit tests targeting <code>AccessControlHandler</code>:</p>
+<ol>
+<li><strong>Initialization Bypass</strong>: Tests artificially seed <code>RuleLoaderStartupHook.rules</code> and <code>RuleLoaderStartupHook.endpointRules</code> with predictable mapping behaviors before rule engine execution.</li>
+<li><strong>Path Skip Asserts</strong>: <code>AccessControlHandler</code> allows endpoints strictly matching the <code>skipPathPrefixes</code> config variable to bypass FGA (e.g., standard <code>/health</code> endpoints).</li>
+<li><strong>Failure Overrides</strong>: If rules are omitted, the explicit verification of <code>config.isDefaultDeny()</code> governs whether missing policies act as permit-all traps or deny-all blocks. Tests must assert that HTTP 403s are accurately rendered when rule configurations lack explicit definition.</li>
 </ol>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/light-rest-4j/openapi-security.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../design/remove-simplejwtverify.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/light-rest-4j/specification.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../cross-cutting-concerns.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -249,11 +244,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/light-rest-4j/openapi-security.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../design/remove-simplejwtverify.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/light-rest-4j/specification.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../cross-cutting-concerns.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
@@ -273,17 +268,17 @@
         </script>
 
 
-        <script src="../../elasticlunr-ef4e11c1.min.js"></script>
-        <script src="../../mark-09e88c2c.min.js"></script>
-        <script src="../../searcher-c2a407aa.js"></script>
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
 
-        <script src="../../clipboard-1626706a.min.js"></script>
-        <script src="../../highlight-abc7f01d.js"></script>
-        <script src="../../book-a0b12cfe.js"></script>
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
 
         <!-- Custom JS scripts -->
-        <script src="../../mermaid-eefea253.min.js"></script>
-        <script src="../../mermaid-init-ccf746f1.js"></script>
+        <script src="../mermaid-eefea253.min.js"></script>
+        <script src="../mermaid-init-ccf746f1.js"></script>
 
 
 

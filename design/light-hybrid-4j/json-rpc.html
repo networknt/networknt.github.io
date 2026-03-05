@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>OpenAPI Validator - Light-4j Platform</title>
+        <title>JSON RPC 2.0 - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -174,72 +174,149 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <hr>
-<h2 id="description-openapi-validator-module"><a class="header" href="#description-openapi-validator-module">description: OpenAPI Validator Module</a></h2>
-<h1 id="openapi-validator"><a class="header" href="#openapi-validator">OpenAPI Validator</a></h1>
-<p>The <code>openapi-validator</code> module provides comprehensive request and response validation against an OpenAPI Specification 3.0. It ensures that incoming requests and outgoing responses adhere to the schemas, parameters, and constraints defined in your API specification.</p>
-<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
-<p>In a contract-first development approach, the OpenAPI specification serves as the “source of truth.” The <code>openapi-validator</code> middleware automates the enforcement of this contract, reducing the need for manual validation logic in your business handlers and improving API reliability.</p>
-<h2 id="core-components"><a class="header" href="#core-components">Core Components</a></h2>
-<h3 id="validatorhandler"><a class="header" href="#validatorhandler">ValidatorHandler</a></h3>
-<p>The main middleware entry point. It identifies whether validation is required for the current request and coordinates the <code>RequestValidator</code> and <code>ResponseValidator</code>.</p>
-<h3 id="requestvalidator"><a class="header" href="#requestvalidator">RequestValidator</a></h3>
-<p>Validates all aspects of an incoming HTTP request:</p>
+                        <h1 id="json-rpc-20-migration-for-light-hybrid-4j"><a class="header" href="#json-rpc-20-migration-for-light-hybrid-4j">JSON-RPC 2.0 Migration for light-hybrid-4j</a></h1>
+<h2 id="1-introduction"><a class="header" href="#1-introduction">1. Introduction</a></h2>
+<p>The <code>light-hybrid-4j</code> framework is the backbone of the <code>light-portal</code>, acting as a highly efficient, modularized monolithic architecture. Currently, it relies on a bespoke JSON structure containing a 4-tuple (<code>host</code>, <code>service</code>, <code>action</code>, <code>version</code>) alongside the domain <code>data</code>.</p>
+<p>With the introduction of the <strong>Model Context Protocol (MCP)</strong> as a first-class citizen in the <code>light-gateway</code> ecosystem, the need for a standardized RPC format has become critical. MCP relies entirely on <strong>JSON-RPC 2.0</strong>.</p>
+<p>This document outlines the architectural design and migration strategy for adapting <code>light-hybrid-4j</code> to natively support the JSON-RPC 2.0 standard.</p>
+<h2 id="2-benefits-and-motivations"><a class="header" href="#2-benefits-and-motivations">2. Benefits and Motivations</a></h2>
+<h3 id="21-native-mcp-integration"><a class="header" href="#21-native-mcp-integration">2.1 Native MCP Integration</a></h3>
+<p>By standardizing <code>light-hybrid-4j</code> to JSON-RPC 2.0, every single command and query service instantly becomes a native MCP tool. The <code>light-gateway</code> can route traffic without requiring any expensive payload translation layer. AI Agents can directly call our backend microservices out-of-the-box.</p>
+<h3 id="22-immediate-ecosystem-compatibility"><a class="header" href="#22-immediate-ecosystem-compatibility">2.2 Immediate Ecosystem Compatibility</a></h3>
+<p>The custom payload format forces third-party developers (and internal UI components) to format their requests manually. JSON-RPC 2.0 is an industry staple with massive ecosystem support (SDKs, Postman, test runners).</p>
+<h3 id="23-batch-processing"><a class="header" href="#23-batch-processing">2.3 Batch Processing</a></h3>
+<p>JSON-RPC 2.0 native batch capabilities allow the <code>portal-view</code> UI to aggregate multiple independent queries into a single HTTP request packet, vastly reducing network overhead and HTTP/2 connection pooling complexity.</p>
+<h3 id="24-separation-of-concerns"><a class="header" href="#24-separation-of-concerns">2.4 Separation of Concerns</a></h3>
+<p>The current payload mixes routing topology (<code>host</code>, <code>service</code>, <code>action</code>, <code>version</code>) and UI metadata (<code>success</code>, <code>failure</code>, <code>title</code>) with actual domain data (<code>data</code>). JSON-RPC forces a clean boundary: routing is handled entirely by the <code>method</code>, while domain data is strictly isolated to the <code>params</code> object.</p>
+<h2 id="3-architecture-design"><a class="header" href="#3-architecture-design">3. Architecture Design</a></h2>
+<h3 id="31-mapping-to-json-rpc-20"><a class="header" href="#31-mapping-to-json-rpc-20">3.1 Mapping to JSON-RPC 2.0</a></h3>
+<p>The legacy <code>light-hybrid-4j</code> request looks like this:</p>
+<pre><code class="language-json">{
+  "host": "lightapi.net",
+  "service": "service",
+  "action": "createApiVersion",
+  "version": "0.1.0",
+  "title": "Create Api Version",
+  "success": "/app/success",
+  "failure": "/app/failure",
+  "data": {
+    "apiId": "MCP0001",
+    "hostId": "01964b05-552a-7c4b-9184-6857e7f3dc5f"
+  }
+}
+</code></pre>
+<p>This will be mapped to the standard JSON-RPC 2.0 format:</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "method": "lightapi.net/service/createApiVersion/0.1.0",
+  "params": {
+    "apiId": "MCP0001",
+    "hostId": "01964b05-552a-7c4b-9184-6857e7f3dc5f"
+  },
+  "id": 1
+}
+</code></pre>
 <ul>
-<li><strong>Path Parameters</strong>: Checks if path variables match the spec.</li>
-<li><strong>Query Parameters</strong>: Validates presence, type, and constraints of query strings.</li>
-<li><strong>Header Parameters</strong>: Validates required headers and their values.</li>
-<li><strong>Cookie Parameters</strong>: Validates cookie values if defined.</li>
-<li><strong>Request Body</strong>: Validates the JSON payload against the operation’s requestBody schema.</li>
+<li><strong><code>jsonrpc</code></strong>: Must be exactly <code>"2.0"</code>.</li>
+<li><strong><code>method</code></strong>: A string constructed by joining the legacy 4-tuple with forward slashes: <code>{host}/{service}/{action}/{version}</code>. This perfectly maps to the internal handler ID used by <code>RpcStartupHookProvider</code>.</li>
+<li><strong><code>params</code></strong>: The exact contents of the legacy <code>data</code> block.</li>
+<li><strong><code>id</code></strong>: A unique identifier for the request, enabling accurate matching of asynchronous responses and batch processing.</li>
 </ul>
-<h3 id="responsevalidator"><a class="header" href="#responsevalidator">ResponseValidator</a></h3>
-<p>Validates the outgoing response from the server. This is typically disabled in production for performance reasons but is invaluable during development and testing to ensure the server respects its own contract.</p>
-<h3 id="schemavalidator"><a class="header" href="#schemavalidator">SchemaValidator</a></h3>
-<p>The underlying engine (built on <code>networknt/json-schema-validator</code>) that performs the actual JSON Schema validation for bodies and complex parameters.</p>
-<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
-<p>The module is configured via <code>openapi-validator.yml</code>.</p>
-<h3 id="key-properties"><a class="header" href="#key-properties">Key Properties</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Property</th><th>Default</th><th>Description</th></tr>
-</thead>
-<tbody>
-<tr><td><code>enabled</code></td><td><code>true</code></td><td>Globally enables or disables the validator.</td></tr>
-<tr><td><code>logError</code></td><td><code>true</code></td><td>If true, validation errors are logged to the console/file.</td></tr>
-<tr><td><code>legacyPathType</code></td><td><code>false</code></td><td>If true, uses the legacy dot-separated path format in error messages instead of JSON Pointers.</td></tr>
-<tr><td><code>skipBodyValidation</code></td><td><code>false</code></td><td>Useful for gateways or proxies that want to validate headers/parameters but pass the body through without parsing.</td></tr>
-<tr><td><code>validateResponse</code></td><td><code>false</code></td><td>Enables validation of outgoing responses.</td></tr>
-<tr><td><code>handleNullableField</code></td><td><code>true</code></td><td>If true, treats fields explicitly marked as <code>nullable: true</code> in the spec correctly.</td></tr>
-<tr><td><code>skipPathPrefixes</code></td><td><code>[]</code></td><td>A list of path prefixes to skip validation for (e.g., <code>/health</code>, <code>/info</code>).</td></tr>
-</tbody>
-</table>
-</div>
-<h2 id="features"><a class="header" href="#features">Features</a></h2>
-<h3 id="hot-reload-support"><a class="header" href="#hot-reload-support">Hot Reload Support</a></h3>
-<p>The validator supports hot-reloading. If the <code>openapi-validator.yml</code> or the underlying <code>openapi.yml</code> specification is updated on the filesystem, the handler will automatically detect the change and re-initialize the internal validators without a server restart.</p>
-<h3 id="multiple-specification-support"><a class="header" href="#multiple-specification-support">Multiple Specification Support</a></h3>
-<p>For gateway use cases where a single server might handle multiple APIs, the validator can maintain separate validation contexts for different path prefixes, each associated with its own OpenAPI specification.</p>
-<h3 id="integration-with-bodyhandler"><a class="header" href="#integration-with-bodyhandler">Integration with BodyHandler</a></h3>
-<p>The <code>RequestValidator</code> automatically retrieves the parsed body from the <code>BodyHandler</code>. To validate the request body, ensure that <code>BodyHandler</code> is placed before <code>ValidatorHandler</code> in your handler chain.</p>
-<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
-<p>When validation fails, the handler returns a standardized error response with a <code>400 Bad Request</code> status (for requests) or logs an error (for responses). The error body follows the standard <code>light-4j</code> status format, including a unique error code and a descriptive message pointing to the specific field that failed validation.</p>
-<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="32-server-side-changes-light-hybrid-4j"><a class="header" href="#32-server-side-changes-light-hybrid-4j">3.2 Server-Side Changes (<code>light-hybrid-4j</code>)</a></h3>
 <ol>
-<li><strong>Development vs. Production</strong>: Always enable <code>validateResponse</code> during development and CI/CD testing, but consider disabling it in production for high-throughput services.</li>
-<li><strong>Contract-First</strong>: Keep your <code>openapi.yml</code> accurate. The validator is only as good as the specification it follows.</li>
-<li><strong>Gateway Optimization</strong>: Use <code>skipBodyValidation: true</code> in gateways if the backend service is also performing validation, to save on CPU cycles spent parsing large JSON payloads twice.</li>
+<li>
+<p><strong>Dual-Protocol Router (<code>SchemaHandler</code> &amp; <code>JsonHandler</code>)</strong>:
+The router must gracefully support both legacy and JSON-RPC payloads during the transition.</p>
+<ul>
+<li><strong>Detection</strong>: Inspect the root keys of the incoming JSON. If <code>"jsonrpc": "2.0"</code> is present, invoke the new JSON-RPC 2.0 parser route. Otherwise, fall back to the legacy parser.</li>
+<li><strong>Extraction</strong>:
+<ul>
+<li>Legacy: Extract <code>host</code>, <code>service</code>, <code>action</code>, <code>version</code> to resolve the Handler.</li>
+<li>JSON-RPC: Split the string in the <code>method</code> parameter <code>host/service/action/version</code> to resolve the Handler.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Response Construction</strong>:
+If the request included an <code>"id"</code> parameter, the response <em>must</em> also be formatted as a JSON-RPC 2.0 response:</p>
+<ul>
+<li><strong>Success</strong>:
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "result": { ... handler payload ... },
+  "id": 1
+}
+</code></pre>
+</li>
+<li><strong>Error</strong>:
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32600,
+    "message": "Invalid Request",
+    "data": { ... custom light-4j status object ... }
+  },
+  "id": 1
+}
+</code></pre>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Batch Request Handling</strong>:
+If the incoming request body is a JSON Array instead of a JSON Object, the gateway must process it as a batch request, iterating over each JSON-RPC object, executing them, and returning a JSON Array of responses.</p>
+</li>
+</ol>
+<h2 id="4-client-side-changes-portal-view-spa"><a class="header" href="#4-client-side-changes-portal-view-spa">4. Client-Side Changes (<code>portal-view</code> SPA)</a></h2>
+<p>The <code>portal-view</code> currently utilizes a <code>fetchClient</code> utility built around the legacy structure.</p>
+<ol>
+<li><strong>Update <code>fetchClient</code></strong>: Modify the core fetch utility to optionally format outbound requests as JSON-RPC 2.0 when an opt-in toggle is set, or permanently switch the underlying transport format.</li>
+<li><strong>Schema Forms</strong>: Update <code>react-schema-form</code> components (or the server-side definitions in <code>Forms.json</code>) to stop injecting UI routing metadata (<code>success</code>, <code>failure</code>, <code>title</code>) into the network payload. These should remain strictly client-side configuration properties.</li>
+</ol>
+<h2 id="5-migration-strategy"><a class="header" href="#5-migration-strategy">5. Migration Strategy</a></h2>
+<ol>
+<li>
+<p><strong>Phase 1: Backend Dual-Support</strong></p>
+<ul>
+<li>Update <code>light-hybrid-4j</code> router components (<code>SchemaHandler</code>, <code>JsonHandler</code>) to detect and accept BOTH legacy and JSON-RPC 2.0 formats simultaneously.</li>
+<li>Deploy the updated framework across all <code>light-portal</code> microservices (Command and Query nodes).</li>
+<li><em>Result: Backend is ready, no client changes required yet.</em></li>
+</ul>
+</li>
+<li>
+<p><strong>Phase 2: Gateway MCP Routing</strong></p>
+<ul>
+<li>Implement MCP HTTP transport logic on the <code>light-gateway</code> to expose the backend tools list.</li>
+<li>When an MCP client lists tools, the gateway reads the hybrid service schemas and publishes them.</li>
+<li>When an MCP client invokes a tool, the gateway proxies the JSON-RPC request transparently to the backend.</li>
+</ul>
+</li>
+<li>
+<p><strong>Phase 3: Frontend Migration</strong></p>
+<ul>
+<li>Update the <code>portal-view</code> UI to use the new JSON-RPC 2.0 wrapper in <code>fetchClient</code>.</li>
+<li>Refactor legacy components sending hardcoded <code>host/service/action</code> structures.</li>
+</ul>
+</li>
+<li>
+<p><strong>Phase 4: Deprecation (Long Term)</strong></p>
+<ul>
+<li>Add warnings to the logs when legacy payloads are received.</li>
+<li>Eventually phase out the legacy parser code in <code>light-hybrid-4j</code> and rely solely on the JSON-RPC 2.0 standard.</li>
+</ul>
+</li>
 </ol>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../concern/light-rest-4j/openapi-security.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../design/light-hybrid-4j.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../concern/light-rest-4j/specification.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../design/mcp-router.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -249,11 +326,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../concern/light-rest-4j/openapi-security.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../design/light-hybrid-4j.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../concern/light-rest-4j/specification.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../design/mcp-router.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

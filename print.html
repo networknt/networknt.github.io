@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7461c00e.js";
+            window.path_to_searchindex_js = "searchindex-8698c645.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-4328ced8.js"></script>
+        <script src="toc-a821ea2f.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -801,6 +801,142 @@ Manages hierarchies where one skill requires another.</p>
 <li><strong>Asynchrony</strong>: Default to async/event-driven for any I/O heavy skill.</li>
 <li><strong>Correlation</strong>: Use <code>correlationId</code> rigorously to track request/response pairs across the bus.</li>
 <li><strong>Idempotency</strong>: Workers should handle duplicate events gracefully.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-hybrid-4j"><a class="header" href="#light-hybrid-4j">light-hybrid-4j</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="json-rpc-20-migration-for-light-hybrid-4j"><a class="header" href="#json-rpc-20-migration-for-light-hybrid-4j">JSON-RPC 2.0 Migration for light-hybrid-4j</a></h1>
+<h2 id="1-introduction"><a class="header" href="#1-introduction">1. Introduction</a></h2>
+<p>The <code>light-hybrid-4j</code> framework is the backbone of the <code>light-portal</code>, acting as a highly efficient, modularized monolithic architecture. Currently, it relies on a bespoke JSON structure containing a 4-tuple (<code>host</code>, <code>service</code>, <code>action</code>, <code>version</code>) alongside the domain <code>data</code>.</p>
+<p>With the introduction of the <strong>Model Context Protocol (MCP)</strong> as a first-class citizen in the <code>light-gateway</code> ecosystem, the need for a standardized RPC format has become critical. MCP relies entirely on <strong>JSON-RPC 2.0</strong>.</p>
+<p>This document outlines the architectural design and migration strategy for adapting <code>light-hybrid-4j</code> to natively support the JSON-RPC 2.0 standard.</p>
+<h2 id="2-benefits-and-motivations"><a class="header" href="#2-benefits-and-motivations">2. Benefits and Motivations</a></h2>
+<h3 id="21-native-mcp-integration"><a class="header" href="#21-native-mcp-integration">2.1 Native MCP Integration</a></h3>
+<p>By standardizing <code>light-hybrid-4j</code> to JSON-RPC 2.0, every single command and query service instantly becomes a native MCP tool. The <code>light-gateway</code> can route traffic without requiring any expensive payload translation layer. AI Agents can directly call our backend microservices out-of-the-box.</p>
+<h3 id="22-immediate-ecosystem-compatibility"><a class="header" href="#22-immediate-ecosystem-compatibility">2.2 Immediate Ecosystem Compatibility</a></h3>
+<p>The custom payload format forces third-party developers (and internal UI components) to format their requests manually. JSON-RPC 2.0 is an industry staple with massive ecosystem support (SDKs, Postman, test runners).</p>
+<h3 id="23-batch-processing"><a class="header" href="#23-batch-processing">2.3 Batch Processing</a></h3>
+<p>JSON-RPC 2.0 native batch capabilities allow the <code>portal-view</code> UI to aggregate multiple independent queries into a single HTTP request packet, vastly reducing network overhead and HTTP/2 connection pooling complexity.</p>
+<h3 id="24-separation-of-concerns"><a class="header" href="#24-separation-of-concerns">2.4 Separation of Concerns</a></h3>
+<p>The current payload mixes routing topology (<code>host</code>, <code>service</code>, <code>action</code>, <code>version</code>) and UI metadata (<code>success</code>, <code>failure</code>, <code>title</code>) with actual domain data (<code>data</code>). JSON-RPC forces a clean boundary: routing is handled entirely by the <code>method</code>, while domain data is strictly isolated to the <code>params</code> object.</p>
+<h2 id="3-architecture-design"><a class="header" href="#3-architecture-design">3. Architecture Design</a></h2>
+<h3 id="31-mapping-to-json-rpc-20"><a class="header" href="#31-mapping-to-json-rpc-20">3.1 Mapping to JSON-RPC 2.0</a></h3>
+<p>The legacy <code>light-hybrid-4j</code> request looks like this:</p>
+<pre><code class="language-json">{
+  "host": "lightapi.net",
+  "service": "service",
+  "action": "createApiVersion",
+  "version": "0.1.0",
+  "title": "Create Api Version",
+  "success": "/app/success",
+  "failure": "/app/failure",
+  "data": {
+    "apiId": "MCP0001",
+    "hostId": "01964b05-552a-7c4b-9184-6857e7f3dc5f"
+  }
+}
+</code></pre>
+<p>This will be mapped to the standard JSON-RPC 2.0 format:</p>
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "method": "lightapi.net/service/createApiVersion/0.1.0",
+  "params": {
+    "apiId": "MCP0001",
+    "hostId": "01964b05-552a-7c4b-9184-6857e7f3dc5f"
+  },
+  "id": 1
+}
+</code></pre>
+<ul>
+<li><strong><code>jsonrpc</code></strong>: Must be exactly <code>"2.0"</code>.</li>
+<li><strong><code>method</code></strong>: A string constructed by joining the legacy 4-tuple with forward slashes: <code>{host}/{service}/{action}/{version}</code>. This perfectly maps to the internal handler ID used by <code>RpcStartupHookProvider</code>.</li>
+<li><strong><code>params</code></strong>: The exact contents of the legacy <code>data</code> block.</li>
+<li><strong><code>id</code></strong>: A unique identifier for the request, enabling accurate matching of asynchronous responses and batch processing.</li>
+</ul>
+<h3 id="32-server-side-changes-light-hybrid-4j"><a class="header" href="#32-server-side-changes-light-hybrid-4j">3.2 Server-Side Changes (<code>light-hybrid-4j</code>)</a></h3>
+<ol>
+<li>
+<p><strong>Dual-Protocol Router (<code>SchemaHandler</code> &amp; <code>JsonHandler</code>)</strong>:
+The router must gracefully support both legacy and JSON-RPC payloads during the transition.</p>
+<ul>
+<li><strong>Detection</strong>: Inspect the root keys of the incoming JSON. If <code>"jsonrpc": "2.0"</code> is present, invoke the new JSON-RPC 2.0 parser route. Otherwise, fall back to the legacy parser.</li>
+<li><strong>Extraction</strong>:
+<ul>
+<li>Legacy: Extract <code>host</code>, <code>service</code>, <code>action</code>, <code>version</code> to resolve the Handler.</li>
+<li>JSON-RPC: Split the string in the <code>method</code> parameter <code>host/service/action/version</code> to resolve the Handler.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Response Construction</strong>:
+If the request included an <code>"id"</code> parameter, the response <em>must</em> also be formatted as a JSON-RPC 2.0 response:</p>
+<ul>
+<li><strong>Success</strong>:
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "result": { ... handler payload ... },
+  "id": 1
+}
+</code></pre>
+</li>
+<li><strong>Error</strong>:
+<pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32600,
+    "message": "Invalid Request",
+    "data": { ... custom light-4j status object ... }
+  },
+  "id": 1
+}
+</code></pre>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Batch Request Handling</strong>:
+If the incoming request body is a JSON Array instead of a JSON Object, the gateway must process it as a batch request, iterating over each JSON-RPC object, executing them, and returning a JSON Array of responses.</p>
+</li>
+</ol>
+<h2 id="4-client-side-changes-portal-view-spa"><a class="header" href="#4-client-side-changes-portal-view-spa">4. Client-Side Changes (<code>portal-view</code> SPA)</a></h2>
+<p>The <code>portal-view</code> currently utilizes a <code>fetchClient</code> utility built around the legacy structure.</p>
+<ol>
+<li><strong>Update <code>fetchClient</code></strong>: Modify the core fetch utility to optionally format outbound requests as JSON-RPC 2.0 when an opt-in toggle is set, or permanently switch the underlying transport format.</li>
+<li><strong>Schema Forms</strong>: Update <code>react-schema-form</code> components (or the server-side definitions in <code>Forms.json</code>) to stop injecting UI routing metadata (<code>success</code>, <code>failure</code>, <code>title</code>) into the network payload. These should remain strictly client-side configuration properties.</li>
+</ol>
+<h2 id="5-migration-strategy"><a class="header" href="#5-migration-strategy">5. Migration Strategy</a></h2>
+<ol>
+<li>
+<p><strong>Phase 1: Backend Dual-Support</strong></p>
+<ul>
+<li>Update <code>light-hybrid-4j</code> router components (<code>SchemaHandler</code>, <code>JsonHandler</code>) to detect and accept BOTH legacy and JSON-RPC 2.0 formats simultaneously.</li>
+<li>Deploy the updated framework across all <code>light-portal</code> microservices (Command and Query nodes).</li>
+<li><em>Result: Backend is ready, no client changes required yet.</em></li>
+</ul>
+</li>
+<li>
+<p><strong>Phase 2: Gateway MCP Routing</strong></p>
+<ul>
+<li>Implement MCP HTTP transport logic on the <code>light-gateway</code> to expose the backend tools list.</li>
+<li>When an MCP client lists tools, the gateway reads the hybrid service schemas and publishes them.</li>
+<li>When an MCP client invokes a tool, the gateway proxies the JSON-RPC request transparently to the backend.</li>
+</ul>
+</li>
+<li>
+<p><strong>Phase 3: Frontend Migration</strong></p>
+<ul>
+<li>Update the <code>portal-view</code> UI to use the new JSON-RPC 2.0 wrapper in <code>fetchClient</code>.</li>
+<li>Refactor legacy components sending hardcoded <code>host/service/action</code> structures.</li>
+</ul>
+</li>
+<li>
+<p><strong>Phase 4: Deprecation (Long Term)</strong></p>
+<ul>
+<li>Add warnings to the logs when legacy payloads are received.</li>
+<li>Eventually phase out the legacy parser code in <code>light-hybrid-4j</code> and rely solely on the JSON-RPC 2.0 standard.</li>
+</ul>
+</li>
 </ol>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="mcp-router"><a class="header" href="#mcp-router">MCP Router</a></h1>
@@ -2174,6 +2310,58 @@ for (Map.Entry&lt;URI, SimpleURIConnectionPool&gt; entry : pools.entrySet()) {
 </ul>
 <h2 id="conclusion-1"><a class="header" href="#conclusion-1">Conclusion</a></h2>
 <p>This refactoring simplifies the codebase, removes duplication, and ensures consistent JWT handling across different modules while maintaining full backward compatibility.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="fine-grained-authorization-fga-design"><a class="header" href="#fine-grained-authorization-fga-design">Fine-Grained Authorization (FGA) Design</a></h1>
+<p>In the Light framework ecosystems (<code>light-rest-4j</code>, <code>light-hybrid-4j</code>, and <code>light-graphql-4j</code>), Coarse-Grained Authorization revolves around OAuth 2.0 JWT token scopes, primarily ensuring that users possess top-level access to broad endpoints.</p>
+<p>However, <strong>Fine-Grained Authorization (FGA)</strong> applies dynamic, rule-based business logic to requests—operating at the row or column level—to selectively filter attributes, enforce ownership constraints, or permit conditionally authorized actions based on arbitrary token claims or request payloads.</p>
+<p>This document outlines the architecture, components, and the integration flows supporting FGA.</p>
+<h2 id="core-components-1"><a class="header" href="#core-components-1">Core Components</a></h2>
+<p>The FGA system relies on the interplay of several core components structured to provide high performance (via local caching) while maintaining centralized policy definitions natively managed within the <code>light-portal</code>.</p>
+<h3 id="1-ruleengine"><a class="header" href="#1-ruleengine">1. <code>RuleEngine</code></a></h3>
+<p>The <code>RuleEngine</code> (housed in <code>yaml-rule</code>) evaluates incoming contextual payloads against a predefined set of YAML rules. The rules contain conditions structured around the business domain, granting binary (pass/fail) results or mutating payload structures.</p>
+<h3 id="2-ruleloaderstartuphook"><a class="header" href="#2-ruleloaderstartuphook">2. <code>RuleLoaderStartupHook</code></a></h3>
+<p>To prevent introducing network latency during live authorization checks, FGA operates completely in-memory.</p>
+<p>The <code>RuleLoaderStartupHook</code> (in <code>light-4j</code>) runs when a framework server starts up. It connects to the <code>light-portal</code> (acting as the control plane) to download all applicable YAML rules and API permissions specific to the host, API ID, and API version.</p>
+<ul>
+<li>It caches all endpoint mapped rules natively inside <code>RuleLoaderStartupHook.endpointRules</code>.</li>
+<li>It caches the YAML schemas dynamically parsed as <code>Rule</code> objects inside <code>RuleLoaderStartupHook.rules</code>.</li>
+<li>It initializes the <code>RuleEngine</code> Singleton.</li>
+</ul>
+<h3 id="3-accesscontrolhandler"><a class="header" href="#3-accesscontrolhandler">3. <code>AccessControlHandler</code></a></h3>
+<p>The <code>AccessControlHandler</code> operates as a crucial middleware in both <code>light-rest-4j</code> and <code>light-hybrid-4j</code> architectures. As a middleware handler injected after authentication mechanisms (like <code>JwtVerifyHandler</code>), it builds a contextual Request Payload encapsulating headers, query parameters, method types, and the deserialized JWT claims (found in <code>auditInfo</code>).</p>
+<p>It behaves iteratively:</p>
+<ol>
+<li><strong>Lookup</strong>: Resolves the exact endpoint being requested.</li>
+<li><strong>Match</strong>: Fetches the associated rules from the <code>RuleLoaderStartupHook</code> mappings for that endpoint.</li>
+<li><strong>Execute</strong>: Pipes the contextual payload through the <code>RuleEngine</code>.</li>
+<li><strong>Enforce</strong>: Depending on the server configuration (<code>accessRuleLogic</code>: <code>all</code> vs. <code>any</code>), the handler will either advance the HTTP Exchange to the next middleware or abort the request, dumping an <code>ERR10067</code> or <code>ERR10069</code> Status code indicating an access control failure or missing rule fallback.</li>
+</ol>
+<h2 id="refactoring-and-integration-gaps"><a class="header" href="#refactoring-and-integration-gaps">Refactoring and Integration Gaps</a></h2>
+<p>Historically, the <code>RuleLoaderStartupHook</code> depended on the <code>market</code> ecosystem to retrieve API endpoint rules. However, to modernize the control plane and decouple rule queries from the legacy marketplace components, Rule/Permission persistence has been shifted to specialized domain queries.</p>
+<h3 id="api-migration-map"><a class="header" href="#api-migration-map">API Migration Map</a></h3>
+<p>The <code>market</code> actions were deprecated and substituted with distinct domain boundaries:</p>
+<ul>
+<li><strong><code>getServiceRule</code></strong>: Migrated out of <code>market</code> and is now natively handled by <code>GetServiceRule.java</code> within the <code>service-query</code> module mapped to the <code>service</code> target endpoint.</li>
+<li><strong><code>getApiPermission</code></strong>: Migrated out of <code>market</code> and natively handled by <code>GetApiPermission.java</code> within the <code>service-query</code> module. (Note: <code>GetRuleByApiId.java</code> inside <code>rule-query</code> serves simple rule mappings, whereas the startup hook specifically requires the enriched unified schema containing <code>ruleBodies</code> provided by the structured <code>GetServiceRule</code>).</li>
+</ul>
+<h3 id="updates-required"><a class="header" href="#updates-required">Updates Required</a></h3>
+<p>Framework integrations must ensure their startup loops target the updated schema formats. Specifically, the <code>RuleLoaderStartupHook</code> payloads strictly hit the modernized endpoints:</p>
+<pre><code class="language-json">{
+  "host": "lightapi.net",
+  "service": "service",
+  "action": "getServiceRule",   // or getApiPermission
+  "version": "0.1.0",
+  "data": { ... }
+}
+</code></pre>
+<h2 id="testing-strategy"><a class="header" href="#testing-strategy">Testing Strategy</a></h2>
+<p>Validating FGA logic avoids reliance on complex networked setups by supplying the <code>RuleLoaderStartupHook</code> instances with mock configurations at test-time.</p>
+<p>For unit tests targeting <code>AccessControlHandler</code>:</p>
+<ol>
+<li><strong>Initialization Bypass</strong>: Tests artificially seed <code>RuleLoaderStartupHook.rules</code> and <code>RuleLoaderStartupHook.endpointRules</code> with predictable mapping behaviors before rule engine execution.</li>
+<li><strong>Path Skip Asserts</strong>: <code>AccessControlHandler</code> allows endpoints strictly matching the <code>skipPathPrefixes</code> config variable to bypass FGA (e.g., standard <code>/health</code> endpoints).</li>
+<li><strong>Failure Overrides</strong>: If rules are omitted, the explicit verification of <code>config.isDefaultDeny()</code> governs whether missing policies act as permit-all traps or deny-all blocks. Tests must assert that HTTP 403s are accurately rendered when rule configurations lack explicit definition.</li>
+</ol>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="cross-cutting-concerns"><a class="header" href="#cross-cutting-concerns">Cross-Cutting-Concerns</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -7358,7 +7546,7 @@ try {
 <h1 id="monad-result"><a class="header" href="#monad-result">Monad Result</a></h1>
 <p>The <code>monad-result</code> module provides a functional way to handle success and failure occurrences in your application logic. It is an implementation of a Result monad, similar to <code>Optional</code> in Java, but designed to carry failure information (error status) instead of just being empty.</p>
 <p>This approach promotes cleaner code by avoiding the use of exceptions for expected business logic failures, making the control flow more explicit and easier to follow.</p>
-<h2 id="core-components-1"><a class="header" href="#core-components-1">Core Components</a></h2>
+<h2 id="core-components-2"><a class="header" href="#core-components-2">Core Components</a></h2>
 <p>The module consists of three main parts:</p>
 <h3 id="1-result"><a class="header" href="#1-result">1. Result</a></h3>
 <p>An interface that represents the result of an operation. It can be either a <code>Success</code> or a <code>Failure</code>.</p>
@@ -8014,7 +8202,7 @@ pathSpecMapping:
 <p>The <code>openapi-validator</code> module provides comprehensive request and response validation against an OpenAPI Specification 3.0. It ensures that incoming requests and outgoing responses adhere to the schemas, parameters, and constraints defined in your API specification.</p>
 <h2 id="overview-13"><a class="header" href="#overview-13">Overview</a></h2>
 <p>In a contract-first development approach, the OpenAPI specification serves as the “source of truth.” The <code>openapi-validator</code> middleware automates the enforcement of this contract, reducing the need for manual validation logic in your business handlers and improving API reliability.</p>
-<h2 id="core-components-2"><a class="header" href="#core-components-2">Core Components</a></h2>
+<h2 id="core-components-3"><a class="header" href="#core-components-3">Core Components</a></h2>
 <h3 id="validatorhandler"><a class="header" href="#validatorhandler">ValidatorHandler</a></h3>
 <p>The main middleware entry point. It identifies whether validation is required for the current request and coordinates the <code>RequestValidator</code> and <code>ResponseValidator</code>.</p>
 <h3 id="requestvalidator"><a class="header" href="#requestvalidator">RequestValidator</a></h3>
@@ -8128,7 +8316,7 @@ paths:
 <h2 id="security-note"><a class="header" href="#security-note">Security Note</a></h2>
 <p>Since the specification handlers expose internal API details, it is recommended to protect these endpoints using the <code>AccessControlHandler</code> or similar security mechanisms if the documentation should not be publicly accessible.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="light-hybrid-4j"><a class="header" href="#light-hybrid-4j">Light-hybrid-4j</a></h1>
+<h1 id="light-hybrid-4j-1"><a class="header" href="#light-hybrid-4j-1">Light-hybrid-4j</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="rpc-router"><a class="header" href="#rpc-router">RPC Router</a></h1>
 <p>The <code>rpc-router</code> is a core module of the <code>light-hybrid-4j</code> framework. It provides a high-performance routing and validation mechanism that enables a single server instance to host multiple, independent service handlers (RPC-style).</p>
@@ -8142,7 +8330,7 @@ paths:
 <li><strong>Specification Management</strong>: Merging multiple <code>spec.yaml</code> files from various service JARs into a single runtime context.</li>
 <li><strong>Configuration Management</strong>: Providing a standardized, hot-reloadable configuration via <code>rpc-router.yml</code>.</li>
 </ul>
-<h2 id="core-components-3"><a class="header" href="#core-components-3">Core Components</a></h2>
+<h2 id="core-components-4"><a class="header" href="#core-components-4">Core Components</a></h2>
 <h3 id="1-schemahandler"><a class="header" href="#1-schemahandler">1. <code>SchemaHandler</code></a></h3>
 <p>The <code>SchemaHandler</code> is a middleware handler that performs the initial processing of RPC requests.</p>
 <ul>
@@ -8234,7 +8422,7 @@ action:
 <li>Extract required scopes from the target service’s schema (specifically the <code>spec.yaml</code> loaded by the <code>rpc-router</code>).</li>
 <li>Authorize the request by comparing the token’s scopes against the service’s required scopes.</li>
 </ol>
-<h2 id="core-components-4"><a class="header" href="#core-components-4">Core Components</a></h2>
+<h2 id="core-components-5"><a class="header" href="#core-components-5">Core Components</a></h2>
 <h3 id="1-hybridjwtverifyhandler"><a class="header" href="#1-hybridjwtverifyhandler">1. <code>HybridJwtVerifyHandler</code></a></h3>
 <p>This handler extends <code>AbstractJwtVerifyHandler</code> to provide JWT validation for hybrid services.</p>
 <ul>
@@ -8373,7 +8561,7 @@ action:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="kafka-consumer"><a class="header" href="#kafka-consumer">Kafka Consumer</a></h1>
 <p>The <code>kafka-consumer</code> module provides a RESTful interface for consuming records from Kafka topics. It abstracts the complexity of the native Kafka Consumer API, handling instance management, thread pooling, and record serialization/deserialization.</p>
-<h2 id="core-components-5"><a class="header" href="#core-components-5">Core Components</a></h2>
+<h2 id="core-components-6"><a class="header" href="#core-components-6">Core Components</a></h2>
 <h3 id="kafkaconsumermanager"><a class="header" href="#kafkaconsumermanager">KafkaConsumerManager</a></h3>
 <p>Manages the lifecycle of Kafka consumers.</p>
 <ul>
@@ -8406,7 +8594,7 @@ KafkaConsumerManager manager = new KafkaConsumerManager(config);
 <h2 id="description-kafka-producer-module"><a class="header" href="#description-kafka-producer-module">description: Kafka Producer Module</a></h2>
 <h1 id="kafka-producer"><a class="header" href="#kafka-producer">Kafka Producer</a></h1>
 <p>The <code>kafka-producer</code> module provides an abstraction for key features of the <code>light-kafka</code> ecosystem, including auditing, schema validation, and header injection. It supports publishing to Kafka with both key and value serialization via Confluent Schema Registry (Avro, JSON Schema, Protobuf).</p>
-<h2 id="core-components-6"><a class="header" href="#core-components-6">Core Components</a></h2>
+<h2 id="core-components-7"><a class="header" href="#core-components-7">Core Components</a></h2>
 <h3 id="sidecarproducer"><a class="header" href="#sidecarproducer">SidecarProducer</a></h3>
 <p>The primary producer implementation.</p>
 <ul>
@@ -8440,7 +8628,7 @@ producer.produceWithSchema(topic, serviceId, partition, request, headers, auditL
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="kafka-streams"><a class="header" href="#kafka-streams">Kafka Streams</a></h1>
 <p>The <code>kafka-streams</code> module provides a lightweight wrapper around the Kafka Streams API, simplifying common tasks such as configuration loading, audit logging, and Dead Letter Queue (DLQ) integration.</p>
-<h2 id="core-components-7"><a class="header" href="#core-components-7">Core Components</a></h2>
+<h2 id="core-components-8"><a class="header" href="#core-components-8">Core Components</a></h2>
 <h3 id="lightstreams"><a class="header" href="#lightstreams">LightStreams</a></h3>
 <p>An interface that helps bootstrap a Kafka Streams application. It typically includes:</p>
 <ul>
@@ -8553,7 +8741,7 @@ KafkaStreamsRegistry.unregister("my-streams-app");
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="msal-exchange-handler"><a class="header" href="#msal-exchange-handler">MSAL Exchange Handler</a></h1>
 <p>The <code>msal-exchange</code> module in <code>light-spa-4j</code> provides a handler to exchange Microsoft Authentication Library (MSAL) tokens for internal application session cookies. This mechanism effectively serves as a Backend-For-Frontend (BFF) authentication layer for Single Page Applications (SPAs).</p>
-<h2 id="core-components-8"><a class="header" href="#core-components-8">Core Components</a></h2>
+<h2 id="core-components-9"><a class="header" href="#core-components-9">Core Components</a></h2>
 <h3 id="msaltokenexchangehandler"><a class="header" href="#msaltokenexchangehandler">MsalTokenExchangeHandler</a></h3>
 <p>This middleware handler intercepts requests to specific paths (configured via <code>msal-exchange.yml</code>) to perform token exchange or logout operations.</p>
 <ul>
@@ -8587,7 +8775,7 @@ rememberMeTimeout: 604800
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="stateless-auth-handler"><a class="header" href="#stateless-auth-handler">Stateless Auth Handler</a></h1>
 <p>The <code>stateless-auth</code> module in <code>light-spa-4j</code> provides a robust, stateless authentication mechanism for Single Page Applications (SPAs). It handles the OAuth 2.0 Authorization Code flow and manages the resulting tokens using secure, HTTP-only cookies, eliminating the need for client-side storage (like <code>localStorage</code>).</p>
-<h2 id="core-components-9"><a class="header" href="#core-components-9">Core Components</a></h2>
+<h2 id="core-components-10"><a class="header" href="#core-components-10">Core Components</a></h2>
 <h3 id="statelessauthhandler"><a class="header" href="#statelessauthhandler">StatelessAuthHandler</a></h3>
 <p>This middleware implements the Backend-For-Frontend (BFF) pattern:</p>
 <ul>
@@ -8627,7 +8815,7 @@ The configuration also includes sections for configuring social login providers 
 <h2 id="description-chaos-monkey-module"><a class="header" href="#description-chaos-monkey-module">description: Chaos Monkey Module</a></h2>
 <h1 id="chaos-monkey"><a class="header" href="#chaos-monkey">Chaos Monkey</a></h1>
 <p>The <code>chaos-monkey</code> module in <code>light-chaos-monkey</code> allows developers and operators to inject various types of failures (assaults) into a running service to test its resilience. It provides API endpoints to query and update assault configurations dynamically at runtime.</p>
-<h2 id="core-components-10"><a class="header" href="#core-components-10">Core Components</a></h2>
+<h2 id="core-components-11"><a class="header" href="#core-components-11">Core Components</a></h2>
 <h3 id="chaosmonkeyconfig"><a class="header" href="#chaosmonkeyconfig">ChaosMonkeyConfig</a></h3>
 <p>Configuration class that loads settings from <code>chaos-monkey.yml</code>. It defines whether the chaos monkey capability is enabled globally.</p>
 <h3 id="chaosmonkeygethandler"><a class="header" href="#chaosmonkeygethandler">ChaosMonkeyGetHandler</a></h3>
@@ -8666,7 +8854,7 @@ The configuration also includes sections for configuring social login providers 
 <h2 id="description-exception-assault-handler"><a class="header" href="#description-exception-assault-handler">description: Exception Assault Handler</a></h2>
 <h1 id="exception-assault"><a class="header" href="#exception-assault">Exception Assault</a></h1>
 <p>The <code>exception-assault</code> module in <code>light-chaos-monkey</code> allows you to inject random exceptions into your application’s request processing pipeline. This helps verify that your application and its consumers gracefully handle unexpected failures.</p>
-<h2 id="core-components-11"><a class="header" href="#core-components-11">Core Components</a></h2>
+<h2 id="core-components-12"><a class="header" href="#core-components-12">Core Components</a></h2>
 <h3 id="exceptionassaulthandler"><a class="header" href="#exceptionassaulthandler">ExceptionAssaultHandler</a></h3>
 <p>The middleware handler responsible for injecting exceptions.</p>
 <ul>
@@ -8696,7 +8884,7 @@ level: 5
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="killapp-assault"><a class="header" href="#killapp-assault">Killapp Assault</a></h1>
 <p>The <code>killapp-assault</code> module in <code>light-chaos-monkey</code> allows you to inject a termination assault into your application. When triggered, it gracefully shuts down the server and then terminates the JVM process. This is the most destructive type of assault and should be used with extreme caution.</p>
-<h2 id="core-components-12"><a class="header" href="#core-components-12">Core Components</a></h2>
+<h2 id="core-components-13"><a class="header" href="#core-components-13">Core Components</a></h2>
 <h3 id="killappassaulthandler"><a class="header" href="#killappassaulthandler">KillappAssaultHandler</a></h3>
 <p>The middleware handler responsible for killing the application.</p>
 <ul>
@@ -8726,7 +8914,7 @@ level: 100
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="latency-assault"><a class="header" href="#latency-assault">Latency Assault</a></h1>
 <p>The <code>latency-assault</code> module in <code>light-chaos-monkey</code> allows you to inject artificial delays (latency) into your application’s request processing. This is useful for testing how your application and its downstream consumers handle slow responses and potential timeouts.</p>
-<h2 id="core-components-13"><a class="header" href="#core-components-13">Core Components</a></h2>
+<h2 id="core-components-14"><a class="header" href="#core-components-14">Core Components</a></h2>
 <h3 id="latencyassaulthandler"><a class="header" href="#latencyassaulthandler">LatencyAssaultHandler</a></h3>
 <p>The middleware handler responsible for injecting latency.</p>
 <ul>
@@ -8760,7 +8948,7 @@ latencyRangeEnd: 2000
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="memory-assault"><a class="header" href="#memory-assault">Memory Assault</a></h1>
 <p>The <code>memory-assault</code> module in <code>light-chaos-monkey</code> allows you to inject memory pressure into your application. When triggered, it allocates memory in increments until a target threshold is reached, holds that memory for a specified duration, and then releases it. This is useful for testing how your application behaves under low-memory conditions and identifying potential memory-related issues.</p>
-<h2 id="core-components-14"><a class="header" href="#core-components-14">Core Components</a></h2>
+<h2 id="core-components-15"><a class="header" href="#core-components-15">Core Components</a></h2>
 <h3 id="memoryassaulthandler"><a class="header" href="#memoryassaulthandler">MemoryAssaultHandler</a></h3>
 <p>The middleware handler responsible for consuming memory.</p>
 <ul>
@@ -8798,7 +8986,7 @@ memoryMillisecondsHoldFilledMemory: 60000
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="lambda-invoker"><a class="header" href="#lambda-invoker">Lambda Invoker</a></h1>
 <p>The <code>lambda-invoker</code> module provides a way to invoke AWS Lambda functions from a light-4j application. It includes a configuration class and an HTTP handler that can be used to proxy requests to Lambda functions.</p>
-<h2 id="core-components-15"><a class="header" href="#core-components-15">Core Components</a></h2>
+<h2 id="core-components-16"><a class="header" href="#core-components-16">Core Components</a></h2>
 <h3 id="lambdainvokerconfig"><a class="header" href="#lambdainvokerconfig">LambdaInvokerConfig</a></h3>
 <p>The configuration class for the Lambda invoker. It loads settings from <code>lambda-invoker.yml</code>.</p>
 <ul>
@@ -9387,7 +9575,7 @@ client.chatStream(messages, new StreamCallback() {
 <p>The <code>genai-websocket-handler</code> module provides a WebSocket-based interface for interacting with Generative AI models via the <code>light-genai-4j</code> library. It manages user sessions, maintains chat history context, and handles the bi-directional stream of messages between the user and the LLM.</p>
 <h2 id="architecture-6"><a class="header" href="#architecture-6">Architecture</a></h2>
 <p>This module is designed as an implementation of the <code>WebSocketApplicationHandler</code> interface defined in <code>light-websocket-4j</code>. It plugs into the <code>websocket-handler</code> infrastructure to receive upgraded WebSocket connections.</p>
-<h3 id="core-components-16"><a class="header" href="#core-components-16">Core Components</a></h3>
+<h3 id="core-components-17"><a class="header" href="#core-components-17">Core Components</a></h3>
 <ol>
 <li><strong>GenAiWebSocketHandler</strong>: The main entry point. It handles <code>onConnect</code>, manages the WebSocket channel life-cycle, and coordinates message processing.</li>
 <li><strong>SessionManager</strong>: Responsible for creating, retrieving, and validating user chat sessions.</li>
