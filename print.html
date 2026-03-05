@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-458bd83c.js";
+            window.path_to_searchindex_js = "searchindex-7461c00e.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-de1f09ea.js"></script>
+        <script src="toc-4328ced8.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -9752,6 +9752,54 @@ docker-compose up
 </li>
 </ol>
 <p>You can set the breakpoints in the initialization code if you want to debug the logic during the server startup. Once the debug session is started, the light-router application inside the container will be started and running as usual. The rest of the debug is the same as you are debugging a standalone application.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="support"><a class="header" href="#support">Support</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="github"><a class="header" href="#github">GitHub</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-bot"><a class="header" href="#light-bot">Light Bot</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="handling-internal-tools-in-mirrored-repositories"><a class="header" href="#handling-internal-tools-in-mirrored-repositories">Handling Internal Tools in Mirrored Repositories</a></h1>
+<p>When open-source repositories hosted on GitHub are replicated to internal customer environments (e.g., Bitbucket), customers often need to add internal directories for commercial scanning tools (code coverage, security vulnerabilities, etc.).</p>
+<p>This document outlines strategies to keep internal tooling isolated from the upstream public GitHub repository to avoid accidental leaks or merge conflicts.</p>
+<h2 id="strategies-for-isolation"><a class="header" href="#strategies-for-isolation">Strategies for Isolation</a></h2>
+<h3 id="1-the-wrapper-repository-git-submodules--highly-recommended"><a class="header" href="#1-the-wrapper-repository-git-submodules--highly-recommended">1. The “Wrapper Repository” (Git Submodules) — <em>Highly Recommended</em></a></h3>
+<p>Instead of adding the internal commercial tooling directly into the mirrored GitHub repository, the customer can create a brand-new internal Bitbucket repository that acts as a “wrapper.”</p>
+<ul>
+<li><strong>How it works:</strong> The customer creates a new Bitbucket repo. They commit their commercial tooling configurations, scan scripts, and extra directories to <em>this</em> repository. Then, they add your GitHub open-source repository as a <strong>Git Submodule</strong> inside it.</li>
+<li><strong>The pipeline:</strong> When their CI/CD pipeline runs, it checks out the wrapper repository, pulls down the submodule (your open-source code), and runs the scanning tools against the submodule directory.</li>
+<li><strong>Why it’s great:</strong> Your GitHub repository remains a 100% exact mirror. The customer never has to worry about accidentally pushing internal files back to your GitHub repo, and you never have to worry about merge conflicts during updates.</li>
+</ul>
+<h3 id="2-the-upstreamdownstream-branching-strategy"><a class="header" href="#2-the-upstreamdownstream-branching-strategy">2. The Upstream/Downstream Branching Strategy</a></h3>
+<p>If the customer insists on having the internal files and the open-source code tracked in the exact same repository, they must use a branch isolation strategy.</p>
+<ul>
+<li><strong>How it works:</strong>
+<ol>
+<li>The customer maintains a <code>main</code> branch that is a <strong>strict mirror</strong> of your GitHub repository. Nothing internal is ever committed here.</li>
+<li>They create an <code>internal-main</code> branch branched off <code>main</code>.</li>
+<li>They commit their internal scanning directories and files to <code>internal-main</code>.</li>
+</ol>
+</li>
+<li><strong>Syncing updates:</strong> When you release new code on GitHub, the customer pulls those changes into their <code>main</code> branch, and then runs <code>git merge main</code> into their <code>internal-main</code> branch.</li>
+<li><strong>Contributing back:</strong> If the customer finds a bug and wants to push a fix back to your GitHub, they branch off <code>main</code> (not <code>internal-main</code>), commit the fix, and push that feature branch back to GitHub.</li>
+<li><strong>Why it’s great:</strong> It utilizes standard Git workflows. The internal directories literally do not exist in the history of the <code>main</code> branch, so they can never be synced back to GitHub.</li>
+</ul>
+<h3 id="3-externalize-the-configuration-in-cicd"><a class="header" href="#3-externalize-the-configuration-in-cicd">3. Externalize the Configuration in CI/CD</a></h3>
+<p>Often, security and code-coverage tools require a configuration file (like a <code>.sonar</code> folder, Fortify configs, or pipeline YAMLs). Instead of committing these directly to the source code repository, the customer can inject them at runtime.</p>
+<ul>
+<li><strong>How it works:</strong> The customer keeps their Bitbucket mirrored repository completely identical to your GitHub repo. They place the scanning tool directories into a <em>second</em>, completely separate Bitbucket repository.</li>
+<li><strong>The pipeline:</strong> During their CI/CD build process, the pipeline clones the mirrored open-source repo, then immediately clones the “tooling” repo, copies the required directories into the workspace, and runs the scan.</li>
+<li><strong>Why it’s great:</strong> It entirely decouples the source code from the infrastructure/tooling, avoiding any Git history modifications.</li>
+</ul>
+<h3 id="4-gitignore-only-if-the-directories-are-generated-not-committed"><a class="header" href="#4-gitignore-only-if-the-directories-are-generated-not-committed">4. Gitignore (Only if the directories are <em>generated</em>, not committed)</a></h3>
+<p>If the commercial tools simply <em>generate</em> directories (like an <code>out/</code>, <code>coverage/</code>, or <code>reports/</code> folder) and those folders do not actually need to be tracked in Bitbucket’s version control:</p>
+<ul>
+<li><strong>How it works:</strong> Ensure the customer does not run <code>git add</code> on those directories.</li>
+<li>They can add the directories to a global <code>.gitignore</code> on their CI/CD build servers, or add <code>.git/info/exclude</code> locally in their Bitbucket repo environment.</li>
+<li><strong>Note:</strong> You <em>could</em> add these commercial directory names to the <code>.gitignore</code> file hosted on your public GitHub. It doesn’t hurt your open-source repo to ignore standard commercial tool outputs (e.g., adding <code>.sonar/</code> to your public <code>.gitignore</code>), and it prevents the customer from accidentally committing them.</li>
+</ul>
+<h2 id="recommendation-for-customers"><a class="header" href="#recommendation-for-customers">Recommendation for Customers</a></h2>
+<p>“To ensure seamless updates from our upstream GitHub repository without merge conflicts or accidentally leaking your internal configurations, we recommend <strong>not</strong> committing your tooling directories directly to the mirrored source code branch. Instead, either keep your tooling in a parent wrapper repository using Git Submodules, or maintain a distinct <code>internal</code> branch that merges updates from our <code>main</code> branch but is never pushed back upstream.”</p>
 
                     </main>
 
