@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-717d62ec.js";
+            window.path_to_searchindex_js = "searchindex-4de36bde.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-49b52dcd.js"></script>
@@ -9031,12 +9031,12 @@ metricsName: lambda-response
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sts-support"><a class="header" href="#sts-support">STS Support</a></h1>
-<p>The <code>lambda-invoker</code> module supports AWS Security Token Service (STS) to obtain temporary, limited-privilege security credentials for invoking Lambda functions. This is an alternative to providing long-term IAM access keys and and it is a fundamental component of AWS Identity and Access Management (IAM) used to enhance security by minimizing the need for long-term access keys.</p>
+<p>The <code>lambda-invoker</code> module supports AWS Security Token Service (STS) to obtain temporary, limited-privilege <em>assumed-role</em> credentials for invoking Lambda functions. This is an alternative to directly using long-lived static IAM access keys and and it is a fundamental component of AWS Identity and Access Management (IAM) used to enhance security by following the principle of least privilege.</p>
 <h2 id="key-features-5"><a class="header" href="#key-features-5">Key Features</a></h2>
 <ul>
 <li><strong>Temporary Credentials</strong>: Provides short-lived credentials (access key, secret key, and token) that expire, reducing risks from compromised keys.</li>
 <li><strong>AssumeRole</strong>: Obtains temporary credentials for cross-account access or delegated permissions.</li>
-<li><strong>Automatic Refresh</strong>: The <code>LambdaFunctionHandler</code> automatically refreshes the temporary credentials before they expire.</li>
+<li><strong>Automatic Managed Refresh</strong>: The <code>LambdaFunctionHandler</code> leverages the AWS SDK’s <code>StsAssumeRoleCredentialsProvider</code> to handle token refresh automatically and asynchronously.</li>
 </ul>
 <h2 id="configuration-64"><a class="header" href="#configuration-64">Configuration</a></h2>
 <p>To enable STS support, you need to add the following configuration to your <code>lambda-invoker.yml</code>:</p>
@@ -9056,13 +9056,17 @@ roleSessionName: gateway-session
 durationSeconds: 3600
 </code></pre>
 <h2 id="how-it-works-6"><a class="header" href="#how-it-works-6">How it Works</a></h2>
-<p>When <code>stsEnabled</code> is set to <code>true</code>, the <code>LambdaFunctionHandler</code> use the <code>StsClient</code> to call the <code>AssumeRole</code> operation with the configured <code>roleArn</code>, <code>roleSessionName</code>, and <code>durationSeconds</code>.</p>
-<p>The returned temporary credentials (access key, secret key, and session token) are then used to initialize the <code>LambdaAsyncClient</code>.</p>
+<p>When <code>stsEnabled</code> is set to <code>true</code>, the <code>LambdaFunctionHandler</code> initializes an <code>StsAssumeRoleCredentialsProvider</code>.</p>
+<p>This provider uses the <strong>AWS Default Credential Chain</strong> (e.g., EC2 instance profile, ECS task role, environment variables, or local profile) as the <em>source</em> credentials to call the <code>AssumeRole</code> operation.</p>
+<p>The returned temporary credentials (access key, secret key, and session token) are then used by the <code>LambdaAsyncClient</code> to sign invocation requests.</p>
 <h3 id="automatic-refreshment"><a class="header" href="#automatic-refreshment">Automatic Refreshment</a></h3>
-<p>The <code>LambdaFunctionHandler</code> checks the expiration time of the cached STS credentials before each Lambda invocation. If the credentials are within a 5-minute buffer of expiring, the handler automatically initiates a new <code>AssumeRole</code> request to refresh the credentials and re-initializes the <code>LambdaAsyncClient</code>.</p>
+<p>The <code>StsAssumeRoleCredentialsProvider</code> automatically manages the lifecycle of the temporary credentials. It preemptively and asynchronously refreshes the session before it expires, ensuring zero downtime and omitting the need for manual refresh logic in the application code.</p>
 <h2 id="iam-policy-requirements"><a class="header" href="#iam-policy-requirements">IAM Policy Requirements</a></h2>
-<p>The IAM entity (user or role) that the light-4j application is running as must have the <code>sts:AssumeRole</code> permission for the target <code>roleArn</code>.</p>
-<h3 id="example-iam-policy"><a class="header" href="#example-iam-policy">Example IAM Policy</a></h3>
+<ol>
+<li><strong>Source Credentials Permission</strong>: The IAM entity (e.g., EC2 instance profile) that the light-4j application is running as must have the <code>sts:AssumeRole</code> permission for the target <code>roleArn</code>.</li>
+<li><strong>Target Role Trust Relationship</strong>: The target role (<code>roleArn</code>) must have a trust relationship (Principal) that allows the application’s source IAM entity to assume it.</li>
+</ol>
+<h3 id="example-source-iam-policy"><a class="header" href="#example-source-iam-policy">Example Source IAM Policy</a></h3>
 <pre><code class="language-json">{
     "Version": "2012-10-17",
     "Statement": [
@@ -9074,7 +9078,6 @@ durationSeconds: 3600
     ]
 }
 </code></pre>
-<p>Additionally, the target role must have a trust relationship that allows the application’s IAM entity to assume it.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="light-websocket-4j"><a class="header" href="#light-websocket-4j">Light-websocket-4j</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
