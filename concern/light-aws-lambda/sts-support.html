@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Fine-Grained Authorization - Light-4j Platform</title>
+        <title>STS Support - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -12,33 +12,33 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="../favicon-de23e50b.svg">
-        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
-        <link rel="stylesheet" href="../css/variables-8adf115d.css">
-        <link rel="stylesheet" href="../css/general-2459343d.css">
-        <link rel="stylesheet" href="../css/chrome-ae938929.css">
-        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+        <link rel="icon" href="../../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../../css/general-2459343d.css">
+        <link rel="stylesheet" href="../../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../../css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+        <link rel="stylesheet" href="../../fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
-        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
-        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../../ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "../";
+            const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-717d62ec.js";
+            window.path_to_searchindex_js = "../../searchindex-717d62ec.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-49b52dcd.js"></script>
+        <script src="../../toc-49b52dcd.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -105,7 +105,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -140,7 +140,7 @@
                     <h1 class="menu-title">Light-4j Platform</h1>
 
                     <div class="right-buttons">
-                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
 
@@ -174,67 +174,61 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="fine-grained-authorization-fga-design"><a class="header" href="#fine-grained-authorization-fga-design">Fine-Grained Authorization (FGA) Design</a></h1>
-<p>In the Light framework ecosystems (<code>light-rest-4j</code>, <code>light-hybrid-4j</code>, and <code>light-graphql-4j</code>), Coarse-Grained Authorization revolves around OAuth 2.0 JWT token scopes, primarily ensuring that users possess top-level access to broad endpoints.</p>
-<p>However, <strong>Fine-Grained Authorization (FGA)</strong> applies dynamic, rule-based business logic to requests—operating at the row or column level—to selectively filter attributes, enforce ownership constraints, or permit conditionally authorized actions based on arbitrary token claims or request payloads.</p>
-<p>This document outlines the architecture, components, and the integration flows supporting FGA.</p>
-<h2 id="core-components"><a class="header" href="#core-components">Core Components</a></h2>
-<p>The FGA system relies on the interplay of several core components structured to provide high performance (via local caching) while maintaining centralized policy definitions natively managed within the <code>light-portal</code>.</p>
-<h3 id="1-ruleengine"><a class="header" href="#1-ruleengine">1. <code>RuleEngine</code></a></h3>
-<p>The <code>RuleEngine</code> (housed in <code>yaml-rule</code>) evaluates incoming contextual payloads against a predefined set of YAML rules. The rules contain conditions structured around the business domain, granting binary (pass/fail) results or mutating payload structures.</p>
-<h3 id="2-ruleloaderstartuphook"><a class="header" href="#2-ruleloaderstartuphook">2. <code>RuleLoaderStartupHook</code></a></h3>
-<p>To prevent introducing network latency during live authorization checks, FGA operates completely in-memory.</p>
-<p>The <code>RuleLoaderStartupHook</code> (in <code>light-4j</code>) runs when a framework server starts up. It connects to the <code>light-portal</code> (acting as the control plane) to download all applicable YAML rules and API permissions specific to the host, API ID, and API version.</p>
+                        <h1 id="sts-support"><a class="header" href="#sts-support">STS Support</a></h1>
+<p>The <code>lambda-invoker</code> module supports AWS Security Token Service (STS) to obtain temporary, limited-privilege security credentials for invoking Lambda functions. This is an alternative to providing long-term IAM access keys and and it is a fundamental component of AWS Identity and Access Management (IAM) used to enhance security by minimizing the need for long-term access keys.</p>
+<h2 id="key-features"><a class="header" href="#key-features">Key Features</a></h2>
 <ul>
-<li>It caches all endpoint mapped rules natively inside <code>RuleLoaderStartupHook.endpointRules</code>.</li>
-<li>It caches the YAML schemas dynamically parsed as <code>Rule</code> objects inside <code>RuleLoaderStartupHook.rules</code>.</li>
-<li>It initializes the <code>RuleEngine</code> Singleton.</li>
+<li><strong>Temporary Credentials</strong>: Provides short-lived credentials (access key, secret key, and token) that expire, reducing risks from compromised keys.</li>
+<li><strong>AssumeRole</strong>: Obtains temporary credentials for cross-account access or delegated permissions.</li>
+<li><strong>Automatic Refresh</strong>: The <code>LambdaFunctionHandler</code> automatically refreshes the temporary credentials before they expire.</li>
 </ul>
-<h3 id="3-accesscontrolhandler"><a class="header" href="#3-accesscontrolhandler">3. <code>AccessControlHandler</code></a></h3>
-<p>The <code>AccessControlHandler</code> operates as a crucial middleware in both <code>light-rest-4j</code> and <code>light-hybrid-4j</code> architectures. As a middleware handler injected after authentication mechanisms (like <code>JwtVerifyHandler</code>), it builds a contextual Request Payload encapsulating headers, query parameters, method types, and the deserialized JWT claims (found in <code>auditInfo</code>).</p>
-<p>It behaves iteratively:</p>
-<ol>
-<li><strong>Lookup</strong>: Resolves the exact endpoint being requested.</li>
-<li><strong>Match</strong>: Fetches the associated rules from the <code>RuleLoaderStartupHook</code> mappings for that endpoint.</li>
-<li><strong>Execute</strong>: Pipes the contextual payload through the <code>RuleEngine</code>.</li>
-<li><strong>Enforce</strong>: Depending on the server configuration (<code>accessRuleLogic</code>: <code>all</code> vs. <code>any</code>), the handler will either advance the HTTP Exchange to the next middleware or abort the request, dumping an <code>ERR10067</code> or <code>ERR10069</code> Status code indicating an access control failure or missing rule fallback.</li>
-</ol>
-<h2 id="refactoring-and-integration-gaps"><a class="header" href="#refactoring-and-integration-gaps">Refactoring and Integration Gaps</a></h2>
-<p>Historically, the <code>RuleLoaderStartupHook</code> depended on the <code>market</code> ecosystem to retrieve API endpoint rules. However, to modernize the control plane and decouple rule queries from the legacy marketplace components, Rule/Permission persistence has been shifted to specialized domain queries.</p>
-<h3 id="api-migration-map"><a class="header" href="#api-migration-map">API Migration Map</a></h3>
-<p>The <code>market</code> actions were deprecated and substituted with distinct domain boundaries:</p>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>To enable STS support, you need to add the following configuration to your <code>lambda-invoker.yml</code>:</p>
 <ul>
-<li><strong><code>getServiceRule</code></strong>: Migrated out of <code>market</code> and is now natively handled by <code>GetServiceRule.java</code> within the <code>service-query</code> module mapped to the <code>service</code> target endpoint.</li>
-<li><strong><code>getApiPermission</code></strong>: Migrated out of <code>market</code> and natively handled by <code>GetApiPermission.java</code> within the <code>service-query</code> module. (Note: <code>GetRuleByApiId.java</code> inside <code>rule-query</code> serves simple rule mappings, whereas the startup hook specifically requires the enriched unified schema containing <code>ruleBodies</code> provided by the structured <code>GetServiceRule</code>).</li>
+<li><strong>stsEnabled</strong>: Set to <code>true</code> to enable STS support. Default is <code>false</code>.</li>
+<li><strong>roleArn</strong>: The ARN of the IAM role to assume.</li>
+<li><strong>roleSessionName</strong>: An identifier for the assumed role session. Default is <code>light-gateway-session</code>.</li>
+<li><strong>durationSeconds</strong>: The duration, in seconds, of the role session. Default is <code>3600</code> (1 hour).</li>
 </ul>
-<h3 id="updates-required"><a class="header" href="#updates-required">Updates Required</a></h3>
-<p>Framework integrations must ensure their startup loops target the updated schema formats. Specifically, the <code>RuleLoaderStartupHook</code> payloads strictly hit the modernized endpoints:</p>
+<h3 id="example-lambda-invokeryml"><a class="header" href="#example-lambda-invokeryml">Example <code>lambda-invoker.yml</code></a></h3>
+<pre><code class="language-yaml">region: us-east-1
+# other configuration properties...
+
+stsEnabled: true
+roleArn: arn:aws:iam::123456789012:role/LambdaInvokerRole
+roleSessionName: gateway-session
+durationSeconds: 3600
+</code></pre>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How it Works</a></h2>
+<p>When <code>stsEnabled</code> is set to <code>true</code>, the <code>LambdaFunctionHandler</code> use the <code>StsClient</code> to call the <code>AssumeRole</code> operation with the configured <code>roleArn</code>, <code>roleSessionName</code>, and <code>durationSeconds</code>.</p>
+<p>The returned temporary credentials (access key, secret key, and session token) are then used to initialize the <code>LambdaAsyncClient</code>.</p>
+<h3 id="automatic-refreshment"><a class="header" href="#automatic-refreshment">Automatic Refreshment</a></h3>
+<p>The <code>LambdaFunctionHandler</code> checks the expiration time of the cached STS credentials before each Lambda invocation. If the credentials are within a 5-minute buffer of expiring, the handler automatically initiates a new <code>AssumeRole</code> request to refresh the credentials and re-initializes the <code>LambdaAsyncClient</code>.</p>
+<h2 id="iam-policy-requirements"><a class="header" href="#iam-policy-requirements">IAM Policy Requirements</a></h2>
+<p>The IAM entity (user or role) that the light-4j application is running as must have the <code>sts:AssumeRole</code> permission for the target <code>roleArn</code>.</p>
+<h3 id="example-iam-policy"><a class="header" href="#example-iam-policy">Example IAM Policy</a></h3>
 <pre><code class="language-json">{
-  "host": "lightapi.net",
-  "service": "service",
-  "action": "getServiceRule",   // or getApiPermission
-  "version": "0.1.0",
-  "data": { ... }
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRole",
+            "Resource": "arn:aws:iam::123456789012:role/LambdaInvokerRole"
+        }
+    ]
 }
 </code></pre>
-<h2 id="testing-strategy"><a class="header" href="#testing-strategy">Testing Strategy</a></h2>
-<p>Validating FGA logic avoids reliance on complex networked setups by supplying the <code>RuleLoaderStartupHook</code> instances with mock configurations at test-time.</p>
-<p>For unit tests targeting <code>AccessControlHandler</code>:</p>
-<ol>
-<li><strong>Initialization Bypass</strong>: Tests artificially seed <code>RuleLoaderStartupHook.rules</code> and <code>RuleLoaderStartupHook.endpointRules</code> with predictable mapping behaviors before rule engine execution.</li>
-<li><strong>Path Skip Asserts</strong>: <code>AccessControlHandler</code> allows endpoints strictly matching the <code>skipPathPrefixes</code> config variable to bypass FGA (e.g., standard <code>/health</code> endpoints).</li>
-<li><strong>Failure Overrides</strong>: If rules are omitted, the explicit verification of <code>config.isDefaultDeny()</code> governs whether missing policies act as permit-all traps or deny-all blocks. Tests must assert that HTTP 403s are accurately rendered when rule configurations lack explicit definition.</li>
-</ol>
+<p>Additionally, the target role must have a trust relationship that allows the application’s IAM entity to assume it.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../design/remove-simplejwtverify.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../concern/light-aws-lambda/lambda-invoker.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../cross-cutting-concerns.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../concern/light-websocket-4j.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -244,11 +238,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../design/remove-simplejwtverify.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../concern/light-aws-lambda/lambda-invoker.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../cross-cutting-concerns.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../concern/light-websocket-4j.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
@@ -268,17 +262,17 @@
         </script>
 
 
-        <script src="../elasticlunr-ef4e11c1.min.js"></script>
-        <script src="../mark-09e88c2c.min.js"></script>
-        <script src="../searcher-c2a407aa.js"></script>
+        <script src="../../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../../mark-09e88c2c.min.js"></script>
+        <script src="../../searcher-c2a407aa.js"></script>
 
-        <script src="../clipboard-1626706a.min.js"></script>
-        <script src="../highlight-abc7f01d.js"></script>
-        <script src="../book-a0b12cfe.js"></script>
+        <script src="../../clipboard-1626706a.min.js"></script>
+        <script src="../../highlight-abc7f01d.js"></script>
+        <script src="../../book-a0b12cfe.js"></script>
 
         <!-- Custom JS scripts -->
-        <script src="../mermaid-eefea253.min.js"></script>
-        <script src="../mermaid-init-ccf746f1.js"></script>
+        <script src="../../mermaid-eefea253.min.js"></script>
+        <script src="../../mermaid-init-ccf746f1.js"></script>
 
 
 

@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8698c645.js";
+            window.path_to_searchindex_js = "searchindex-717d62ec.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a821ea2f.js"></script>
+        <script src="toc-49b52dcd.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -9030,6 +9030,52 @@ metricsName: lambda-response
       - lambda
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="sts-support"><a class="header" href="#sts-support">STS Support</a></h1>
+<p>The <code>lambda-invoker</code> module supports AWS Security Token Service (STS) to obtain temporary, limited-privilege security credentials for invoking Lambda functions. This is an alternative to providing long-term IAM access keys and and it is a fundamental component of AWS Identity and Access Management (IAM) used to enhance security by minimizing the need for long-term access keys.</p>
+<h2 id="key-features-5"><a class="header" href="#key-features-5">Key Features</a></h2>
+<ul>
+<li><strong>Temporary Credentials</strong>: Provides short-lived credentials (access key, secret key, and token) that expire, reducing risks from compromised keys.</li>
+<li><strong>AssumeRole</strong>: Obtains temporary credentials for cross-account access or delegated permissions.</li>
+<li><strong>Automatic Refresh</strong>: The <code>LambdaFunctionHandler</code> automatically refreshes the temporary credentials before they expire.</li>
+</ul>
+<h2 id="configuration-64"><a class="header" href="#configuration-64">Configuration</a></h2>
+<p>To enable STS support, you need to add the following configuration to your <code>lambda-invoker.yml</code>:</p>
+<ul>
+<li><strong>stsEnabled</strong>: Set to <code>true</code> to enable STS support. Default is <code>false</code>.</li>
+<li><strong>roleArn</strong>: The ARN of the IAM role to assume.</li>
+<li><strong>roleSessionName</strong>: An identifier for the assumed role session. Default is <code>light-gateway-session</code>.</li>
+<li><strong>durationSeconds</strong>: The duration, in seconds, of the role session. Default is <code>3600</code> (1 hour).</li>
+</ul>
+<h3 id="example-lambda-invokeryml"><a class="header" href="#example-lambda-invokeryml">Example <code>lambda-invoker.yml</code></a></h3>
+<pre><code class="language-yaml">region: us-east-1
+# other configuration properties...
+
+stsEnabled: true
+roleArn: arn:aws:iam::123456789012:role/LambdaInvokerRole
+roleSessionName: gateway-session
+durationSeconds: 3600
+</code></pre>
+<h2 id="how-it-works-6"><a class="header" href="#how-it-works-6">How it Works</a></h2>
+<p>When <code>stsEnabled</code> is set to <code>true</code>, the <code>LambdaFunctionHandler</code> use the <code>StsClient</code> to call the <code>AssumeRole</code> operation with the configured <code>roleArn</code>, <code>roleSessionName</code>, and <code>durationSeconds</code>.</p>
+<p>The returned temporary credentials (access key, secret key, and session token) are then used to initialize the <code>LambdaAsyncClient</code>.</p>
+<h3 id="automatic-refreshment"><a class="header" href="#automatic-refreshment">Automatic Refreshment</a></h3>
+<p>The <code>LambdaFunctionHandler</code> checks the expiration time of the cached STS credentials before each Lambda invocation. If the credentials are within a 5-minute buffer of expiring, the handler automatically initiates a new <code>AssumeRole</code> request to refresh the credentials and re-initializes the <code>LambdaAsyncClient</code>.</p>
+<h2 id="iam-policy-requirements"><a class="header" href="#iam-policy-requirements">IAM Policy Requirements</a></h2>
+<p>The IAM entity (user or role) that the light-4j application is running as must have the <code>sts:AssumeRole</code> permission for the target <code>roleArn</code>.</p>
+<h3 id="example-iam-policy"><a class="header" href="#example-iam-policy">Example IAM Policy</a></h3>
+<pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRole",
+            "Resource": "arn:aws:iam::123456789012:role/LambdaInvokerRole"
+        }
+    ]
+}
+</code></pre>
+<p>Additionally, the target role must have a trust relationship that allows the application’s IAM entity to assume it.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="light-websocket-4j"><a class="header" href="#light-websocket-4j">Light-websocket-4j</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="websocket-client"><a class="header" href="#websocket-client">Websocket Client</a></h1>
@@ -9037,7 +9083,7 @@ metricsName: lambda-response
 <h1 id="websocket-router"><a class="header" href="#websocket-router">WebSocket Router</a></h1>
 <p>The <code>WebSocketRouterHandler</code> is a middleware handler designed to route WebSocket connections to downstream services in a microservices architecture. It sits in the request chain and identifies WebSocket handshake requests either by a specific header (<code>service_id</code>) or by matching the request path against configured prefixes.</p>
 <p>When a request is identified as a WebSocket request targeted for routing, this handler performs the WebSocket handshake (upgrading the connection) and establishes a proxy connection to the appropriate downstream service. It manages the bi-directional traffic between the client and the downstream service.</p>
-<h2 id="configuration-64"><a class="header" href="#configuration-64">Configuration</a></h2>
+<h2 id="configuration-65"><a class="header" href="#configuration-65">Configuration</a></h2>
 <p>The configuration for the WebSocket Router Handler is located in <code>websocket-router.yml</code>.</p>
 <pre><code># Light websocket router configuration
 # Enable WebSocket Router Handler
@@ -9071,7 +9117,7 @@ pathPrefixService:
     - header
     - router
 </code></pre>
-<h2 id="how-it-works-6"><a class="header" href="#how-it-works-6">How it Works</a></h2>
+<h2 id="how-it-works-7"><a class="header" href="#how-it-works-7">How it Works</a></h2>
 <ol>
 <li><strong>Request Interception</strong>: The handler checks each incoming request.</li>
 <li><strong>Identification</strong>:
@@ -9115,7 +9161,7 @@ pathPrefixService:
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="websocket-handler"><a class="header" href="#websocket-handler">WebSocket Handler</a></h1>
 <p>The <code>WebSocketHandler</code> is a middleware handler designed to process WebSocket messages on the server side (Light Gateway or Light 4J Service), rather than proxying them to downstream services. It enables the implementation of custom logic, such as Chat bots, GenAI integration, or real-time notifications, directly within the application.</p>
-<h2 id="configuration-65"><a class="header" href="#configuration-65">Configuration</a></h2>
+<h2 id="configuration-66"><a class="header" href="#configuration-66">Configuration</a></h2>
 <p>The configuration is located in <code>websocket-handler.yml</code>.</p>
 <div class="table-wrapper">
 <table>
@@ -9176,7 +9222,7 @@ public class ChatHandler implements WebSocketApplicationHandler {
     - WebSocketHandler
     # ... other handlers
 </code></pre>
-<h2 id="how-it-works-7"><a class="header" href="#how-it-works-7">How It Works</a></h2>
+<h2 id="how-it-works-8"><a class="header" href="#how-it-works-8">How It Works</a></h2>
 <ol>
 <li><strong>Matching</strong>: The handler checks if the request path starts with one of the configured <code>pathPrefixHandlers</code>.</li>
 <li><strong>Instantiation</strong>: It loads and instantiates the configured handler class singleton at startup.</li>
@@ -9204,7 +9250,7 @@ public class ChatHandler implements WebSocketApplicationHandler {
     &lt;version&gt;${version.light-4j}&lt;/version&gt;
 &lt;/dependency&gt;
 </code></pre>
-<h2 id="configuration-66"><a class="header" href="#configuration-66">Configuration</a></h2>
+<h2 id="configuration-67"><a class="header" href="#configuration-67">Configuration</a></h2>
 <p>The module is configured via <code>websocket-rendezvous.yml</code> (or <code>values.yml</code> overrides).</p>
 <p>The configuration key is <code>websocket-rendezvous</code>.</p>
 <div class="table-wrapper">
@@ -9239,7 +9285,7 @@ handler.paths:
     exec:
       - rendezvous
 </code></pre>
-<h2 id="how-it-works-8"><a class="header" href="#how-it-works-8">How It Works</a></h2>
+<h2 id="how-it-works-9"><a class="header" href="#how-it-works-9">How It Works</a></h2>
 <ol>
 <li>
 <p><strong>Channel Identification</strong>: Both the Client and the Backend must provide a <code>channelId</code> to identify the session. This is typically done via the HTTP header <code>channel-group-id</code> or a query parameter <code>channelId</code> in the WebSocket upgrade request.</p>
@@ -9332,7 +9378,7 @@ Connection: Upgrade
 <li><strong>Configuration</strong>: externalizable configuration via <code>ollama.yml</code>.</li>
 <li><strong>Token Management</strong>: N/A (Ollama usually runs locally without auth, but can be proxied).</li>
 </ul>
-<h2 id="configuration-67"><a class="header" href="#configuration-67">Configuration</a></h2>
+<h2 id="configuration-68"><a class="header" href="#configuration-68">Configuration</a></h2>
 <p>The client is configured via <code>ollama.yml</code> in the <code>src/main/resources/config</code> directory (or externalized config folder).</p>
 <h3 id="properties-1"><a class="header" href="#properties-1">Properties</a></h3>
 <div class="table-wrapper">
@@ -9396,7 +9442,7 @@ client.chatStream(messages, new StreamCallback() {
 <li><strong>Streaming Chat</strong>: streams the response from the model token by token, suitable for real-time applications.</li>
 <li><strong>Non-Blocking I/O</strong>: Uses XNIO and Undertow’s asynchronous client to prevent blocking threads during I/O operations.</li>
 </ul>
-<h2 id="configuration-68"><a class="header" href="#configuration-68">Configuration</a></h2>
+<h2 id="configuration-69"><a class="header" href="#configuration-69">Configuration</a></h2>
 <p>The client is configured via <code>openai.yml</code>.</p>
 <h3 id="properties-2"><a class="header" href="#properties-2">Properties</a></h3>
 <div class="table-wrapper">
@@ -9457,7 +9503,7 @@ client.chatStream(messages, new StreamCallback() {
 <li><strong>Streaming Chat</strong>: streams the response from the model chunk by chunk, suitable for real-time applications.</li>
 <li><strong>Non-Blocking I/O</strong>: Uses XNIO and Undertow’s asynchronous client to prevent blocking threads during I/O operations.</li>
 </ul>
-<h2 id="configuration-69"><a class="header" href="#configuration-69">Configuration</a></h2>
+<h2 id="configuration-70"><a class="header" href="#configuration-70">Configuration</a></h2>
 <p>The client is configured via <code>gemini.yml</code>.</p>
 <h3 id="properties-3"><a class="header" href="#properties-3">Properties</a></h3>
 <div class="table-wrapper">
@@ -9518,7 +9564,7 @@ client.chatStream(messages, new StreamCallback() {
 <li><strong>Streaming Chat</strong>: streams the response from the model chunk by chunk, suitable for real-time applications.</li>
 <li><strong>Non-Blocking I/O</strong>: Leverages <code>BedrockRuntimeAsyncClient</code> and JDK <code>CompletableFuture</code> for non-blocking operations.</li>
 </ul>
-<h2 id="configuration-70"><a class="header" href="#configuration-70">Configuration</a></h2>
+<h2 id="configuration-71"><a class="header" href="#configuration-71">Configuration</a></h2>
 <p>The client is configured via <code>bedrock.yml</code>.</p>
 <h3 id="properties-4"><a class="header" href="#properties-4">Properties</a></h3>
 <div class="table-wrapper">
@@ -9630,7 +9676,7 @@ client.chatStream(messages, new StreamCallback() {
 <li><strong>Redis</strong>: Shared cache for clustered deployments (session affinity not required).</li>
 <li><strong>Hazelcast</strong>: In-memory data grid for distributed caching.</li>
 </ul>
-<h2 id="configuration-71"><a class="header" href="#configuration-71">Configuration</a></h2>
+<h2 id="configuration-72"><a class="header" href="#configuration-72">Configuration</a></h2>
 <p>The implementation to use can be configured via <code>service.yml</code> (using Light-4J’s Service/Module loading) or dedicated config files.</p>
 <p>Example <code>service.yml</code> for In-Memory:</p>
 <pre><code class="language-yaml">- com.networknt.genai.handler.ChatHistoryRepository:
@@ -9703,7 +9749,7 @@ ToolSpecification codeExecutionTool = ToolSpecification.builder()
 
 // ... register tool with your ChatModel or Agent ...
 </code></pre>
-<h2 id="configuration-72"><a class="header" href="#configuration-72">Configuration</a></h2>
+<h2 id="configuration-73"><a class="header" href="#configuration-73">Configuration</a></h2>
 <p>The GraalVM execution engine can be configured to restrict access to host resources (file system, network, etc.) for security. By default, LangChain4j’s implementation provides a reasonable level of sandboxing, but you should review the <a href="https://www.graalvm.org/latest/security-guide/">GraalVM Security Guide</a> for production deployments, especially if executing untrusted code.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="example-3"><a class="header" href="#example-3">Example</a></h1>
@@ -9719,7 +9765,7 @@ ToolSpecification codeExecutionTool = ToolSpecification.builder()
 <li>maven 3.6.0 or above</li>
 <li><a href="https://ollama.ai/">Ollama</a> running locally (for the default configuration) with a model pulled (e.g., <code>qwen3:14b</code> or <code>llama3</code>).</li>
 </ul>
-<h2 id="configuration-73"><a class="header" href="#configuration-73">Configuration</a></h2>
+<h2 id="configuration-74"><a class="header" href="#configuration-74">Configuration</a></h2>
 <p>The server configuration is consolidated in <code>src/main/resources/config/values.yml</code>.</p>
 <h3 id="server--handler"><a class="header" href="#server--handler">Server &amp; Handler</a></h3>
 <p>The server runs on HTTP port 8080 and defines two main paths:</p>
@@ -9791,7 +9837,7 @@ mvn clean install exec:java
 <li><strong>Backend</strong>: <code>llmchat-server</code> running on HTTP port 8080.</li>
 <li><strong>Routing</strong>: Uses <code>WebSocketRouterHandler</code> to forward messages based on path or serviceId. Also uses <code>DirectRegistry</code> for service discovery.</li>
 </ul>
-<h2 id="configuration-74"><a class="header" href="#configuration-74">Configuration</a></h2>
+<h2 id="configuration-75"><a class="header" href="#configuration-75">Configuration</a></h2>
 <p>The configuration is located in <code>src/main/resources/config/values.yml</code>.</p>
 <h3 id="server--handler-1"><a class="header" href="#server--handler-1">Server &amp; Handler</a></h3>
 <p>Configured for HTTPS on port 8443.</p>
