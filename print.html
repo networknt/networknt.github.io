@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-4de36bde.js";
+            window.path_to_searchindex_js = "searchindex-1c211d5e.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-49b52dcd.js"></script>
+        <script src="toc-17955bc6.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -6641,6 +6641,57 @@ InputStream is = Config.getInstance().getInputStreamFromFile("primary.crt");
 <li><strong>Values.yml</strong>: Use <code>values.yml</code> to centrally manage variables that are injected into multiple other config files.</li>
 <li><strong>Secrets</strong>: Never commit plain text passwords. Use the encryption feature or Kubernetes Secrets mapped to files in the config directory.</li>
 </ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="value-injection"><a class="header" href="#value-injection">Value Injection</a></h1>
+<p>The light-4j framework provides a powerful mechanism to inject values into configuration files from external sources, such as environment variables or a centralized <code>values.yml</code> file. This allows for dynamic and flexible configuration management without modifying the application code.</p>
+<h2 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h2>
+<p>Property injection uses the <code>${key:defaultValue}</code> pattern. When a configuration file is loaded, any property with this pattern will be replaced by:</p>
+<ol>
+<li><strong>Environment Variable</strong>: If an environment variable matching the <code>key</code> (often converted to uppercase with underscores) exists, its value is used.</li>
+<li><strong>values.yml</strong>: If the key is defined in the <code>values.yml</code> file, its value is used.</li>
+<li><strong>Default Value</strong>: If neither is found, the <code>defaultValue</code> is used.</li>
+</ol>
+<p>Example:</p>
+<pre><code class="language-yaml">server.port: ${PORT:8080}
+</code></pre>
+<h2 id="centralized-valuesyml"><a class="header" href="#centralized-valuesyml">Centralized values.yml</a></h2>
+<p>The <code>values.yml</code> file (also supports <code>.yaml</code> or <code>.json</code>) acts as a central repository for all injected values. It is typically located in the same config directory as other configuration files.</p>
+<p>When using <code>values.yml</code>, you should prefix keys with the name of the configuration file they correspond to, although this is not strictly required if you use generic keys.</p>
+<p>Example <code>values.yml</code>:</p>
+<pre><code class="language-yaml">server.serviceId: com.networknt.gateway-1.0.0
+router.maxRequestTime: 5000
+db.user: root
+db.password: ${DB_PASS:password}
+</code></pre>
+<h2 id="self-injection-in-valuesyml"><a class="header" href="#self-injection-in-valuesyml">Self-Injection in values.yml</a></h2>
+<p>A recent enhancement allows <code>values.yml</code> to support property injection from its own entries. This enables you to reuse values and maintain consistency within the centralized configuration file.</p>
+<h3 id="implementation-details-1"><a class="header" href="#implementation-details-1">Implementation Details</a></h3>
+<p>To support self-injection, the <code>ConfigInjection</code> class follows a <strong>two-pass initialization strategy</strong>:</p>
+<ol>
+<li><strong>Exclusion</strong>: <code>values.yml</code> is explicitly excluded from the standard injection process during its initial load. This ensures it is loaded as a raw map, preventing any “cannot be expanded” exceptions during startup.</li>
+<li><strong>Pass 1</strong>: The raw values are loaded into the internal <code>decryptedValueMap</code> and <code>undecryptedValueMap</code>.</li>
+<li><strong>Pass 2</strong>: Once the maps are assigned to the static fields, the system performs a second pass using <code>CentralizedManagement.mergeMap</code>. During this pass, ${key} patterns are resolved against the internal maps, allowing for recursive resolution of self-references and environment variables.</li>
+</ol>
+<h3 id="example-of-self-injection"><a class="header" href="#example-of-self-injection">Example of Self-Injection</a></h3>
+<pre><code class="language-yaml"># values.yml
+db.host: localhost
+db.user: root
+db.url: jdbc:mysql://${db.host}:3306/mydb?user=${db.user}
+</code></pre>
+<p>In this example, <code>db.url</code> correctly resolves to <code>jdbc:mysql://localhost:3306/mydb?user=root</code> during application startup.</p>
+<h2 id="exclusion-list"><a class="header" href="#exclusion-list">Exclusion List</a></h2>
+<p>If you want to prevent certain configuration files from being processed for injection, you can add them to the <code>exclusionConfigFileList</code> in <code>config.yml</code>.</p>
+<pre><code class="language-yaml"># config.yml
+exclusionConfigFileList:
+  - openapi
+  - values
+</code></pre>
+<blockquote class="blockquote-tag blockquote-tag-note">
+<p class="blockquote-tag-title"><svg viewbox="0 0 16 16" width="18" height="18"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>Note</p>
+<p><code>values.yml</code> and <code>config.yml</code> are automatically excluded from the initial injection pass by the framework to maintain system stability.</p>
+</blockquote>
+<h2 id="decryption"><a class="header" href="#decryption">Decryption</a></h2>
+<p>Value injection also supports automatic decryption of values. If a value is encrypted (usually prefixed with <code>CRYPT:</code>), it will be decrypted using the configured <code>Decryptor</code> before being injected.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="cache-manager"><a class="header" href="#cache-manager">Cache Manager</a></h1>
 <p>The <code>CacheManager</code> module provides a unified interface for managing in-memory caches within the light-4j application. It abstracts the underlying caching implementation, allowing developers to configure and use caches without tying their code to a specific library.</p>
