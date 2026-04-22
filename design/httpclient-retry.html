@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-1c211d5e.js";
+            window.path_to_searchindex_js = "../searchindex-439a39d5.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-17955bc6.js"></script>
+        <script src="../toc-31edf89d.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -350,12 +350,35 @@ You have defined <code>private HttpClient client;</code> as an instance variable
 </code></pre>
 <h4 id="header-restriction"><a class="header" href="#header-restriction">Header Restriction</a></h4>
 <p>Header Restriction: Ensure your JVM is started with -Djdk.httpclient.allowRestrictedHeaders=connection to allow the HttpClient to modify the Connection header.</p>
-<p>To make it easier, we have added the following code to the handler.</p>
-<pre><code>    static {
-        System.setProperty("jdk.httpclient.allowRestrictedHeaders", "host,connection");
-    }
-
+<p>This must be configured at JVM startup, for example:</p>
+<pre><code class="language-bash">-Djdk.httpclient.allowRestrictedHeaders=connection,host
 </code></pre>
+<p>or in the JDK <code>conf/net.properties</code> file.</p>
+<p>Do not rely on calling <code>System.setProperty("jdk.httpclient.allowRestrictedHeaders", ...)</code> inside application code. The JDK does not guarantee that this property will be honored when set programmatically after startup, and in practice the request builder can still fail with:</p>
+<pre><code class="language-text">java.lang.IllegalArgumentException: restricted header name: "Connection"
+</code></pre>
+<p>This behavior was observed in <code>light-4j</code> issue <code>#2740</code> when the retry logic attempted to add <code>Connection: close</code> dynamically.</p>
+<h3 id="safe-fallback-behavior"><a class="header" href="#safe-fallback-behavior">Safe Fallback Behavior</a></h3>
+<p>Because the runtime property may be missing or ignored, the retry implementation should degrade safely:</p>
+<ul>
+<li>First attempt: use the original request</li>
+<li>Retry attempts: try to add <code>Connection: close</code></li>
+<li>If the JDK rejects the restricted header, log a warning and fall back to a normal retry request instead of throwing a runtime exception</li>
+</ul>
+<p>Example:</p>
+<pre><code class="language-java">static HttpRequest buildRetryRequest(HttpRequest request, int attempt) {
+    try {
+        logger.info("Attempt {} failed. Retrying with 'Connection: close' to force fresh connection.", attempt);
+        return HttpRequest.newBuilder(request, (name, value) -&gt; true)
+                .header("Connection", "close")
+                .build();
+    } catch (IllegalArgumentException e) {
+        logger.warn("Attempt {} retry could not set restricted header 'Connection: close'. Falling back to a normal retry. Configure -Djdk.httpclient.allowRestrictedHeaders=connection,host at JVM startup to enable fresh-connection retries.", attempt, e);
+        return request;
+    }
+}
+</code></pre>
+<p>This ensures the retry logic still works even when the environment is not configured for restricted headers. The only feature that is lost in that case is the explicit forced-connection-close hint.</p>
 
                     </main>
 
