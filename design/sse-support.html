@@ -1,0 +1,565 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>SSE Support - Light-4j Platform</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-0392ca55.css">
+        <link rel="stylesheet" href="../css/chrome-fc474251.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex-5cca9b9e.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-e043d924.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Light-4j Platform</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="sse-support"><a class="header" href="#sse-support">SSE Support</a></h1>
+<p>This document describes how <code>light-4j</code> should support Server-Sent Events (SSE)
+for gateway and sidecar deployments where a client sends an HTTP request to an
+agent or downstream API and the downstream response is streamed back as
+<code>text/event-stream</code>.</p>
+<h2 id="background"><a class="header" href="#background">Background</a></h2>
+<p>SSE is a response-side streaming protocol. The client sends a normal HTTP
+request and keeps the response connection open while the server writes events in
+the <code>text/event-stream</code> format.</p>
+<p>For chatbot and agent use cases, the common flow is:</p>
+<pre><code class="language-text">chatbot client -&gt; light-gateway or sidecar -&gt; agent service
+                                      &lt;- text/event-stream response
+</code></pre>
+<p>This is different from the existing <code>sse-handler</code> module. <code>SseHandler</code> opens and
+owns a local SSE endpoint. When a request path matches <code>sse.path</code> or
+<code>sse.pathPrefixes</code>, it creates an Undertow <code>ServerSentEventHandler</code>, registers
+the connection in <code>SseConnectionRegistry</code>, and does not forward that exchange to
+the next handler. It is useful when the light-4j service itself owns the SSE
+connection, but it is not a downstream SSE proxy.</p>
+<p>For downstream agent responses, the proxy and router handlers are the right
+place to support SSE passthrough.</p>
+<h2 id="current-proxy-behavior"><a class="header" href="#current-proxy-behavior">Current Proxy Behavior</a></h2>
+<p><code>ProxyHandler</code> already has the core behavior needed for SSE passthrough:</p>
+<ul>
+<li>It forwards the request to the downstream service with Undertow client APIs.</li>
+<li>If the incoming request body is still available, it transfers the request body
+from the client request channel to the downstream request channel.</li>
+<li>When the downstream response arrives, it copies the downstream status and
+headers to the client exchange.</li>
+<li>It transfers the downstream response channel directly to the client response
+channel with <code>Transfer.initiateTransfer(...)</code>.</li>
+</ul>
+<p>Because the response body is transferred channel-to-channel, the proxy does not
+need to know the full body before it starts sending data to the client. This is
+the correct foundation for SSE.</p>
+<h2 id="current-gaps"><a class="header" href="#current-gaps">Current Gaps</a></h2>
+<h3 id="request-timeout"><a class="header" href="#request-timeout">Request Timeout</a></h3>
+<p><code>router.maxRequestTime</code> and <code>proxy.maxRequestTime</code> default to <code>1000</code>
+milliseconds. <code>ProxyHandler</code> schedules this timeout against the entire exchange
+and removes it only when the exchange completes.</p>
+<p>An SSE response is intentionally long-lived, so a normal one-second request
+timeout will close the stream. A gateway that proxies SSE must either disable
+the whole-exchange timeout for that route or use a timeout long enough for the
+expected stream lifetime.</p>
+<p>There is also a current implementation risk in <code>pathPrefixMaxRequestTime</code>.
+<code>ProxyHandler</code> mutates the handler field <code>maxRequestTime</code> when a prefix matches
+and schedules the timeout with that value. This is unsafe in a singleton handler
+because concurrent requests can affect each other. It also means a per-prefix
+value of <code>0</code> is not a reliable way to disable the timeout for one path.</p>
+<h3 id="response-header-overwrite"><a class="header" href="#response-header-overwrite">Response Header Overwrite</a></h3>
+<p><code>ProxyHandler.copyHeaders(...)</code> intentionally does not overwrite a response
+header that is already present on the exchange.</p>
+<p>That creates a problem when <code>ContentHandler</code> or another upstream middleware has
+already set <code>Content-Type</code> to <code>application/json</code>. If the downstream agent returns
+<code>Content-Type: text/event-stream</code>, the proxy may not replace the existing header.
+The client then receives the wrong content type and may not treat the response
+as SSE.</p>
+<h3 id="body-consuming-middleware"><a class="header" href="#body-consuming-middleware">Body-Consuming Middleware</a></h3>
+<p><code>BodyHandler</code> reads the request body into an attachment and does not restore it
+to the request channel for the proxy. For POST-based agent calls this can leave
+the downstream service without the original request body.</p>
+<p>For an SSE proxy route, middleware that consumes the request or response body
+must be excluded unless it restores the stream for downstream transfer.</p>
+<h3 id="response-buffering-and-transformation"><a class="header" href="#response-buffering-and-transformation">Response Buffering and Transformation</a></h3>
+<p><code>ResponseInterceptorInjectionHandler</code> can install a <code>ModifiableContentSinkConduit</code>
+when response interceptors require content. That conduit buffers the response
+until termination so interceptors can inspect or modify the body. This is
+incompatible with long-lived SSE responses because the stream may not terminate
+for a long time.</p>
+<p><code>DumpHandler</code> can also store the whole response when response dumping is enabled.
+<code>ResponseEncodeHandler</code> can add compression wrappers. Both are poor defaults for
+SSE passthrough.</p>
+<h2 id="design-goals"><a class="header" href="#design-goals">Design Goals</a></h2>
+<ul>
+<li>Allow <code>RouterHandler</code> and <code>LightProxyHandler</code> to proxy downstream
+<code>text/event-stream</code> responses without buffering.</li>
+<li>Preserve normal proxy timeout behavior for non-streaming APIs.</li>
+<li>Allow per-path streaming timeout behavior without mutating shared handler
+state.</li>
+<li>Preserve downstream SSE headers even if upstream middleware has already set a
+default response header.</li>
+<li>Make safe handler-chain recommendations explicit for gateway operators.</li>
+<li>Keep the current <code>SseHandler</code> semantics unchanged.</li>
+</ul>
+<h2 id="proxyhandler-enhancements"><a class="header" href="#proxyhandler-enhancements">ProxyHandler Enhancements</a></h2>
+<h3 id="1-use-request-local-timeout-values"><a class="header" href="#1-use-request-local-timeout-values">1. Use Request-Local Timeout Values</a></h3>
+<p>Replace the mutable timeout logic with request-local variables:</p>
+<pre><code class="language-java">int effectiveMaxRequestTime = this.maxRequestTime;
+long timeout = effectiveMaxRequestTime &gt; 0
+        ? System.currentTimeMillis() + effectiveMaxRequestTime
+        : 0;
+
+if (pathPrefixMaxRequestTime != null) {
+    for (Map.Entry&lt;String, Integer&gt; entry : pathPrefixMaxRequestTime.entrySet()) {
+        if (reqPath.startsWith(entry.getKey())) {
+            effectiveMaxRequestTime = entry.getValue();
+            timeout = effectiveMaxRequestTime &gt; 0
+                    ? System.currentTimeMillis() + effectiveMaxRequestTime
+                    : 0;
+            break;
+        }
+    }
+}
+</code></pre>
+<p>The timeout task should be scheduled only when <code>timeout &gt; 0</code>, and the scheduled
+delay should use <code>effectiveMaxRequestTime</code>, not the mutable field.</p>
+<p>This change makes per-path <code>0</code> mean “no whole-exchange timeout” and avoids
+cross-request contamination.</p>
+<h3 id="2-add-explicit-streaming-route-configuration"><a class="header" href="#2-add-explicit-streaming-route-configuration">2. Add Explicit Streaming Route Configuration</a></h3>
+<p>Add streaming configuration to both direct proxy and router deployments. The
+fields should be exposed through <code>ProxyConfig</code>/<code>LightProxyHandler</code> and through
+<code>RouterConfig</code>/<code>RouterHandler</code>, with <code>RouterHandler</code> passing the resolved values
+into the shared <code>ProxyHandler</code> builder.</p>
+<p>Suggested fields:</p>
+<pre><code class="language-yaml">streamResponseContentTypes:
+  - text/event-stream
+
+streamRequestAcceptTypes:
+  - text/event-stream
+
+streamPathPrefixes:
+  - /chat
+  - /agent
+
+streamMaxRequestTime: 0
+streamIdleTimeout: 0
+
+streamResponseHeaderOverwrite:
+  - Content-Type
+  - Cache-Control
+  - Connection
+  - Transfer-Encoding
+</code></pre>
+<p>The path-prefix list should mark requests as streaming before the downstream
+response arrives. The response content type should also be checked after
+downstream headers arrive so a service can opt into streaming by returning
+<code>text/event-stream</code>. Both detection modes are required: path-based detection
+lets the gateway apply streaming timeout behavior before the downstream response
+exists, and response-header detection handles services that declare streaming
+only through <code>Content-Type</code>.</p>
+<h3 id="3-cancel-whole-exchange-timeout-for-streaming-responses"><a class="header" href="#3-cancel-whole-exchange-timeout-for-streaming-responses">3. Cancel Whole-Exchange Timeout for Streaming Responses</a></h3>
+<p>If a timeout task has already been scheduled and the downstream response is
+classified as streaming, cancel the whole-exchange timeout when the response
+headers arrive.</p>
+<p>The existing timeout attachment can be reused. A small helper can make the
+behavior explicit:</p>
+<pre><code class="language-java">private static void cancelRequestTimeout(HttpServerExchange exchange) {
+    XnioExecutor.Key key = exchange.getAttachment(TIMEOUT_KEY);
+    if (key != null) {
+        key.remove();
+        exchange.removeAttachment(TIMEOUT_KEY);
+    }
+}
+</code></pre>
+<p>For streaming routes, the gateway should rely on TCP close, client disconnect,
+downstream close, or a dedicated optional streaming idle timeout rather than the
+normal whole-exchange request timeout. <code>streamIdleTimeout</code> should represent the
+maximum silent period between downstream bytes or events. A value of <code>0</code> should
+disable idle timeout enforcement.</p>
+<h3 id="4-preserve-sse-response-headers"><a class="header" href="#4-preserve-sse-response-headers">4. Preserve SSE Response Headers</a></h3>
+<p>When the downstream response content type starts with <code>text/event-stream</code>, the
+proxy should overwrite conflicting response headers that were set before proxy
+response handling.</p>
+<p>At minimum, overwrite:</p>
+<ul>
+<li><code>Content-Type</code></li>
+<li><code>Cache-Control</code></li>
+<li><code>Connection</code></li>
+<li><code>Transfer-Encoding</code></li>
+<li><code>Content-Encoding</code></li>
+<li><code>Content-Length</code></li>
+</ul>
+<p><code>Content-Length</code> should usually be removed for SSE because the response length is
+not known up front. <code>Content-Encoding</code> should be removed unless compression is
+explicitly supported and tested for streaming clients.</p>
+<p>This can be implemented as a streaming-aware response header copy path rather
+than changing the existing <code>copyHeaders(...)</code> behavior globally.</p>
+<h3 id="5-keep-streaming-routes-in-a-dedicated-chain"><a class="header" href="#5-keep-streaming-routes-in-a-dedicated-chain">5. Keep Streaming Routes in a Dedicated Chain</a></h3>
+<p>SSE routes should avoid response buffering and transformation through handler
+chain configuration. The design does not require <code>DumpHandler</code>,
+<code>ResponseInterceptorInjectionHandler</code>, response transformers, response cache, or
+response body interceptors to inspect a shared streaming attachment. Operators
+should configure SSE paths with a narrow chain that excludes body-consuming and
+response-buffering handlers.</p>
+<h3 id="6-add-streaming-tests"><a class="header" href="#6-add-streaming-tests">6. Add Streaming Tests</a></h3>
+<p>Add focused tests in <code>proxy-handler</code> and <code>egress-router</code>:</p>
+<ul>
+<li>downstream returns <code>text/event-stream</code>; client receives the first event before
+the downstream stream completes.</li>
+<li>default non-streaming timeout behavior still works.</li>
+<li>per-prefix <code>0</code> disables timeout for the matched streaming route and does not
+mutate <code>maxRequestTime</code> for other requests.</li>
+<li>downstream <code>Content-Type: text/event-stream</code> overwrites an earlier
+<code>Content-Type: application/json</code>.</li>
+<li>POST request body reaches the downstream agent when body-consuming middleware
+is not in the chain.</li>
+</ul>
+<h2 id="routerhandler-enhancements"><a class="header" href="#routerhandler-enhancements">RouterHandler Enhancements</a></h2>
+<p><code>RouterHandler</code> wraps <code>ProxyHandler</code> and builds it from <code>RouterConfig</code>.
+Enhancing router support means exposing the streaming proxy settings through
+<code>router.yml</code> and passing them into the proxy builder.</p>
+<p>Suggested router configuration:</p>
+<pre><code class="language-yaml">streamResponseContentTypes: ${router.streamResponseContentTypes:["text/event-stream"]}
+streamRequestAcceptTypes: ${router.streamRequestAcceptTypes:["text/event-stream"]}
+streamPathPrefixes: ${router.streamPathPrefixes:}
+streamMaxRequestTime: ${router.streamMaxRequestTime:0}
+streamIdleTimeout: ${router.streamIdleTimeout:0}
+streamResponseHeaderOverwrite: ${router.streamResponseHeaderOverwrite:["Content-Type","Cache-Control","Connection","Transfer-Encoding","Content-Encoding","Content-Length"]}
+</code></pre>
+<p><code>RouterConfig</code> should parse these fields and <code>RouterHandler.buildProxy()</code> should
+set them on <code>ProxyHandler.builder()</code>.</p>
+<p>The same fields should be added to <code>ProxyConfig</code> and passed by
+<code>LightProxyHandler</code> so both router-based and direct proxy deployments have the
+same behavior.</p>
+<h2 id="handler-chain-recommendation"><a class="header" href="#handler-chain-recommendation">Handler Chain Recommendation</a></h2>
+<p>For an SSE proxy route, keep the chain narrow and avoid body or response
+buffering handlers.</p>
+<p>Recommended chain:</p>
+<pre><code class="language-yaml">handlers:
+  - com.networknt.correlation.CorrelationHandler@correlation
+  - com.networknt.cors.CorsHttpHandler@cors
+  - com.networknt.whitelist.WhitelistHandler@whitelist
+  - com.networknt.security.UnifiedSecurityHandler@security
+  - com.networknt.header.HeaderHandler@header
+  - com.networknt.router.RouterHandler@router
+
+paths:
+  - path: '/agent/chat'
+    method: 'post'
+    exec:
+      - correlation
+      - cors
+      - whitelist
+      - security
+      - header
+      - router
+</code></pre>
+<p>Use <code>LightProxyHandler</code> instead of <code>RouterHandler</code> for a simple sidecar or
+single-target reverse proxy.</p>
+<p>Safe or conditionally safe handlers:</p>
+<ul>
+<li><code>CorrelationHandler</code>: safe.</li>
+<li><code>CorsHttpHandler</code>: safe and normally required for browser clients.</li>
+<li><code>WhitelistHandler</code>: safe.</li>
+<li><code>LimitHandler</code>: usable, but size limits and concurrency semantics must account
+for long-lived requests.</li>
+<li><code>UnifiedSecurityHandler</code>, <code>ApiKeyHandler</code>, <code>BasicAuthHandler</code>,
+<code>DerefMiddlewareHandler</code>: safe if configured for the route.</li>
+<li><code>HeaderHandler</code>: safe only if it does not overwrite SSE response headers with
+non-streaming values.</li>
+</ul>
+<p>Avoid these handlers on SSE proxy routes:</p>
+<ul>
+<li><code>SseHandler</code>: owns a local SSE endpoint and does not proxy matched requests.</li>
+<li><code>BodyHandler</code>: consumes POST/PUT/PATCH bodies before the proxy can forward
+them.</li>
+<li><code>ContentHandler</code>: can pre-set <code>Content-Type</code> and prevent downstream
+<code>text/event-stream</code> from being copied.</li>
+<li><code>SanitizerHandler</code>: depends on parsed request bodies.</li>
+<li><code>DumpHandler</code>: can buffer/store the response body.</li>
+<li><code>ResponseEncodeHandler</code>: can compress a stream that clients expect to receive
+as plain event-stream frames.</li>
+<li><code>ResponseInterceptorInjectionHandler</code> with content-required response
+interceptors: buffers the response until termination.</li>
+<li>Response transformer, response cache, response filter, and response body
+interceptors when they require response content.</li>
+<li>Request transformer/body interceptors that read or replace the body unless
+they restore it correctly for the proxy.</li>
+<li><code>MetricsHandler</code>: avoid in the dedicated SSE chain. Long-lived streams produce
+long request durations and do not provide useful per-event visibility through
+normal request metrics.</li>
+</ul>
+<h2 id="browser-and-client-notes"><a class="header" href="#browser-and-client-notes">Browser and Client Notes</a></h2>
+<p>The browser <code>EventSource</code> API only supports GET. If the chatbot client must send
+a POST body to the agent and receive an SSE response, it should use <code>fetch()</code> or
+a client library that can read the response stream incrementally.</p>
+<p>The gateway should pass through:</p>
+<ul>
+<li><code>Accept: text/event-stream</code></li>
+<li>authorization headers</li>
+<li>correlation and traceability headers</li>
+<li>request body for POST-based agent calls</li>
+</ul>
+<p>The downstream agent should return:</p>
+<pre><code class="language-http">Content-Type: text/event-stream
+Cache-Control: no-cache
+</code></pre>
+<p>It should periodically write comments or events as keep-alives if long pauses
+are possible.</p>
+<h2 id="implementation-plan"><a class="header" href="#implementation-plan">Implementation Plan</a></h2>
+<ol>
+<li>Fix <code>ProxyHandler</code> timeout calculation to use request-local values and allow
+per-prefix <code>0</code> to disable the whole-exchange timeout.</li>
+<li>Add streaming classification configuration to both <code>ProxyConfig</code> and
+<code>RouterConfig</code>.</li>
+<li>Extend <code>ProxyHandler.Builder</code> to accept streaming content types, accept
+headers, path prefixes, timeout behavior, idle timeout behavior, and header
+overwrite names.</li>
+<li>Detect streaming requests before scheduling the normal timeout when possible.</li>
+<li>Detect downstream <code>text/event-stream</code> responses in <code>ResponseCallback</code>.</li>
+<li>Cancel the normal timeout and overwrite conflicting response headers for
+streaming responses.</li>
+<li>Keep SSE paths on dedicated chains that avoid body-consuming,
+response-buffering, and metrics handlers.</li>
+<li>Add targeted proxy and router tests for streaming, timeout, idle timeout,
+header overwrite, and POST body passthrough.</li>
+<li>Update the <code>proxy-handler</code>, <code>router-handler</code>, and <code>sse-handler</code>
+documentation pages after implementation.</li>
+</ol>
+<h2 id="resolved-questions"><a class="header" href="#resolved-questions">Resolved Questions</a></h2>
+<ul>
+<li>Streaming route configuration must be available in both <code>ProxyHandler</code> and
+<code>RouterHandler</code> paths.</li>
+<li>Streaming detection must use both request/path configuration and downstream
+response headers.</li>
+<li>The gateway should provide an optional streaming idle timeout separate from
+whole-exchange <code>maxRequestTime</code>.</li>
+<li>SSE routes should avoid response-buffering handlers through dedicated chain
+configuration instead of requiring those handlers to honor a shared streaming
+attachment.</li>
+<li>Metrics should be avoided in the dedicated SSE chain.</li>
+</ul>
+<h2 id="decision"><a class="header" href="#decision">Decision</a></h2>
+<p>Use <code>ProxyHandler</code> and its wrappers for downstream SSE passthrough. Keep
+<code>SseHandler</code> as a local server-owned SSE endpoint. Enhance proxy and router
+configuration to make streaming routes explicit, disable whole-exchange timeout
+for those routes, add an optional streaming idle timeout, preserve downstream
+SSE headers, and keep SSE routes on dedicated chains that avoid body-consuming,
+response-buffering, and metrics handlers.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../design/mcp-router.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../design/config-reload.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../design/mcp-router.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../design/config-reload.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-09f2665d.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-c22b7243.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../mermaid-eefea253.min.js"></script>
+        <script src="../mermaid-init-ccf746f1.js"></script>
+
+
+
+    </div>
+    </body>
+</html>
