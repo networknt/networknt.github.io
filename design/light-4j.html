@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Intelligent Routing - Light-4j Platform</title>
+        <title>light-4j - Light-4j Platform</title>
 
 
         <!-- Custom HTML head -->
@@ -12,33 +12,33 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="../../favicon-de23e50b.svg">
-        <link rel="shortcut icon" href="../../favicon-8114d1fc.png">
-        <link rel="stylesheet" href="../../css/variables-8adf115d.css">
-        <link rel="stylesheet" href="../../css/general-0392ca55.css">
-        <link rel="stylesheet" href="../../css/chrome-fc474251.css">
-        <link rel="stylesheet" href="../../css/print-9e4910d8.css" media="print">
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-0392ca55.css">
+        <link rel="stylesheet" href="../css/chrome-fc474251.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="../../fonts/fonts-9644e21d.css">
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="mdbook-highlight-css" href="../../highlight-493f70e1.css">
-        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../../tomorrow-night-4c0ae647.css">
-        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../../ayu-highlight-3fdfc3ac.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "../../";
+            const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-aa7e5761.js";
+            window.path_to_searchindex_js = "../searchindex-aa7e5761.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-83e1172e.js"></script>
+        <script src="../toc-83e1172e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -105,7 +105,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
             </noscript>
             <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -140,7 +140,7 @@
                     <h1 class="menu-title">Light-4j Platform</h1>
 
                     <div class="right-buttons">
-                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
 
@@ -174,114 +174,17 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="intelligent-routing"><a class="header" href="#intelligent-routing">Intelligent Routing</a></h1>
-<p>Implementing <strong>Intelligent Routing &amp; Load Balancing</strong> in an MCP (Model Context Protocol) Gateway is a fascinating architectural challenge. Because MCP requests are typically sent to a single endpoint (e.g., via JSON-RPC or a single SSE connection) rather than standard RESTful URLs, traditional URL-based API gateway routing will not work.</p>
-<p>To implement this feature, you need to break it down into three distinct architectural pillars. Since you are working in the <strong>NetworkNT (Light-4j)</strong> ecosystem—which is built for high-throughput Java API gateways—here is exactly how you should approach this.</p>
-<hr>
-<h3 id="pillar-1-routing-by-tool-name-content-based-routing"><a class="header" href="#pillar-1-routing-by-tool-name-content-based-routing">Pillar 1: Routing by Tool Name (Content-Based Routing)</a></h3>
-<p>In standard HTTP routing, the gateway looks at the URL path (e.g., <code>/api/weather</code>). In MCP, the gateway must look <em>inside</em> the JSON payload.</p>
-<p>An MCP tool call looks like this:</p>
-<pre><code class="language-json">{
-  "method": "tools/call",
-  "params": {
-    "name": "get_customer_data",
-    "arguments": { "customerId": "123" }
-  }
-}
-</code></pre>
-<p><strong>Implementation Strategy:</strong></p>
-<ol>
-<li><strong>Payload Interception:</strong> Create a middleware handler that parses the incoming request body (using Jackson <code>JsonNode</code>).</li>
-<li><strong>Tool Registry Lookup:</strong> Extract the <code>params.name</code> (“get_customer_data”). You need an in-memory map or a distributed registry (like Consul, which NetworkNT uses heavily) that maps tool names to backend service IDs.
-<ul>
-<li><code>get_customer_data</code> -&gt; <code>service-id: customer-service</code></li>
-<li><code>execute_sql</code> -&gt; <code>service-id: db-agent</code></li>
-</ul>
-</li>
-<li><strong>Dynamic Upstream Routing:</strong> Once the service ID is identified, mutate the request context so the gateway’s HTTP client forwards the request to the correct downstream server.</li>
-</ol>
-<hr>
-<h3 id="pillar-2-routing-by-semantic-intent-ai-driven-routing"><a class="header" href="#pillar-2-routing-by-semantic-intent-ai-driven-routing">Pillar 2: Routing by Semantic Intent (AI-Driven Routing)</a></h3>
-<p>This is the “Intelligent” part. Sometimes the AI model (or user) doesn’t specify an exact tool name, but sends a raw prompt, and the gateway must decide which backend tool server is best equipped to handle it.</p>
-<p><strong>Implementation Strategy (Two Approaches):</strong></p>
-<ul>
-<li>
-<p><strong>Approach A: Fast LLM Classifier (Recommended for Accuracy)</strong>
-Intercept the request and send it to a very fast, cheap LLM (like Claude 3 Haiku or GPT-4o-mini). Provide the LLM with a list of available downstream services and ask it to output ONLY the service name based on the user’s intent. Then, route the request.</p>
-</li>
-<li>
-<p><strong>Approach B: Embeddings &amp; Vector Search (Recommended for Latency/Cost)</strong></p>
-<ol>
-<li><strong>Pre-computation:</strong> Create a text description for every backend server/tool you have, generate vector embeddings for those descriptions, and store them in memory.</li>
-<li><strong>Runtime:</strong> When a semantic request comes in, generate an embedding for the user’s intent.</li>
-<li><strong>Cosine Similarity Search:</strong> Calculate the distance between the user’s request vector and your tool vectors. Route the request to the tool server with the highest similarity score.</li>
-</ol>
-</li>
-</ul>
-<p><em>Note: Semantic routing adds latency. You should only trigger this flow if the request does NOT contain a strict <code>tool name</code>.</em></p>
-<hr>
-<h3 id="pillar-3-reliability-load-balancing-retries-circuit-breaking"><a class="header" href="#pillar-3-reliability-load-balancing-retries-circuit-breaking">Pillar 3: Reliability (Load Balancing, Retries, Circuit Breaking)</a></h3>
-<p>Because AI tool calls often hit legacy backends, databases, or third-party APIs, failure rates are higher than standard web traffic. You need robust resilience patterns.</p>
-<p><strong>Implementation Strategy:</strong></p>
-<ol>
-<li>
-<p><strong>Client-Side Load Balancing:</strong>
-Instead of hardcoding IPs, the Gateway should resolve the <code>service-id</code> (from Pillar 1) to a list of available nodes via a discovery service (Consul/Zookeeper). Use algorithms like <strong>Round Robin</strong> or <strong>Consistent Hashing</strong> (useful if you want the same user/context to hit the same tool server to utilize caching). <em>NetworkNT provides built-in client-side load balancing via the <code>cluster</code> module.</em></p>
-</li>
-<li>
-<p><strong>Retries:</strong>
-AI tool calls can fail due to rate limits (HTTP 429) or transient timeouts.</p>
-<ul>
-<li>Implement an exponential backoff retry mechanism.</li>
-<li><strong>Caution:</strong> Only retry if the MCP tool is <em>idempotent</em> (e.g., <code>get_weather</code>). Do not blindly retry tools that mutate state (e.g., <code>process_refund</code>) unless you have idempotency keys in place.</li>
-</ul>
-</li>
-<li>
-<p><strong>Circuit Breaking:</strong>
-If your <code>database-tool-server</code> goes down, requests will queue up and exhaust gateway threads.</p>
-<ul>
-<li>Implement a circuit breaker (e.g., using <strong>Resilience4j</strong> in Java, or NetworkNT’s native circuit breaker).</li>
-<li>If a specific tool server fails 50% of the time over a 10-second window, <strong>open the circuit</strong>.</li>
-<li>When the circuit is open, immediately return a fast-failure to the AI model: <em>“System error: The database tool is currently unavailable.”</em> The AI model can then decide to apologize to the user or try an alternative tool.</li>
-</ul>
-</li>
-<li>
-<p><strong>Failover (Fallback Routing):</strong>
-If the primary tool server is down, the Gateway can attempt to route to a secondary cluster in a different region, or fall back to an “echo/mock” service that returns graceful degradation messages.</p>
-</li>
-</ol>
-<hr>
-<h3 id="summary-the-gateway-request-flow"><a class="header" href="#summary-the-gateway-request-flow">Summary: The Gateway Request Flow</a></h3>
-<p>If you build this module, the lifecycle of a request passing through the gateway would look like this:</p>
-<ol>
-<li><strong>Ingress:</strong> Request enters the MCP Gateway.</li>
-<li><strong>Intent Evaluation:</strong>
-<ul>
-<li>Is <code>params.name</code> present? -&gt; Proceed to Step 3.</li>
-<li>If semantic intent only -&gt; Run Vector Search to guess the tool -&gt; Set <code>params.name</code>.</li>
-</ul>
-</li>
-<li><strong>Service Discovery:</strong> Lookup the Tool Name -&gt; Get <code>Service-ID</code>.</li>
-<li><strong>Load Balancing:</strong> Get healthy IPs for <code>Service-ID</code> from Consul. Pick one node.</li>
-<li><strong>Execution:</strong> HTTP Client calls the target node.
-<ul>
-<li><em>If Timeout/429:</em> Trigger <strong>Retry</strong> logic.</li>
-<li><em>If Node Down:</em> Mark node unhealthy, trigger <strong>Failover</strong> to another node.</li>
-<li><em>If Systemic Failure:</em> <strong>Circuit Breaker</strong> trips, returns graceful error to the LLM.</li>
-</ul>
-</li>
-<li><strong>Egress:</strong> Result is returned back to the LLM/User.</li>
-</ol>
+                        <h1 id="light-4j"><a class="header" href="#light-4j">light-4j</a></h1>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../product/mcp-gateway.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../design.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../../product/mcp-gateway/mcp-execution-via-code.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../design/light-4j/pbkdf2-upgrade.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -291,11 +194,11 @@ If the primary tool server is down, the Gateway can attempt to route to a second
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../product/mcp-gateway.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../design.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../../product/mcp-gateway/mcp-execution-via-code.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../design/light-4j/pbkdf2-upgrade.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
@@ -315,17 +218,17 @@ If the primary tool server is down, the Gateway can attempt to route to a second
         </script>
 
 
-        <script src="../../elasticlunr-ef4e11c1.min.js"></script>
-        <script src="../../mark-09e88c2c.min.js"></script>
-        <script src="../../searcher-09f2665d.js"></script>
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-09f2665d.js"></script>
 
-        <script src="../../clipboard-1626706a.min.js"></script>
-        <script src="../../highlight-abc7f01d.js"></script>
-        <script src="../../book-c22b7243.js"></script>
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-c22b7243.js"></script>
 
         <!-- Custom JS scripts -->
-        <script src="../../mermaid-eefea253.min.js"></script>
-        <script src="../../mermaid-init-ccf746f1.js"></script>
+        <script src="../mermaid-eefea253.min.js"></script>
+        <script src="../mermaid-init-ccf746f1.js"></script>
 
 
 

@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5cca9b9e.js";
+            window.path_to_searchindex_js = "searchindex-aa7e5761.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-e043d924.js"></script>
+        <script src="toc-83e1172e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -180,6 +180,284 @@
 <h1 id="architecture"><a class="header" href="#architecture">Architecture</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="design"><a class="header" href="#design">Design</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="light-4j"><a class="header" href="#light-4j">light-4j</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="pbkdf2-upgrade-and-crypt-format-compatibility"><a class="header" href="#pbkdf2-upgrade-and-crypt-format-compatibility">PBKDF2 Upgrade and CRYPT Format Compatibility</a></h1>
+<p>This document describes the proposed upgrade path for PBKDF2 usage in
+<code>light-4j</code>, with special focus on encrypted configuration values that use the
+<code>CRYPT</code> prefix.</p>
+<p>The immediate operational issue is compatibility. The new <code>light-encryptor</code>
+emits only the four-part AES-GCM format, while existing deployed configuration
+may still contain the legacy three-part AES-CBC format. The <code>light-4j</code>
+decryptor should read both formats so services can upgrade safely without
+requiring every encrypted configuration value to be regenerated at the same
+time.</p>
+<h2 id="background"><a class="header" href="#background">Background</a></h2>
+<p>There are two separate PBKDF2 use cases in <code>light-4j</code>:</p>
+<ul>
+<li><code>AESSaltDecryptor</code> derives an AES key from a configured master password for
+decrypting encrypted configuration values.</li>
+<li><code>HashUtil</code> generates and validates PBKDF2 password or API-key hashes.</li>
+</ul>
+<p>These two paths should not be upgraded in exactly the same way. OWASP password
+storage guidance applies directly to password and API-key hashes, where PBKDF2
+is the password hashing function. The <code>CRYPT</code> path uses PBKDF2 as a key
+derivation function before AES encryption. It has its own compatibility
+constraints because the encrypted value format historically did not include an
+algorithm version or iteration count.</p>
+<p>Current OWASP guidance recommends <code>PBKDF2-HMAC-SHA256</code> with 600,000 iterations
+for password storage. See the OWASP Password Storage Cheat Sheet:</p>
+<p>https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html</p>
+<h2 id="current-crypt-formats"><a class="header" href="#current-crypt-formats">Current CRYPT Formats</a></h2>
+<h3 id="legacy-three-part-format"><a class="header" href="#legacy-three-part-format">Legacy Three-Part Format</a></h3>
+<p>The legacy format is:</p>
+<pre><code class="language-text">CRYPT:&lt;hex-salt&gt;:&lt;hex-ciphertext&gt;
+</code></pre>
+<p>The legacy implementation uses:</p>
+<ul>
+<li><code>PBKDF2WithHmacSHA256</code></li>
+<li>65,536 iterations</li>
+<li>256-bit AES key</li>
+<li><code>AES/CBC/PKCS5Padding</code></li>
+<li>a static zero IV</li>
+</ul>
+<p>This format is still present in older deployed service configuration and older
+test fixtures. It should be treated as deprecated but readable.</p>
+<p>The main security weakness is the static zero IV in CBC mode. With a fixed IV,
+the same plaintext encrypted with the same derived key produces the same first
+ciphertext block. That can reveal equality or common prefixes across encrypted
+configuration values. For this reason, legacy CBC support must be read-only and
+the runtime should warn when it decrypts a legacy value.</p>
+<h3 id="current-four-part-format"><a class="header" href="#current-four-part-format">Current Four-Part Format</a></h3>
+<p>The current <code>light-encryptor</code> output format is:</p>
+<pre><code class="language-text">CRYPT:&lt;hex-salt&gt;:&lt;hex-iv&gt;:&lt;hex-ciphertext-and-tag&gt;
+</code></pre>
+<p>The current implementation uses:</p>
+<ul>
+<li><code>PBKDF2WithHmacSHA256</code></li>
+<li>65,536 iterations</li>
+<li>256-bit AES key</li>
+<li><code>AES/GCM/NoPadding</code></li>
+<li>random 16-byte salt</li>
+<li>random 12-byte GCM IV</li>
+<li>128-bit GCM authentication tag</li>
+</ul>
+<p>This is the only format that <code>light-encryptor</code> should emit going forward.</p>
+<h2 id="goals"><a class="header" href="#goals">Goals</a></h2>
+<ul>
+<li>Allow <code>light-4j</code> runtime decryptors to read both legacy three-part <code>CRYPT</code>
+values and current four-part <code>CRYPT</code> values.</li>
+<li>Keep <code>light-encryptor</code> simple by generating only the current four-part
+AES-GCM format.</li>
+<li>Avoid breaking existing checked-in or deployed encrypted configuration during
+framework upgrades.</li>
+<li>Make the future PBKDF2 cost upgrade explicit instead of overloading an
+unversioned format.</li>
+<li>Preserve clear error messages that identify invalid <code>CRYPT</code> formatting.</li>
+</ul>
+<h2 id="non-goals"><a class="header" href="#non-goals">Non-Goals</a></h2>
+<ul>
+<li>Do not make <code>light-encryptor</code> generate legacy three-part values.</li>
+<li>Do not silently re-encrypt configuration files at runtime.</li>
+<li>Do not change the meaning of existing four-part <code>CRYPT:salt:iv:hash</code> values
+without adding a versioned format.</li>
+<li>Do not apply OWASP password-storage iteration guidance blindly to every
+PBKDF2 use without measuring startup and request-time cost.</li>
+</ul>
+<h2 id="design-1"><a class="header" href="#design-1">Design</a></h2>
+<h3 id="1-add-format-dispatch-in-aessaltdecryptor"><a class="header" href="#1-add-format-dispatch-in-aessaltdecryptor">1. Add Format Dispatch in AESSaltDecryptor</a></h3>
+<p><code>AESSaltDecryptor.decrypt(String input)</code> should parse the token count and route
+to the correct decryptor:</p>
+<pre><code class="language-text">parts.length == 3 -&gt; decryptLegacyCbc(parts)
+parts.length == 4 -&gt; decryptGcm(parts)
+otherwise         -&gt; invalid CRYPT format
+</code></pre>
+<p>Use <code>split(":", -1)</code> so malformed values with empty fields are still detected
+as malformed fields instead of being accidentally normalized by <code>String.split</code>.</p>
+<p>Suggested method shape:</p>
+<pre><code class="language-java">public String decrypt(String input) {
+    if (input == null || !input.startsWith(CRYPT_PREFIX + ":")) {
+        throw new RuntimeException("Unable to decrypt, input string does not start with 'CRYPT:'.");
+    }
+
+    String[] parts = input.split(":", -1);
+    return switch (parts.length) {
+        case 3 -&gt; decryptLegacyCbc(parts);
+        case 4 -&gt; decryptGcm(parts);
+        default -&gt; throw invalidCryptFormat();
+    };
+}
+</code></pre>
+<p>The error text should mention both accepted formats:</p>
+<pre><code class="language-text">CRYPT:salt:hash
+CRYPT:salt:iv:hash
+</code></pre>
+<p>The implementation should validate that required fields are non-empty before
+hex decoding. A malformed value should fail as a format error, while a bad
+master password, corrupted ciphertext, or failed GCM authentication tag should
+fail as a cryptographic error. The public exception message should remain
+generic enough that it does not disclose secret material, but the internal log
+message should let an operator distinguish invalid structure from failed
+decryption.</p>
+<h3 id="2-keep-legacy-cbc-decryption-read-only"><a class="header" href="#2-keep-legacy-cbc-decryption-read-only">2. Keep Legacy CBC Decryption Read-Only</a></h3>
+<p>The legacy path should preserve the previous behavior exactly:</p>
+<ul>
+<li>parse salt from <code>parts[1]</code></li>
+<li>parse ciphertext from <code>parts[2]</code></li>
+<li>derive the AES key with <code>PBKDF2WithHmacSHA256</code>, 65,536 iterations, 256-bit key</li>
+<li>decrypt with <code>AES/CBC/PKCS5Padding</code></li>
+<li>use the legacy static zero IV</li>
+</ul>
+<p>This path exists only to keep existing configuration readable. It should not be
+used by <code>light-encryptor</code> for new values.</p>
+<p>When this path is used, the decryptor should log a throttled warning, ideally
+once per JVM or once per unique legacy value:</p>
+<pre><code class="language-text">Legacy three-part CRYPT value decrypted. Regenerate this secret with the current
+light-encryptor to migrate to AES-GCM.
+</code></pre>
+<p>The warning must not include the encrypted value, plaintext secret, derived key,
+master password, salt, or ciphertext.</p>
+<h3 id="3-keep-four-part-gcm-as-the-default-format"><a class="header" href="#3-keep-four-part-gcm-as-the-default-format">3. Keep Four-Part GCM as the Default Format</a></h3>
+<p>The four-part path should preserve the current behavior:</p>
+<ul>
+<li>parse salt from <code>parts[1]</code></li>
+<li>parse IV from <code>parts[2]</code></li>
+<li>parse ciphertext plus tag from <code>parts[3]</code></li>
+<li>derive the AES key with <code>PBKDF2WithHmacSHA256</code>, 65,536 iterations, 256-bit key</li>
+<li>decrypt with <code>AES/GCM/NoPadding</code></li>
+<li>use a 128-bit authentication tag</li>
+</ul>
+<p><code>light-encryptor</code> should keep emitting only this format.</p>
+<h3 id="4-cache-derived-keys-by-kdf-parameters"><a class="header" href="#4-cache-derived-keys-by-kdf-parameters">4. Cache Derived Keys by KDF Parameters</a></h3>
+<p>The existing cache key is based on salt. That is enough while all supported
+formats use the same PBKDF2 algorithm, iteration count, and key size, but it is
+not a good foundation for the next upgrade.</p>
+<p>Use a cache key that includes the KDF parameters:</p>
+<pre><code class="language-text">&lt;kdf-algorithm&gt;:&lt;iterations&gt;:&lt;key-size&gt;:&lt;salt-hex&gt;
+</code></pre>
+<p>This prevents a future format from accidentally reusing a key derived with old
+parameters.</p>
+<p>The cache key does not need to include the master password as long as the master
+password is fixed for the JVM lifetime, which matches the current
+<code>AutoAESSaltDecryptor</code> environment-variable model. If a future implementation
+allows hot reload of the master password without a JVM restart, the cache must
+be cleared on password change or the password identity must become part of the
+cache key.</p>
+<h3 id="5-avoid-shared-cipher-instances"><a class="header" href="#5-avoid-shared-cipher-instances">5. Avoid Shared Cipher Instances</a></h3>
+<p><code>Cipher</code> instances are mutable and should not be shared across concurrent
+requests. Each decrypt operation should create and initialize a local <code>Cipher</code>.
+The cache should store only derived <code>SecretKeySpec</code> values.</p>
+<h3 id="6-keep-error-handling-actionable"><a class="header" href="#6-keep-error-handling-actionable">6. Keep Error Handling Actionable</a></h3>
+<p>The decryptor should separate three categories internally:</p>
+<ul>
+<li>format errors, such as missing fields, empty fields, invalid hex, or an
+unsupported number of parts</li>
+<li>key derivation errors, such as an unavailable PBKDF2 algorithm</li>
+<li>cryptographic failures, such as an incorrect master password, corrupted
+ciphertext, or AES-GCM tag failure</li>
+</ul>
+<p>All categories should avoid logging sensitive values. GCM tag failures should
+not be downgraded or ignored; they are the authenticated-encryption signal that
+the value cannot be trusted.</p>
+<h2 id="pbkdf2-iteration-upgrade"><a class="header" href="#pbkdf2-iteration-upgrade">PBKDF2 Iteration Upgrade</a></h2>
+<h3 id="password-and-api-key-hashes"><a class="header" href="#password-and-api-key-hashes">Password and API-Key Hashes</a></h3>
+<p>For <code>HashUtil</code>, new hashes should move to a versioned format that records the
+algorithm and iteration count. For example:</p>
+<pre><code class="language-text">pbkdf2-sha256:600000:&lt;hex-salt&gt;:&lt;hex-hash&gt;
+</code></pre>
+<p>Validation should support both:</p>
+<pre><code class="language-text">&lt;iterations&gt;:&lt;hex-salt&gt;:&lt;hex-hash&gt;
+pbkdf2-sha256:&lt;iterations&gt;:&lt;hex-salt&gt;:&lt;hex-hash&gt;
+</code></pre>
+<p>The legacy three-part password-hash format should continue to validate with its
+original algorithm, <code>PBKDF2WithHmacSHA1</code>, because the stored value does not
+record the algorithm. New hashes should use <code>PBKDF2WithHmacSHA256</code> and 600,000
+iterations.</p>
+<p>Hash comparison should use a constant-time byte-array comparison such as
+<code>MessageDigest.isEqual(...)</code>. This avoids early-exit comparison behavior when
+validating passwords or API keys.</p>
+<p>For API keys, request-time cost must be measured before rollout because
+<code>ApiKeyHandler</code> can call <code>HashUtil.validatePassword(...)</code> during request
+authentication when hashed API keys are enabled.</p>
+<p><code>HashUtil</code> should also expose a helper such as <code>needsRehash(String storedHash)</code>
+so callers that can persist credentials can upgrade legacy hashes after a
+successful validation.</p>
+<h3 id="crypt-values"><a class="header" href="#crypt-values">CRYPT Values</a></h3>
+<p>The current four-part <code>CRYPT</code> format does not contain an iteration count. If the
+decryptor changes four-part values from 65,536 iterations to 600,000 iterations
+without a version marker, existing four-part values will become unreadable.</p>
+<p>Therefore, the compatibility fix should keep both three-part CBC and four-part
+GCM values on the existing 65,536-iteration KDF. A later cost increase for
+encrypted configuration should introduce a versioned format, for example:</p>
+<pre><code class="language-text">CRYPT2:&lt;kdf-algorithm&gt;:&lt;iterations&gt;:&lt;hex-salt&gt;:&lt;cipher-algorithm&gt;:&lt;hex-iv&gt;:&lt;hex-ciphertext-and-tag&gt;
+</code></pre>
+<p>That future format can use 600,000 iterations, or another measured value, while
+the existing <code>CRYPT</code> formats remain readable.</p>
+<p>Because configuration decryption usually happens during startup and unique salts
+can be cached after the first derivation, a higher iteration count is more
+practical here than it is for per-request API-key validation. A reasonable
+target for the future versioned format is a measured startup cost, for example
+100 ms to 200 ms per unique salt on supported deployment hardware. The exact
+iteration count should be selected from benchmark data rather than copied
+directly from password-storage guidance.</p>
+<h2 id="rollout-plan"><a class="header" href="#rollout-plan">Rollout Plan</a></h2>
+<ol>
+<li>Update <code>light-4j</code> <code>AESSaltDecryptor</code> to read both three-part CBC and
+four-part GCM formats.</li>
+<li>Add regression tests for both formats with known ciphertext fixtures.</li>
+<li>Release the compatible <code>light-4j</code> decryptor.</li>
+<li>Keep <code>light-encryptor</code> generating only four-part GCM values.</li>
+<li>Log a throttled warning whenever the legacy three-part CBC path is used.</li>
+<li>Gradually regenerate old three-part values with the new <code>light-encryptor</code>
+when configuration files are touched.</li>
+<li>Add a scanner or CI check that can report remaining three-part <code>CRYPT</code>
+values, but do not fail builds until downstream repositories have migrated.</li>
+<li>Add a command-line migration utility that can rewrite legacy values after
+decrypting them with the configured master password.</li>
+<li>Design and implement a separate versioned format before increasing the KDF
+iteration count for <code>CRYPT</code> values.</li>
+</ol>
+<h2 id="test-plan"><a class="header" href="#test-plan">Test Plan</a></h2>
+<p>Add focused tests in <code>decryptor</code>:</p>
+<ul>
+<li>decrypts a known legacy <code>CRYPT:salt:hash</code> value to the expected plaintext</li>
+<li>decrypts a known current <code>CRYPT:salt:iv:hash</code> value to the expected plaintext</li>
+<li>rejects malformed values with fewer than three parts</li>
+<li>rejects malformed values with more than four parts</li>
+<li>rejects empty salt, IV, or ciphertext fields</li>
+<li>verifies <code>AutoAESSaltDecryptor</code> and <code>ManualAESSaltDecryptor</code> inherit the same
+compatibility behavior</li>
+</ul>
+<p>Add config-loading coverage:</p>
+<ul>
+<li>one YAML fixture with a legacy three-part value</li>
+<li>one YAML fixture with a four-part value</li>
+<li>one JSON-style config fixture if the existing config tests cover encrypted
+values in JSON strings</li>
+</ul>
+<p>Add migration checks:</p>
+<pre><code class="language-bash">rg -n "CRYPT:[^:[:space:]]+:[^:[:space:]]+(\\s|$)" .
+</code></pre>
+<p>This reports likely legacy three-part values. Each match should be reviewed
+before replacement because grep is only a locator, not a parser.</p>
+<h2 id="operational-notes"><a class="header" href="#operational-notes">Operational Notes</a></h2>
+<p>Services should be upgraded to a compatible <code>light-4j</code> decryptor before new
+four-part encrypted values are deployed to their configuration. Older runtimes
+that only support the three-part CBC format cannot decrypt values generated by
+the current <code>light-encryptor</code>.</p>
+<p>The compatibility decryptor should log enough detail to identify a format
+problem, but it must not log plaintext secrets, derived keys, ciphertext bytes,
+or the master password.</p>
+<h2 id="open-questions"><a class="header" href="#open-questions">Open Questions</a></h2>
+<ul>
+<li>What package should own the migration utility: <code>light-encryptor</code>, <code>light-4j</code>,
+or a small standalone migration artifact?</li>
+<li>What benchmark baseline should define the future <code>CRYPT2</code> KDF cost across
+container, VM, and local developer environments?</li>
+<li>Which <code>HashUtil</code> callers can safely persist upgraded hashes after
+<code>needsRehash(...)</code> returns true?</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="light-genai-4j"><a class="header" href="#light-genai-4j">light-genai-4j</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -1073,7 +1351,7 @@ If the team uses “Squash and Merge” or “Rebase and Merge”, GitHub genera
 for gateway and sidecar deployments where a client sends an HTTP request to an
 agent or downstream API and the downstream response is streamed back as
 <code>text/event-stream</code>.</p>
-<h2 id="background"><a class="header" href="#background">Background</a></h2>
+<h2 id="background-1"><a class="header" href="#background-1">Background</a></h2>
 <p>SSE is a response-side streaming protocol. The client sends a normal HTTP
 request and keeps the response connection open while the server writes events in
 the <code>text/event-stream</code> format.</p>
@@ -2748,7 +3026,7 @@ for (Map.Entry&lt;URI, SimpleURIConnectionPool&gt; entry : pools.entrySet()) {
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="cross-cutting-concerns"><a class="header" href="#cross-cutting-concerns">Cross-Cutting-Concerns</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="light-4j"><a class="header" href="#light-4j">Light-4j</a></h1>
+<h1 id="light-4j-1"><a class="header" href="#light-4j-1">Light-4j</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="http-handler"><a class="header" href="#http-handler">Http Handler</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
