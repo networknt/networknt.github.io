@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-aa7e5761.js";
+            window.path_to_searchindex_js = "searchindex-b50ab605.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-83e1172e.js"></script>
+        <script src="toc-1909b282.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -12338,6 +12338,151 @@ docker-compose up
 </ul>
 <h2 id="recommendation-for-customers"><a class="header" href="#recommendation-for-customers">Recommendation for Customers</a></h2>
 <p>“To ensure seamless updates from our upstream GitHub repository without merge conflicts or accidentally leaking your internal configurations, we recommend <strong>not</strong> committing your tooling directories directly to the mirrored source code branch. Instead, either keep your tooling in a parent wrapper repository using Git Submodules, or maintain a distinct <code>internal</code> branch that merges updates from our <code>main</code> branch but is never pushed back upstream.”</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="security-1"><a class="header" href="#security-1">Security</a></h1>
+<p>NetworkNT publishes general security information at <a href="https://www.networknt.com/security.html">networknt.com/security.html</a>.</p>
+<p>This section contains security notes that need more project-specific context than a generic vulnerability scanner result can provide. The goal is to explain whether a reported issue is applicable to NetworkNT components, what deployment conditions are required for exploitation, and what technical controls can mitigate the issue.</p>
+<ul>
+<li><a href="#known-vulnerabilities">Known Vulnerabilities</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="known-vulnerabilities"><a class="header" href="#known-vulnerabilities">Known Vulnerabilities</a></h1>
+<p>This page tracks known vulnerability reports that can appear in dependency scans and require NetworkNT-specific applicability analysis.</p>
+<h2 id="undertow-request-smuggling-cves"><a class="header" href="#undertow-request-smuggling-cves">Undertow Request Smuggling CVEs</a></h2>
+<p>The following CVEs are all Undertow HTTP request smuggling issues in the HTTP/1.1 request parsing layer. They are relevant to <code>light-4j</code> because <code>light-4j</code> uses <code>io.undertow:undertow-core</code> as its embedded HTTP server. As of June 10, 2026, <code>light-4j</code> manages <code>undertow-core</code> at <code>2.4.1.Final</code>, and Maven Central still lists <code>2.4.1.Final</code> as the latest release.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>CVE</th><th>Vulnerability pattern</th><th>NetworkNT assessment</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="#cve-2026-28367">CVE-2026-28367</a></td><td>Non-standard header block terminator forwarded by certain proxies</td><td>Conditionally applicable; mitigated by strict edge proxy validation or by not placing Undertow behind an affected HTTP/1.1 proxy path.</td></tr>
+<tr><td><a href="#cve-2026-28368">CVE-2026-28368</a></td><td>Header names interpreted differently by an upstream proxy and Undertow</td><td>Conditionally applicable; requires a proxy/backend parser mismatch.</td></tr>
+<tr><td><a href="#cve-2026-28369">CVE-2026-28369</a></td><td>First header line with leading spaces interpreted differently</td><td>Conditionally applicable; requires malformed HTTP/1.1 traffic to reach Undertow through a permissive upstream proxy.</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="general-applicability-to-light-4j"><a class="header" href="#general-applicability-to-light-4j">General Applicability to light-4j</a></h2>
+<p>These issues should not be treated as directly exploitable in every <code>light-4j</code> deployment only because <code>undertow-core</code> appears in the dependency tree. Request smuggling requires at least two HTTP processors that disagree on where a request starts, ends, or which headers are present. A normal <code>light-4j</code> service that terminates client traffic itself does not have a front-end/back-end parser disagreement in the same request path.</p>
+<p>The risk becomes relevant when a <code>light-4j</code> service is deployed as an Undertow origin behind an upstream HTTP/1.1 proxy, load balancer, gateway, or WAF that accepts malformed requests and forwards them to Undertow in a form Undertow interprets differently. The same inbound condition applies when a <code>light-4j</code> router or proxy service is placed behind another upstream proxy. The <code>light-4j</code> proxy modules operate on Undertow’s parsed <code>HeaderMap</code> and create a new outbound Undertow client request; they do not intentionally forward the original raw HTTP header block.</p>
+<h2 id="standard-mitigations"><a class="header" href="#standard-mitigations">Standard Mitigations</a></h2>
+<p>Use the following controls for customer environments where scanner findings identify these CVEs:</p>
+<ul>
+<li>Prefer the default <code>light-4j</code> posture: <code>enableHttps: true</code>, <code>enableHttp: false</code>, <code>enableHttp2: true</code>, and <code>allowUnescapedCharactersInUrl: false</code>.</li>
+<li>Do not expose a <code>light-4j</code> HTTP/1.1 listener directly to untrusted networks unless there is a strict edge control in front of it.</li>
+<li>Configure upstream proxies, load balancers, gateways, and WAFs to reject malformed HTTP/1.1 requests instead of forwarding or normalizing ambiguous header syntax.</li>
+<li>Avoid older proxy products or legacy load balancer modes known to forward malformed HTTP/1.1 traffic to Undertow. For CVE-2026-28367, Red Hat specifically calls out older Apache Traffic Server and Google Cloud Classic Application Load Balancer configurations as examples.</li>
+<li>Prefer TLS and HTTP/2 between the client-facing edge and <code>light-4j</code> where possible. If the edge terminates HTTP/2 and forwards HTTP/1.1 to <code>light-4j</code>, the edge-to-origin HTTP/1.1 hop must still enforce strict request validation.</li>
+<li>Keep <code>light-4j</code> and deployment images current. At the time of this review, Maven Central did not provide a newer <code>undertow-core</code> release than <code>2.4.1.Final</code>, so deployment controls are still required.</li>
+</ul>
+<h2 id="red-hat-status-context"><a class="header" href="#red-hat-status-context">Red Hat Status Context</a></h2>
+<p>Red Hat rates all three CVEs as Important with CNA CVSS 3.1 score 8.7 and high attack complexity. NVD lists a separate 9.1 Critical score, but the Red Hat CNA scoring is more specific to the proxy-dependent request smuggling condition.</p>
+<p>Red Hat’s product status is not uniform across all products. Red Hat Security Data marks some <code>undertow-core</code> product streams, including Red Hat Data Grid 8, Red Hat Fuse 7, and Red Hat JBoss Enterprise Application Platform 7, as <code>Will not fix</code>, while other product streams are marked <code>Affected</code> or <code>Not affected</code>. That status supports treating these as deployment-specific findings rather than assuming every scanner match requires an immediate library replacement.</p>
+<h2 id="references"><a class="header" href="#references">References</a></h2>
+<ul>
+<li><a href="https://repo1.maven.org/maven2/io/undertow/undertow-core/maven-metadata.xml">Maven Central undertow-core metadata</a></li>
+<li><a href="https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-28367.json">Red Hat Security Data JSON: CVE-2026-28367</a></li>
+<li><a href="https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-28368.json">Red Hat Security Data JSON: CVE-2026-28368</a></li>
+<li><a href="https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-28369.json">Red Hat Security Data JSON: CVE-2026-28369</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cve-2026-28367"><a class="header" href="#cve-2026-28367">CVE-2026-28367</a></h1>
+<h2 id="summary-4"><a class="header" href="#summary-4">Summary</a></h2>
+<p>CVE-2026-28367 is an Undertow request smuggling vulnerability involving a non-standard HTTP header block terminator. Red Hat describes the condition as a remote attacker sending a malformed header terminator that can be interpreted differently by certain upstream proxies and Undertow.</p>
+<p>Red Hat rates the issue as Important with CVSS 3.1 score 8.7, using high attack complexity because exploitation depends on a compatible proxy/backend parsing mismatch. NVD also lists a 9.1 Critical score, but the Red Hat CNA score better reflects the deployment prerequisite.</p>
+<h2 id="light-4j-applicability"><a class="header" href="#light-4j-applicability">light-4j Applicability</a></h2>
+<p><code>light-4j</code> uses Undertow through <code>io.undertow:undertow-core</code>, so dependency scanners can report this CVE for <code>light-4j</code> applications.</p>
+<p>The issue is not directly exploitable in every <code>light-4j</code> deployment. It requires an HTTP/1.1 request path where an upstream proxy accepts and forwards a malformed header block terminator, and Undertow interprets the forwarded bytes differently. Red Hat specifically names older Apache Traffic Server versions and Google Cloud Classic Application Load Balancer configurations as examples of proxy environments where this class of issue can matter.</p>
+<p>The finding is not applicable, or is not exploitable, when:</p>
+<ul>
+<li>The <code>light-4j</code> service is not behind an affected HTTP/1.1 proxy or load balancer.</li>
+<li>The client-facing edge rejects malformed HTTP/1.1 requests before they reach Undertow.</li>
+<li>The deployment uses HTTPS and HTTP/2 end to end, without translating malformed HTTP/1.1 traffic into the Undertow origin hop.</li>
+<li>The <code>light-4j</code> service is reachable only through trusted internal traffic controls that enforce strict HTTP request validation.</li>
+</ul>
+<h2 id="mitigation"><a class="header" href="#mitigation">Mitigation</a></h2>
+<p>For exposed services, configure the upstream proxy, load balancer, gateway, or WAF to reject non-standard HTTP header block terminators before forwarding to <code>light-4j</code>. This matches Red Hat’s stated mitigation for this CVE.</p>
+<p>For <code>light-4j</code> configuration, keep the default production posture:</p>
+<ul>
+<li><code>enableHttps: true</code></li>
+<li><code>enableHttp: false</code></li>
+<li><code>enableHttp2: true</code></li>
+<li><code>allowUnescapedCharactersInUrl: false</code></li>
+</ul>
+<p>If a customer must run <code>light-4j</code> behind an HTTP/1.1 proxy, validate the exact proxy product and mode. The proxy must reject malformed request framing, not normalize and forward it.</p>
+<h2 id="customer-response"><a class="header" href="#customer-response">Customer Response</a></h2>
+<p>This CVE is a deployment-dependent Undertow request smuggling issue. NetworkNT has confirmed that <code>light-4j</code> embeds Undertow, but exploitability requires a vulnerable upstream HTTP/1.1 proxy path that forwards malformed header termination to Undertow. In recommended <code>light-4j</code> deployments, HTTPS/HTTP2 is enabled, clear HTTP is disabled, and edge proxies must enforce strict HTTP request validation. When those controls are in place, the issue is not exploitable in the <code>light-4j</code> service.</p>
+<h2 id="references-1"><a class="header" href="#references-1">References</a></h2>
+<ul>
+<li><a href="https://nvd.nist.gov/vuln/detail/CVE-2026-28367">NVD: CVE-2026-28367</a></li>
+<li><a href="https://access.redhat.com/security/cve/CVE-2026-28367">Red Hat CVE page: CVE-2026-28367</a></li>
+<li><a href="https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-28367.json">Red Hat Security Data JSON: CVE-2026-28367</a></li>
+<li><a href="https://cveawg.mitre.org/api/cve/CVE-2026-28367">CVE Program API: CVE-2026-28367</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cve-2026-28368"><a class="header" href="#cve-2026-28368">CVE-2026-28368</a></h1>
+<h2 id="summary-5"><a class="header" href="#summary-5">Summary</a></h2>
+<p>CVE-2026-28368 is an Undertow request smuggling vulnerability involving inconsistent HTTP header name parsing. Red Hat describes the condition as specially crafted requests whose header names are interpreted differently by Undertow and an upstream proxy, allowing request smuggling when the two components disagree.</p>
+<p>Red Hat rates the issue as Important with CVSS 3.1 score 8.7, using high attack complexity because exploitation depends on an upstream proxy/backend parser mismatch. NVD also lists a 9.1 Critical score, but the Red Hat CNA score better reflects the deployment prerequisite.</p>
+<h2 id="light-4j-applicability-1"><a class="header" href="#light-4j-applicability-1">light-4j Applicability</a></h2>
+<p><code>light-4j</code> uses Undertow through <code>io.undertow:undertow-core</code>, so dependency scanners can report this CVE for <code>light-4j</code> applications.</p>
+<p>The issue is conditionally applicable only when malformed HTTP/1.1 requests pass through an upstream proxy, load balancer, gateway, or WAF that interprets header names differently from Undertow and forwards the ambiguous request to the <code>light-4j</code> origin. A direct client-to-Undertow path does not create the front-end/back-end desynchronization required for request smuggling.</p>
+<p>The finding is not applicable, or is not exploitable, when:</p>
+<ul>
+<li>The <code>light-4j</code> service is not deployed behind a permissive HTTP/1.1 proxy or load balancer.</li>
+<li>The upstream proxy rejects malformed or ambiguous header names.</li>
+<li>The edge-to-origin hop uses strict request validation and does not forward non-compliant header syntax.</li>
+<li>The deployment uses HTTPS and HTTP/2 end to end, without translating malformed HTTP/1.1 traffic into the Undertow origin hop.</li>
+</ul>
+<h2 id="mitigation-1"><a class="header" href="#mitigation-1">Mitigation</a></h2>
+<p>Red Hat’s public mitigation text says a broadly applicable mitigation is not available under its Product Security criteria. For <code>light-4j</code> deployments, the practical technical mitigation is still to remove the parser mismatch condition:</p>
+<ul>
+<li>Use a fronting proxy, load balancer, gateway, or WAF that rejects malformed HTTP/1.1 header names.</li>
+<li>Avoid forwarding raw, ambiguous, or normalized-but-non-compliant HTTP/1.1 requests to Undertow.</li>
+<li>Prefer the default <code>light-4j</code> production posture: HTTPS enabled, clear HTTP disabled, HTTP/2 enabled, and unescaped URL characters disabled.</li>
+<li>If the deployment requires an HTTP/1.1 hop from edge to <code>light-4j</code>, test the exact edge product and configuration for strict header-name validation.</li>
+</ul>
+<h2 id="customer-response-1"><a class="header" href="#customer-response-1">Customer Response</a></h2>
+<p>This CVE is not a standalone application logic issue in <code>light-4j</code>; it is a proxy/backend HTTP parsing ambiguity in Undertow. A scanner can flag the Undertow dependency, but exploitability requires a permissive upstream HTTP/1.1 proxy path that forwards ambiguous header names to Undertow. In deployments where the edge rejects malformed headers or uses strict HTTPS/HTTP2 request handling to the service, the issue is not exploitable in <code>light-4j</code>.</p>
+<h2 id="references-2"><a class="header" href="#references-2">References</a></h2>
+<ul>
+<li><a href="https://nvd.nist.gov/vuln/detail/CVE-2026-28368">NVD: CVE-2026-28368</a></li>
+<li><a href="https://access.redhat.com/security/cve/CVE-2026-28368">Red Hat CVE page: CVE-2026-28368</a></li>
+<li><a href="https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-28368.json">Red Hat Security Data JSON: CVE-2026-28368</a></li>
+<li><a href="https://cveawg.mitre.org/api/cve/CVE-2026-28368">CVE Program API: CVE-2026-28368</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cve-2026-28369"><a class="header" href="#cve-2026-28369">CVE-2026-28369</a></h1>
+<h2 id="summary-6"><a class="header" href="#summary-6">Summary</a></h2>
+<p>CVE-2026-28369 is an Undertow request smuggling vulnerability involving malformed HTTP request headers. Red Hat describes the condition as an HTTP request where the first header line starts with one or more spaces. Undertow strips the leading spaces, which can cause it to interpret the request differently from an upstream proxy.</p>
+<p>Red Hat rates the issue as Important with CVSS 3.1 score 8.7, using high attack complexity because exploitation depends on an upstream proxy/backend parser mismatch. NVD also lists a 9.1 Critical score, but the Red Hat CNA score better reflects the deployment prerequisite.</p>
+<h2 id="light-4j-applicability-2"><a class="header" href="#light-4j-applicability-2">light-4j Applicability</a></h2>
+<p><code>light-4j</code> uses Undertow through <code>io.undertow:undertow-core</code>, so dependency scanners can report this CVE for <code>light-4j</code> applications.</p>
+<p>The issue is conditionally applicable only when a malformed HTTP/1.1 request is accepted by an upstream proxy and forwarded to Undertow in a way that causes the proxy and Undertow to disagree about request boundaries or headers. If the upstream component rejects the malformed header line, the request does not reach Undertow and the smuggling condition is removed.</p>
+<p>The finding is not applicable, or is not exploitable, when:</p>
+<ul>
+<li>The <code>light-4j</code> service is not behind an upstream HTTP/1.1 proxy that forwards malformed first-header-line syntax.</li>
+<li>The edge proxy, load balancer, gateway, or WAF rejects header lines with leading whitespace.</li>
+<li>HTTPS and HTTP/2 are used end to end, without translating malformed HTTP/1.1 traffic into the Undertow origin hop.</li>
+<li>The <code>light-4j</code> listener is protected by network controls and only accepts traffic from trusted components that enforce strict HTTP syntax.</li>
+</ul>
+<h2 id="mitigation-2"><a class="header" href="#mitigation-2">Mitigation</a></h2>
+<p>For <code>light-4j</code> deployments, mitigation should focus on strict request validation at the edge and conservative server configuration:</p>
+<ul>
+<li>Configure upstream proxies, load balancers, gateways, and WAFs to reject header lines that begin with whitespace.</li>
+<li>Do not allow a permissive edge component to normalize and forward malformed HTTP/1.1 requests to Undertow.</li>
+<li>Prefer the default <code>light-4j</code> production posture: HTTPS enabled, clear HTTP disabled, HTTP/2 enabled, and unescaped URL characters disabled.</li>
+<li>If a customer uses a legacy HTTP/1.1 proxy in front of <code>light-4j</code>, verify that it rejects malformed header syntax before forwarding.</li>
+</ul>
+<h2 id="customer-response-2"><a class="header" href="#customer-response-2">Customer Response</a></h2>
+<p>This CVE is a conditional Undertow request smuggling issue. <code>light-4j</code> may be flagged because it embeds Undertow, but the issue requires a vulnerable upstream HTTP/1.1 proxy path that forwards malformed header-line syntax to Undertow. With strict edge validation, HTTPS/HTTP2-oriented deployment, and clear HTTP disabled for untrusted access, the issue is not exploitable in <code>light-4j</code>.</p>
+<h2 id="references-3"><a class="header" href="#references-3">References</a></h2>
+<ul>
+<li><a href="https://nvd.nist.gov/vuln/detail/CVE-2026-28369">NVD: CVE-2026-28369</a></li>
+<li><a href="https://access.redhat.com/security/cve/CVE-2026-28369">Red Hat CVE page: CVE-2026-28369</a></li>
+<li><a href="https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-28369.json">Red Hat Security Data JSON: CVE-2026-28369</a></li>
+<li><a href="https://cveawg.mitre.org/api/cve/CVE-2026-28369">CVE Program API: CVE-2026-28369</a></li>
+</ul>
 
                     </main>
 
