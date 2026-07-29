@@ -15,8 +15,8 @@
         <link rel="icon" href="../../favicon-de23e50b.svg">
         <link rel="shortcut icon" href="../../favicon-8114d1fc.png">
         <link rel="stylesheet" href="../../css/variables-8adf115d.css">
-        <link rel="stylesheet" href="../../css/general-0392ca55.css">
-        <link rel="stylesheet" href="../../css/chrome-fc474251.css">
+        <link rel="stylesheet" href="../../css/general-e96d0476.css">
+        <link rel="stylesheet" href="../../css/chrome-d279d366.css">
         <link rel="stylesheet" href="../../css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
@@ -35,7 +35,7 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-b50ab605.js";
+            window.path_to_searchindex_js = "../../searchindex-d61f3be9.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-1909b282.js"></script>
@@ -194,6 +194,8 @@
 <ul>
 <li><code>enabled</code>: Enable or disable the handler.</li>
 <li><code>authPath</code>: Path to handle the authorization code callback (default: <code>/authorization</code>).</li>
+<li><code>logoutPath</code>: Path that clears the BFF session (default: <code>/logout</code>).</li>
+<li><code>logoutCsrfEnforced</code>: Enforce logout double-submit CSRF after observe-only qualification (default: <code>false</code>).</li>
 <li><code>cookieDomain</code>: Domain for the session cookies (e.g., <code>localhost</code> or your domain).</li>
 <li><code>cookiePath</code>: Path scope for cookies (default: <code>/</code>).</li>
 <li><code>cookieSecure</code>: Set to <code>true</code> for HTTPS environments.</li>
@@ -208,6 +210,21 @@ The configuration also includes sections for configuring social login providers 
 <li><code>facebookPath</code>, <code>facebookClientId</code></li>
 <li><code>githubPath</code>, <code>githubClientId</code></li>
 </ul>
+<h2 id="http-contract"><a class="header" href="#http-contract">HTTP Contract</a></h2>
+<p><code>/authorization</code> and enabled <code>/google</code>, <code>/facebook</code>, and <code>/github</code> endpoints
+are OAuth authorization-code callbacks and remain GET-only. They accept
+<code>code</code> and optional <code>state</code> query parameters and are not part of the mutation
+method migration.</p>
+<p>Logout is a credentialed, bodyless <code>POST</code> to <code>/logout</code> with <code>X-CSRF-TOKEN</code>
+read from the readable <code>csrf</code> cookie. A zero-length request is valid even when
+a shared client declares <code>Content-Type: application/json</code>. Successful logout
+returns <code>204 No Content</code>, no response content type or body, and deletion
+cookies for every cookie name the handler can set. Route <code>OPTIONS /logout</code>
+explicitly through a chain with CORS before <code>stateless</code>.</p>
+<p>During the compatibility release, an explicitly routed legacy GET logout
+remains accepted and measured. Remove that bridge only after the Phase 4
+release gate. Strict enforcement returns HTTP <code>405</code>, <code>ERR10008</code>, and
+<code>Allow: POST</code>.</p>
 
                     </main>
 
@@ -257,7 +274,7 @@ The configuration also includes sections for configuring social login providers 
 
         <script src="../../clipboard-1626706a.min.js"></script>
         <script src="../../highlight-abc7f01d.js"></script>
-        <script src="../../book-c22b7243.js"></script>
+        <script src="../../book-609e4cb8.js"></script>
 
         <!-- Custom JS scripts -->
         <script src="../../mermaid-eefea253.min.js"></script>
