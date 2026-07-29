@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d61f3be9.js";
+            window.path_to_searchindex_js = "searchindex-1fc81bf0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1909b282.js"></script>
@@ -9923,10 +9923,9 @@ cookie. A zero-length request remains valid when a shared client declares
 <p>Successful logout returns <code>204 No Content</code>, no response content type or body,
 and deletion cookies for every cookie name the handler can set. Route
 <code>OPTIONS</code> explicitly through a chain with CORS before <code>msal-exchange</code>.</p>
-<p>During the compatibility release, explicitly routed legacy GET exchange and
-logout requests remain accepted and measured. Remove those bridge routes only
-after the Phase 4 release gate. Strict enforcement returns HTTP <code>405</code>,
-<code>ERR10008</code>, and <code>Allow: POST</code>.</p>
+<p>Exchange and logout are POST-only. A legacy GET or another unsupported method
+returns HTTP <code>405</code>, <code>ERR10008</code>, and <code>Allow: POST</code> before token-server or cookie
+side effects.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="stateless-auth-handler"><a class="header" href="#stateless-auth-handler">Stateless Auth Handler</a></h1>
 <p>The <code>stateless-auth</code> module in <code>light-spa-4j</code> provides a robust, stateless authentication mechanism for Single Page Applications (SPAs). It handles the OAuth 2.0 Authorization Code flow and manages the resulting tokens using secure, HTTP-only cookies, eliminating the need for client-side storage (like <code>localStorage</code>).</p>
@@ -9975,10 +9974,8 @@ a shared client declares <code>Content-Type: application/json</code>. Successful
 returns <code>204 No Content</code>, no response content type or body, and deletion
 cookies for every cookie name the handler can set. Route <code>OPTIONS /logout</code>
 explicitly through a chain with CORS before <code>stateless</code>.</p>
-<p>During the compatibility release, an explicitly routed legacy GET logout
-remains accepted and measured. Remove that bridge only after the Phase 4
-release gate. Strict enforcement returns HTTP <code>405</code>, <code>ERR10008</code>, and
-<code>Allow: POST</code>.</p>
+<p>Logout is POST-only. A legacy GET or another unsupported method returns HTTP
+<code>405</code>, <code>ERR10008</code>, and <code>Allow: POST</code> before cookie deletion.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="websocket-security-design"><a class="header" href="#websocket-security-design">WebSocket Security Design</a></h1>
 <p>WebSockets present unique security challenges compared to standard REST APIs, primarily because the browser’s <code>WebSocket</code> API does not support custom HTTP headers (like <code>X-CSRF-TOKEN</code> or <code>Authorization</code>) during the initial connection handshake.</p>

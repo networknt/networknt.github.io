@@ -35,7 +35,7 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-d61f3be9.js";
+            window.path_to_searchindex_js = "../../searchindex-1fc81bf0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-1909b282.js"></script>
@@ -221,10 +221,8 @@ a shared client declares <code>Content-Type: application/json</code>. Successful
 returns <code>204 No Content</code>, no response content type or body, and deletion
 cookies for every cookie name the handler can set. Route <code>OPTIONS /logout</code>
 explicitly through a chain with CORS before <code>stateless</code>.</p>
-<p>During the compatibility release, an explicitly routed legacy GET logout
-remains accepted and measured. Remove that bridge only after the Phase 4
-release gate. Strict enforcement returns HTTP <code>405</code>, <code>ERR10008</code>, and
-<code>Allow: POST</code>.</p>
+<p>Logout is POST-only. A legacy GET or another unsupported method returns HTTP
+<code>405</code>, <code>ERR10008</code>, and <code>Allow: POST</code> before cookie deletion.</p>
 
                     </main>
 

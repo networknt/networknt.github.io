@@ -35,7 +35,7 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-d61f3be9.js";
+            window.path_to_searchindex_js = "../../searchindex-1fc81bf0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-1909b282.js"></script>
@@ -218,10 +218,9 @@ cookie. A zero-length request remains valid when a shared client declares
 <p>Successful logout returns <code>204 No Content</code>, no response content type or body,
 and deletion cookies for every cookie name the handler can set. Route
 <code>OPTIONS</code> explicitly through a chain with CORS before <code>msal-exchange</code>.</p>
-<p>During the compatibility release, explicitly routed legacy GET exchange and
-logout requests remain accepted and measured. Remove those bridge routes only
-after the Phase 4 release gate. Strict enforcement returns HTTP <code>405</code>,
-<code>ERR10008</code>, and <code>Allow: POST</code>.</p>
+<p>Exchange and logout are POST-only. A legacy GET or another unsupported method
+returns HTTP <code>405</code>, <code>ERR10008</code>, and <code>Allow: POST</code> before token-server or cookie
+side effects.</p>
 
                     </main>
 
