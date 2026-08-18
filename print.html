@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-1fc81bf0.js";
+            window.path_to_searchindex_js = "searchindex-1a56e92f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1909b282.js"></script>
+        <script src="toc-2dba6721.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -5659,6 +5659,856 @@ pathPrefixAuths:
 <li><strong>Flexibility</strong>: Supports different security requirements for different API versions or functional areas.</li>
 <li><strong>Dynamic Discovery</strong>: Supports multiple JWK or introspection services per path prefix, enabling integration with multiple identity providers.</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="hmac-webhook-authentication-for-java"><a class="header" href="#hmac-webhook-authentication-for-java">HMAC Webhook Authentication for Java</a></h1>
+<p>Status: Proposed design for <code>light-4j</code>. The first provider profile is GitHub.
+Implementation has not started.</p>
+<p>Tracking issue: <a href="https://github.com/networknt/light-4j/issues/2772">networknt/light-4j#2772</a></p>
+<p>Companion design: <code>light-fabric/docs/src/design/hmac-webhook-authentication.md</code>
+contains the Rust implementation design. The two implementations share an
+external behavior contract, but deliberately use different internal designs.</p>
+<h2 id="decision-summary"><a class="header" href="#decision-summary">Decision Summary</a></h2>
+<p>The Java and Rust designs should remain separate.</p>
+<p><code>light-4j</code> is in maintenance mode and is widely deployed. Its implementation
+should preserve the existing handler chain, first-match prefix behavior,
+configuration reload pattern, and header-authentication code. In particular,
+Java should not adopt Rust’s new longest-prefix and method-aware policy model.</p>
+<p>HMAC is a separate body-aware implementation component, but it is not a
+separate route policy. Unified Security continues to decide which authentication
+factors a path requires. A new <code>hmacProfile</code> property on an existing
+<code>pathPrefixAuths</code> entry means that HMAC is required in addition to any supported
+JWT or API-key requirement on that entry.</p>
+<p>The proposed Java request chain is:</p>
+<pre><code class="language-text">RequestInterceptorInjectionHandler
+  -&gt; HmacRequestInterceptor (must be the first request interceptor)
+  -&gt; other non-mutating request interceptors
+  -&gt; HmacHandler (atomic replay gate)
+  -&gt; UnifiedSecurityHandler (HMAC evidence plus optional JWT/API key)
+  -&gt; application or proxy/Jenkins
+</code></pre>
+<p>The split between <code>HmacRequestInterceptor</code> and <code>HmacHandler</code> is intentional:</p>
+<ul>
+<li>the interceptor sees the exact pooled request bytes before parsing or
+transformation and performs the CPU-only signature verification; and</li>
+<li>the handler can suspend and resume the chain around an asynchronous
+distributed replay-store operation without blocking Undertow’s I/O thread.</li>
+</ul>
+<p>This adds a narrow extension to Unified Security and reuses the current request
+buffering rather than replacing or duplicating it. It also adds an opt-in exact
+byte limit to request injection for HMAC routes. The existing <code>maxBuffers</code>
+behavior remains the default for legacy deployments.</p>
+<h2 id="resolved-requirements"><a class="header" href="#resolved-requirements">Resolved Requirements</a></h2>
+<ul>
+<li>GitHub is the first provider. The design is configurable for other providers
+that sign a raw request body, but version 1 does not need another provider’s
+integration tests.</li>
+<li>Version 1 supports HMAC-SHA-256 over the exact incoming entity-body bytes.</li>
+<li>A matched route can require HMAC only, HMAC and JWT, or HMAC and API key.</li>
+<li>A profile can use one shared secret or select an ordered secret list from a
+request header.</li>
+<li>GitHub uses <code>X-GitHub-Hook-ID</code> to select the secret list,
+<code>X-Hub-Signature-256</code> for the signature, and <code>X-GitHub-Delivery</code> for replay
+detection.</li>
+<li>Secrets are supplied through named environment variables. Secret values must
+not appear in config files, config snapshots, logs, metrics, or admin output.</li>
+<li>Active and previous secrets may overlap during rotation. Configuration reload
+can change which already-provisioned environment variables are referenced.
+Changing an environment variable’s bytes requires a process restart.</li>
+<li>The exact verified request body and application headers continue through the
+normal handler/proxy path. HMAC code does not parse, normalize, decompress, or
+rewrite them.</li>
+<li>The exact maximum is configurable and defaults to 16 MiB.</li>
+<li>Non-identity <code>Content-Encoding</code> is rejected in version 1.</li>
+<li>Replay retention is configurable and defaults to seven days.</li>
+<li>Duplicate deliveries return an empty <code>200</code> and do not invoke Jenkins or the
+application handler.</li>
+<li>A final non-<code>2xx</code> response releases the replay reservation for a later retry.</li>
+<li>Replay storage is pluggable. With no configured provider, a process-local
+store is used. An explicitly configured distributed store never silently
+falls back to local storage when unavailable.</li>
+<li>An authorized operator can remove one replay record before requesting an
+intentional GitHub redelivery.</li>
+<li>Existing Java prefix matching and existing non-HMAC security configuration
+retain their current behavior.</li>
+<li>An HMAC-protected prefix cannot overlap <code>anonymousPrefixes</code>.</li>
+</ul>
+<p>GitHub documents the relevant behavior in:</p>
+<ul>
+<li><a href="https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries">Validating webhook deliveries</a></li>
+<li><a href="https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks">Best practices for using webhooks</a></li>
+<li><a href="https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks">Redelivering webhooks</a></li>
+</ul>
+<p>GitHub currently permits redelivery of deliveries from the previous three days
+and uses the original <code>X-GitHub-Delivery</code> value for a redelivery. The seven-day
+default therefore covers that manual redelivery window, while remaining
+operator-configurable.</p>
+<h2 id="goals-1"><a class="header" href="#goals-1">Goals</a></h2>
+<ul>
+<li>Reject a forged or altered GitHub request before it reaches Jenkins.</li>
+<li>Preserve the exact authenticated entity body for downstream processing.</li>
+<li>Compose HMAC with the existing JWT and API-key paths with minimal changes.</li>
+<li>Support one shared secret or a per-selector active/previous keyring.</li>
+<li>Suppress the same delivery atomically across concurrent requests.</li>
+<li>Support local and distributed replay stores without coupling replay safety to
+session CRUD semantics.</li>
+<li>Keep configuration and pre-provisioned secret-reference rotation reloadable.</li>
+<li>Fail closed when required buffering, HMAC enforcement, or a configured replay
+store is unavailable.</li>
+<li>Preserve existing Java handler and route-matching behavior for all legacy
+configurations.</li>
+</ul>
+<h2 id="non-goals-1"><a class="header" href="#non-goals-1">Non-Goals</a></h2>
+<ul>
+<li>Do not implement a general canonical signing-expression language.</li>
+<li>Do not support signatures over timestamps, paths, query strings, or selected
+headers in version 1.</li>
+<li>Do not parse JSON or form data before HMAC verification.</li>
+<li>Do not verify a decompressed or reconstructed body.</li>
+<li>Do not preserve transport framing or hop-by-hop headers. Undertow and an
+existing proxy may normalize those independently of this feature.</li>
+<li>Do not add Java longest-prefix or method-aware Unified Security matching.</li>
+<li>Do not change the existing semantics of legacy <code>basic</code>, <code>jwt</code>, <code>sjwt</code>, <code>swt</code>,
+or <code>apikey</code> rules.</li>
+<li>Do not combine HMAC with Basic, SJWT, or SWT in version 1.</li>
+<li>Do not require another provider-specific integration test.</li>
+<li>Do not make Jenkins or another callee idempotent. The callee must still use an
+idempotency key where duplicate side effects are unacceptable.</li>
+<li>Do not use <code>SessionRepository.findById()</code> followed by <code>save()</code> as a replay
+fence; that sequence is not an atomic insert-if-absent operation.</li>
+</ul>
+<h2 id="threat-model-and-security-invariants"><a class="header" href="#threat-model-and-security-invariants">Threat Model and Security Invariants</a></h2>
+<p>The design addresses:</p>
+<ul>
+<li>request-body modification without the configured shared secret;</li>
+<li>missing, malformed, or ambiguous signature headers;</li>
+<li>selection of an unknown hook secret;</li>
+<li>repeated use of a GitHub delivery ID within the retention period;</li>
+<li>concurrent duplicates arriving at different application instances when a
+distributed store is configured;</li>
+<li>HMAC bypass through <code>anonymousPrefixes</code> or an incomplete handler chain;</li>
+<li>verification after a body parser or request transformer changed bytes; and</li>
+<li>partial authentication where HMAC succeeds but required JWT or API-key
+authentication fails.</li>
+</ul>
+<p>The following invariants are mandatory:</p>
+<ol>
+<li>HMAC input is the exact entity-body byte sequence captured from the incoming
+request.</li>
+<li>No character decoding, JSON parsing, whitespace normalization, or
+decompression occurs before verification.</li>
+<li>HMAC comparison is constant-time.</li>
+<li>A route that declares <code>hmacProfile</code> cannot reach the application unless a
+matching HMAC evidence attachment is present.</li>
+<li>Every configured factor passes before the request reaches Jenkins or an
+application handler.</li>
+<li>The forwarded entity body has the same bytes and length as the body that was
+verified.</li>
+<li><code>X-GitHub-Hook-ID</code> only selects candidate secrets; it is not authenticated
+identity on its own.</li>
+<li>Replay reservation is one atomic insert-if-absent operation.</li>
+<li>Normal failure release uses an owner token so an old request cannot delete a
+newer reservation.</li>
+<li>A configured replay-store failure fails closed.</li>
+<li>Secret bytes never enter serializable module configuration or operational
+output.</li>
+<li>One request pins one immutable HMAC runtime through verification,
+reservation, and completion handling.</li>
+</ol>
+<h3 id="replay-limitation"><a class="header" href="#replay-limitation">Replay Limitation</a></h3>
+<p>GitHub signs the request body, but it does not include <code>X-GitHub-Delivery</code> in
+that HMAC. Following GitHub’s recommendation and deduplicating the delivery
+header blocks ordinary replay of an unchanged captured request, but it is not a
+complete cryptographic anti-replay protocol. An attacker with a valid body and
+signature could change the unsigned delivery header. Replay is also possible
+after a finite retention period, after a local-store process restart, or during
+ambiguous failures around downstream invocation.</p>
+<p>For these reasons, replay suppression is defense in depth rather than a
+substitute for callee idempotency. A future strict mode could also fence a
+signature/body fingerprint, with the tradeoff that separate legitimate events
+with identical bodies might be treated as duplicates.</p>
+<h2 id="why-the-java-design-uses-two-hmac-components"><a class="header" href="#why-the-java-design-uses-two-hmac-components">Why the Java Design Uses Two HMAC Components</a></h2>
+<p>The current <code>RequestInterceptorInjectionHandler</code> already performs bounded body
+buffering, stores <code>PooledByteBuffer[]</code> under
+<code>AttachmentConstants.BUFFERED_REQUEST_DATA_KEY</code>, restores the request channel,
+and then calls registered <code>RequestInterceptor</code> instances in their <code>service.yml</code>
+order. This is the smallest safe place to observe the raw body.</p>
+<p><code>maxBuffers</code> alone cannot be the HMAC security boundary. When the last configured
+buffer becomes full, the current reader can stop before it has observed
+end-of-stream. A signature verifier must never authenticate that buffered prefix
+and then allow unread bytes to continue downstream. HMAC deployments therefore
+enable a new exact <code>maxBodyBytes</code> request-injection option. In that mode the
+reader must observe EOF at or below the limit, or read/probe one byte beyond the
+limit and return <code>413</code>. The option is absent or zero by default so existing
+non-HMAC deployments keep their current behavior.</p>
+<p>However, <code>RequestInterceptor.handleRequest()</code> is synchronous. A Redis or other
+distributed atomic reservation may require asynchronous I/O and must not block
+the Undertow I/O thread. Changing the general request-interceptor contract would
+affect established modules and is not appropriate for the Java maintenance
+branch.</p>
+<p>The responsibilities are therefore split:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Component</th><th>Responsibility</th></tr>
+</thead>
+<tbody>
+<tr><td><code>HmacRequestInterceptor</code></td><td>Match an HMAC rule, validate method/headers/encoding/body limit, verify the raw bytes, and attach an immutable pending result. It performs no network I/O.</td></tr>
+<tr><td><code>HmacHandler</code></td><td>Require the pending result, atomically reserve the replay key through an asynchronous SPI, return local <code>200</code> for a duplicate, or attach final authentication evidence and continue.</td></tr>
+<tr><td><code>UnifiedSecurityHandler</code></td><td>Match the existing first prefix, require evidence for <code>hmacProfile</code>, then enforce an optional JWT or API key with existing code.</td></tr>
+</tbody>
+</table>
+</div>
+<p>Although <code>HmacHandler</code> is an independent handler-chain component, Unified
+Security owns the route policy and composition. There is no second HMAC route
+list.</p>
+<h2 id="unified-security-configuration"><a class="header" href="#unified-security-configuration">Unified Security Configuration</a></h2>
+<p>Add one nullable property to <code>UnifiedPathPrefixAuth</code>:</p>
+<pre><code class="language-yaml">pathPrefixAuths:
+  # Existing configuration remains unchanged.
+  - prefix: /legacy-api
+    jwt: true
+    jwkServiceIds:
+      - com.networknt.oauth2-token-1.0.0
+
+  # HMAC only.
+  - prefix: /github-webhook
+    hmacProfile: github
+
+  # HMAC and JWT. Both are required.
+  - prefix: /partner-webhook
+    hmacProfile: partner
+    jwt: true
+    jwkServiceIds:
+      - com.networknt.oauth2-partner-1.0.0
+
+  # HMAC and API key. Both are required.
+  - prefix: /signed-build
+    hmacProfile: build-system
+    apikey: true
+</code></pre>
+<p><code>hmacProfile</code> both enables HMAC and names the profile; a separate boolean is not
+needed. An HMAC rule may contain:</p>
+<ul>
+<li>no legacy auth boolean, meaning HMAC only;</li>
+<li><code>jwt: true</code>, meaning HMAC and JWT; or</li>
+<li><code>apikey: true</code>, meaning HMAC and API key.</li>
+</ul>
+<p>For an HMAC rule, configuration loading rejects Basic, SJWT, SWT, or both JWT
+and API key. This avoids changing the existing Authorization-header-versus-API-
+key branch behavior. These restrictions apply only to new HMAC rules; legacy
+rules are not reinterpreted.</p>
+<h3 id="first-match-compatibility"><a class="header" href="#first-match-compatibility">First-Match Compatibility</a></h3>
+<p>Java keeps the current ordered, first-prefix-match behavior. It does not sort by
+prefix length and does not add method-aware matching.</p>
+<p>New validation applies only when HMAC is configured:</p>
+<ul>
+<li>reject an HMAC rule shadowed by an earlier matching prefix;</li>
+<li>reject an unknown or blank HMAC profile;</li>
+<li>reject an HMAC prefix that overlaps any <code>anonymousPrefixes</code> value;</li>
+<li>reject an HMAC prefix not covered by
+<code>request-injection.appliedBodyInjectionPathPrefixes</code>;</li>
+<li>reject a built-in request-transformer prefix that overlaps an HMAC route; and</li>
+<li>require <code>HmacRequestInterceptor</code> to be the first configured
+<code>RequestInterceptor</code>.</li>
+</ul>
+<p>The existing prefix ordering remains authoritative. Operators should use a
+dedicated webhook path and place more specific rules before broader rules, just
+as they do today.</p>
+<h3 id="method-handling"><a class="header" href="#method-handling">Method Handling</a></h3>
+<p>Version 1 does not add methods to the Unified Security matcher. Each HMAC
+profile instead has an <code>allowedMethods</code> list, defaulting to <code>POST</code>. The allowed
+values are limited to <code>POST</code>, <code>PUT</code>, and <code>PATCH</code>, matching the methods for which
+<code>RequestInterceptorInjectionHandler</code> currently buffers content. A disallowed
+method on an HMAC-matched prefix returns <code>405</code>.</p>
+<p>GitHub qualification uses <code>POST</code> only.</p>
+<h2 id="hmac-profile-configuration"><a class="header" href="#hmac-profile-configuration">HMAC Profile Configuration</a></h2>
+<p><code>hmac.yml</code> contains provider profiles and optional replay-store definitions. It
+does not contain route prefixes.</p>
+<pre><code class="language-yaml">enabled: true
+
+profiles:
+  github:
+    signedInput: rawBody
+    algorithm: hmacSha256
+    allowedMethods:
+      - POST
+    signatureHeader: X-Hub-Signature-256
+    signaturePrefix: "sha256="
+    signatureEncoding: hex
+    maxBodyBytes: 16777216
+
+    secrets:
+      selectorHeader: X-GitHub-Hook-ID
+      bySelector:
+        "12345678":
+          - GITHUB_HOOK_12345678_CURRENT_SECRET
+          - GITHUB_HOOK_12345678_PREVIOUS_SECRET
+        "87654321":
+          - GITHUB_HOOK_87654321_CURRENT_SECRET
+      defaultEnvNames: []
+
+    replay:
+      enabled: true
+      idHeader: X-GitHub-Delivery
+      store: webhook-replay
+      retentionSeconds: 604800
+
+  shared-build-system:
+    signedInput: rawBody
+    algorithm: hmacSha256
+    allowedMethods:
+      - POST
+    signatureHeader: X-Build-Signature
+    signaturePrefix: ""
+    signatureEncoding: base64
+    maxBodyBytes: 16777216
+    secrets:
+      selectorHeader: ""
+      bySelector: {}
+      defaultEnvNames:
+        - BUILD_WEBHOOK_CURRENT_SECRET
+        - BUILD_WEBHOOK_PREVIOUS_SECRET
+    replay:
+      enabled: true
+      idHeader: X-Build-Delivery
+      store: webhook-replay
+      retentionSeconds: 604800
+
+replayStores:
+  webhook-replay:
+    type: redis
+    urlEnv: WEBHOOK_REPLAY_REDIS_URL
+    keyPrefix: "light:hmac-replay:"
+    connectTimeoutMillis: 1000
+    operationTimeoutMillis: 1000
+</code></pre>
+<p>Version 1 supports:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Values and behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>signedInput</code></td><td><code>rawBody</code> only</td></tr>
+<tr><td><code>algorithm</code></td><td><code>hmacSha256</code> only</td></tr>
+<tr><td><code>allowedMethods</code></td><td>Non-empty subset of <code>POST</code>, <code>PUT</code>, and <code>PATCH</code>; default <code>POST</code></td></tr>
+<tr><td><code>signatureEncoding</code></td><td><code>hex</code> or <code>base64</code></td></tr>
+<tr><td><code>signaturePrefix</code></td><td>Exact optional prefix removed before signature decoding</td></tr>
+<tr><td><code>maxBodyBytes</code></td><td>Positive byte limit, default 16 MiB</td></tr>
+<tr><td><code>selectorHeader</code></td><td>Optional exact secret-map selector header</td></tr>
+<tr><td><code>defaultEnvNames</code></td><td>Explicit shared-secret fallback; empty means no fallback</td></tr>
+<tr><td><code>idHeader</code></td><td>Required replay identifier header when replay is enabled</td></tr>
+<tr><td><code>retentionSeconds</code></td><td>Positive TTL; default seven days</td></tr>
+</tbody>
+</table>
+</div>
+<p>HTTP header names are case-insensitive. Multiple values for the signature,
+selector, or replay ID header are rejected instead of choosing one. Selector
+values are matched exactly after trimming optional HTTP whitespace and are not
+converted to numbers.</p>
+<p>The candidate secret list is ordered active first, previous second. Limit the
+list to two entries in version 1. Verification computes and compares every
+candidate instead of returning at the first match, reducing secret-version
+timing differences.</p>
+<p>If <code>selectorHeader</code> is present, an unknown or missing selector fails unless
+<code>defaultEnvNames</code> is explicitly non-empty. Shared-secret fallback is therefore
+an operator decision, not an implicit convenience behavior.</p>
+<h2 id="secret-resolution-and-rotation"><a class="header" href="#secret-resolution-and-rotation">Secret Resolution and Rotation</a></h2>
+<p>Serialized configuration contains environment-variable names only. Runtime
+compilation resolves those names into non-serializable key material with
+redacted <code>toString</code>, logging, and management representations.</p>
+<p>Startup or a newly loaded runtime fails closed if a referenced environment
+variable is missing, empty, or cannot initialize the configured <code>Mac</code>.
+Deployments should use randomly generated secrets of at least 32 bytes when the
+provider permits it.</p>
+<p>Recommended rotation is:</p>
+<ol>
+<li>Provision both <code>CURRENT</code> and <code>PREVIOUS</code> environment variables before process
+startup.</li>
+<li>Configure the ordered list as <code>[CURRENT, PREVIOUS]</code> and reload <code>hmac.yml</code>.</li>
+<li>Change the provider to use <code>CURRENT</code>.</li>
+<li>After the overlap window, remove <code>PREVIOUS</code> from <code>hmac.yml</code> and reload.</li>
+<li>Use a rolling restart when the bytes assigned to an environment variable
+must change.</li>
+</ol>
+<p>One immutable <code>HmacRuntime</code> is attached to each matched request. A reload does
+not change a request’s secret keyring or replay-store reference halfway through
+processing.</p>
+<h2 id="handler-and-service-wiring"><a class="header" href="#handler-and-service-wiring">Handler and Service Wiring</a></h2>
+<p>The HMAC module uses the existing request-injection handler:</p>
+<pre><code class="language-yaml"># handler.yml
+handlers:
+  - com.networknt.handler.RequestInterceptorInjectionHandler@request-injection
+  - com.networknt.hmac.HmacHandler@hmac
+  - com.networknt.security.UnifiedSecurityHandler@unified-security
+  # application/proxy handlers follow
+
+chains:
+  webhook:
+    - request-injection
+    - hmac
+    - unified-security
+    - proxy
+</code></pre>
+<p>The HMAC interceptor must be first in the singleton list:</p>
+<pre><code class="language-yaml"># service.yml
+singletons:
+  - com.networknt.handler.RequestInterceptor:
+      - com.networknt.hmac.HmacRequestInterceptor
+      - com.networknt.body.RequestBodyInterceptor
+</code></pre>
+<p>Configure request injection for every HMAC prefix:</p>
+<pre><code class="language-yaml"># request-injection.yml
+enabled: true
+maxBuffers: 1024
+maxBodyBytes: 16777216
+appliedBodyInjectionPathPrefixes:
+  - /github-webhook
+  - /partner-webhook
+  - /signed-build
+</code></pre>
+<p>The existing <code>maxBuffers</code> setting remains an allocation guard. The new optional
+request-injection <code>maxBodyBytes</code> is the strict read boundary and must be positive
+when any covered route requires HMAC. The body reader counts every byte across
+buffer boundaries, reads until EOF, and rejects as soon as it observes byte
+<code>maxBodyBytes + 1</code>. A declared <code>Content-Length</code> above the limit can be rejected
+before reading, but chunked and missing-length requests still use the counted
+limit.</p>
+<p>The HMAC interceptor independently checks its profile <code>maxBodyBytes</code>. Startup
+validation requires the request-injection limit to be greater than or equal to
+every covered HMAC profile limit and verifies that <code>maxBuffers</code> can hold that
+many bytes with the configured server buffer size. This prevents a prefix-only
+HMAC check and preserves an exact 16 MiB acceptance boundary.</p>
+<p><code>handler.yml</code> and <code>service.yml</code> wiring is initialized at startup. Enabling HMAC
+for the first time therefore requires deploying the module and restarting the
+process. After it is pre-wired, profile, prefix-coverage, secret-reference, and
+Unified Security changes use the existing module config-reload path.</p>
+<h3 id="request-transformer-restriction"><a class="header" href="#request-transformer-restriction">Request Transformer Restriction</a></h3>
+<p><code>RequestTransformerInterceptor</code> can replace the buffered request body and
+change the path or headers. That is incompatible with forwarding the exact body
+that GitHub signed.</p>
+<p>Built-in configuration validation rejects overlap between an HMAC route and
+<code>request-transformer.appliedPathPrefixes</code>. A custom request interceptor on an
+HMAC route must be non-mutating. As a defense-in-depth check, the HMAC
+interceptor records the original body length and a SHA-256 body fingerprint;
+<code>HmacHandler</code> recomputes them before replay reservation and rejects the request
+if another interceptor changed the buffered body.</p>
+<h2 id="java-request-lifecycle"><a class="header" href="#java-request-lifecycle">Java Request Lifecycle</a></h2>
+<pre class="mermaid">sequenceDiagram
+    participant Sender as GitHub / sender
+    participant Inject as Request injection
+    participant Verify as HMAC interceptor
+    participant Replay as HMAC handler / replay store
+    participant Unified as Unified Security
+    participant Callee as Jenkins / application
+
+    Sender-&gt;&gt;Inject: Headers and request body
+    Inject-&gt;&gt;Inject: Buffer bounded raw bytes and restore request channel
+    Inject-&gt;&gt;Verify: First request interceptor
+    Verify-&gt;&gt;Verify: Match first prefix and verify exact raw bytes
+    Verify--&gt;&gt;Inject: Attach pending result and body fingerprint
+    Inject-&gt;&gt;Replay: Continue after non-mutating interceptors
+    Replay-&gt;&gt;Replay: Recheck body fingerprint
+    Replay-&gt;&gt;Replay: Atomically reserve delivery ID
+    alt duplicate
+        Replay--&gt;&gt;Sender: 200 with empty body
+    else reserved
+        Replay-&gt;&gt;Unified: Attach HMAC authentication evidence
+        Unified-&gt;&gt;Unified: Match first prefix and require matching evidence
+        Unified-&gt;&gt;Unified: Verify optional JWT or API key
+        Unified-&gt;&gt;Callee: Continue normal handler/proxy path
+        Callee--&gt;&gt;Sender: Normal response
+        alt final response is 2xx
+            Replay-&gt;&gt;Replay: Keep reservation until TTL
+        else final response is non-2xx
+            Replay-&gt;&gt;Replay: Release reservation asynchronously
+        end
+    end
+</pre>
+
+<p>Detailed flow:</p>
+<ol>
+<li><code>RequestInterceptorInjectionHandler</code> applies its existing POST/PUT/PATCH and
+prefix checks, reads the complete body under the opt-in exact byte limit,
+stores the pooled-buffer attachment, restores the Undertow request channel,
+and invokes request interceptors.</li>
+<li><code>HmacRequestInterceptor</code>, which is first, resolves the first matching Unified
+Security rule. It is a no-op when that rule has no <code>hmacProfile</code>.</li>
+<li>For HMAC, it validates the method, content encoding, required single-value
+headers, exact body limit, signature syntax, secret selector, and HMAC.</li>
+<li>It reads each <code>ByteBuffer.duplicate()</code> without changing the pooled buffer’s
+position or limit. It does not allocate a second 16 MiB byte array.</li>
+<li>On success it attaches an immutable pending result containing the matched
+prefix, profile, selector namespace, replay ID, original path, body length,
+body fingerprint, and pinned <code>HmacRuntime</code>. It never attaches a secret or
+submitted signature.</li>
+<li>Other configured request interceptors run. HMAC routes may use parsers that
+only attach derived data; they may not mutate the buffered request.</li>
+<li><code>HmacHandler</code> returns immediately if an earlier interceptor already started
+an error response. Otherwise, it requires the pending result for an HMAC
+rule, rechecks the body length/fingerprint, and calls the replay store
+asynchronously.</li>
+<li>A duplicate gets an empty local <code>200</code>; the remaining chain and callee are not
+invoked. This is an idempotency response, not admission of the request to the
+protected route.</li>
+<li>A new reservation produces an HMAC evidence attachment and resumes the
+handler chain.</li>
+<li><code>UnifiedSecurityHandler</code> uses its existing first-match logic. For an HMAC
+rule it requires evidence with the same prefix and profile before running
+existing JWT or API-key verification.</li>
+<li>Existing body restoration forwards the same entity bytes through the
+application or proxy path. The HMAC components only read headers.</li>
+<li>An exchange completion listener retains the reservation for a final <code>2xx</code>
+and schedules owner-checked release for a final non-<code>2xx</code>.</li>
+</ol>
+<p>If any required component is absent or out of order, the evidence is missing
+and Unified Security returns <code>503</code>; it must never treat a configured HMAC factor
+as optional.</p>
+<h3 id="duplicate-before-header-authentication"><a class="header" href="#duplicate-before-header-authentication">Duplicate Before Header Authentication</a></h3>
+<p>The replay gate precedes Unified Security so that the latter can enforce the
+presence of final HMAC evidence and fail closed on chain misconfiguration. A
+cryptographically valid duplicate can therefore receive the configured empty
+<code>200</code> before JWT or API-key verification. It still cannot reach the callee and
+does not create authenticated request context. This is the narrow Java
+maintenance-mode tradeoff for avoiding a rewrite of the synchronous Unified
+Security handler.</p>
+<p>If policy requires rejecting duplicates that do not also carry a current JWT
+or API key, the handler order would need a broader split of Unified Security
+into selection/header-auth/finalization phases. That is explicitly deferred.</p>
+<h2 id="hmac-verification"><a class="header" href="#hmac-verification">HMAC Verification</a></h2>
+<p>The interceptor performs these checks in order:</p>
+<ol>
+<li>Resolve the existing first matching prefix and HMAC profile.</li>
+<li>Reject a method not in <code>allowedMethods</code> with <code>405</code>.</li>
+<li>Reject <code>Content-Encoding</code> other than absent or <code>identity</code> with <code>415</code>.</li>
+<li>Count the attached raw bytes and return <code>413</code> if they exceed
+<code>maxBodyBytes</code>.</li>
+<li>Require exactly one signature header, remove the configured exact prefix,
+decode hex or base64, and require a 32-byte SHA-256 HMAC.</li>
+<li>Resolve the ordered candidate secrets using the optional selector header.</li>
+<li>Compute <code>HmacSHA256</code> over the unmodified duplicated buffers for every
+candidate.</li>
+<li>Compare each expected value with <code>MessageDigest.isEqual</code> and do not return
+early when one secret matches.</li>
+<li>Require exactly one replay ID header when replay is enabled.</li>
+<li>Return one generic <code>401</code> for a missing signature, malformed signature,
+unknown selector, missing replay ID, or signature mismatch.</li>
+</ol>
+<p>An empty body is the zero-length HMAC input. Missing buffered data is treated as
+an empty body only when Undertow reports that the request is complete and its
+declared content length is zero; otherwise it is a server wiring error and
+fails closed.</p>
+<p>Java version 1 relies on the existing server/request read timeout while
+<code>RequestInterceptorInjectionHandler</code> collects the body. It does not add a new
+HMAC-specific body-read timer to this shared production handler.</p>
+<h2 id="replay-store"><a class="header" href="#replay-store">Replay Store</a></h2>
+<p>Replay behavior needs a purpose-specific asynchronous SPI:</p>
+<pre><code class="language-java">public interface WebhookReplayStore {
+    CompletionStage&lt;ReserveOutcome&gt; reserve(
+        WebhookReplayKey key,
+        Duration retention
+    );
+
+    CompletionStage&lt;Void&gt; release(ReplayReservation reservation);
+
+    CompletionStage&lt;Boolean&gt; forceRemove(WebhookReplayKey key);
+}
+</code></pre>
+<p><code>ReserveOutcome</code> is either <code>Reserved</code>, containing an opaque reservation with a
+random owner token, or <code>Duplicate</code>. The logical key contains the profile,
+normalized selector or <code>shared</code>, and replay ID. A provider may hash that tuple
+before persistence.</p>
+<p>The provider contract requires:</p>
+<ul>
+<li>atomic insert-if-absent with TTL;</li>
+<li>owner-token compare-and-delete for normal release;</li>
+<li>unconditional, authorized deletion for operator redelivery;</li>
+<li>bounded connection and operation timeouts; and</li>
+<li>no blocking of the Undertow I/O thread.</li>
+</ul>
+<p>The existing <code>light-session-4j</code> implementations are useful models for local,
+Redis, Hazelcast, or JDBC lifecycle and configuration, but the current
+<code>SessionRepository</code> create/save/find/delete contract does not provide the atomic
+reservation semantics required here. Replay-store adapters may reuse underlying
+clients, but must implement this stronger contract directly.</p>
+<h3 id="local-store"><a class="header" href="#local-store">Local Store</a></h3>
+<p>When no replay store is configured, use a process-local implementation. It
+must:</p>
+<ul>
+<li>use atomic <code>putIfAbsent</code> semantics;</li>
+<li>support a TTL per reservation;</li>
+<li>have a configured maximum entry count;</li>
+<li>never silently evict an unexpired entry to make room;</li>
+<li>return an unavailable/capacity result, producing <code>503</code>, when the guarantee
+cannot be maintained; and</li>
+<li>expose only safe size/outcome summaries to operational tooling.</li>
+</ul>
+<p>Local state is lost on restart and is not shared across instances. Startup and
+metrics must clearly state <code>scope=local</code>. Operators running multiple Java
+instances should configure a distributed store.</p>
+<h3 id="distributed-store"><a class="header" href="#distributed-store">Distributed Store</a></h3>
+<p>The first optional distributed adapter should be Redis and should remain a
+separate artifact so the core HMAC module does not add Redisson or another
+client to every <code>light-4j</code> deployment.</p>
+<p>Reservation maps to <code>SET key owner-token NX PX retention</code>. Release uses an
+atomic compare-and-delete script, and operator removal uses <code>DEL</code>. The Redis
+namespace must not evict unexpired replay records. Timeout, connection failure,
+or a full store returns <code>503</code>; it never falls back to local storage for that
+request.</p>
+<p>Whether the adapter is packaged in <code>light-4j</code> or alongside reusable providers
+in <code>light-session-4j</code> is a repository-layout decision, not a change to this
+contract.</p>
+<h3 id="retention-and-final-outcome"><a class="header" href="#retention-and-final-outcome">Retention and Final Outcome</a></h3>
+<p>The default retention is 604800 seconds (seven days). Each profile can override
+it. Finite retention means finite replay protection.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Outcome</th><th>Reservation behavior</th></tr>
+</thead>
+<tbody>
+<tr><td>Duplicate before the callee</td><td>Return empty <code>200</code>; keep the existing reservation</td></tr>
+<tr><td>Final <code>2xx</code></td><td>Keep until TTL, even if the caller disconnects afterward</td></tr>
+<tr><td>Final non-<code>2xx</code></td><td>Schedule owner-checked release</td></tr>
+<tr><td>Handler/proxy exception before a response</td><td>Schedule owner-checked release from exchange completion</td></tr>
+<tr><td>Release failure</td><td>Log/count it and retain the original response; operator may remove the stale record</td></tr>
+<tr><td>JVM crash after reserve</td><td>Reservation remains until TTL or operator removal</td></tr>
+</tbody>
+</table>
+</div>
+<p>Java’s exchange completion callback makes release asynchronous and eventually
+consistent. A retry arriving immediately after a failed response can briefly
+observe the still-present reservation and receive duplicate <code>200</code>. The release
+operation must be dispatched promptly and measured. Removing this small window
+would require response-commit changes across the established Java chain and is
+not proposed for maintenance mode.</p>
+<h2 id="operator-redelivery"><a class="header" href="#operator-redelivery">Operator Redelivery</a></h2>
+<p>Add an optional protected admin handler rather than requiring operators to
+construct an internal cache key:</p>
+<pre><code class="language-http">POST /adm/hmac-replay/remove
+Content-Type: application/json
+
+{
+  "profile": "github",
+  "selector": "12345678",
+  "deliveryId": "6f3f8b40-..."
+}
+</code></pre>
+<p>The response reports whether an entry was removed and whether the store is
+local or distributed. It never returns the provider key, stored owner token, or
+secret material.</p>
+<p>This handler is disabled by default, requires the existing administrative
+authorization controls, and emits an audit event. For a local store the
+controller must invoke it on every instance that can serve the route. One call
+is sufficient for a shared distributed store. The operator workflow is remove
+first, then ask GitHub to redeliver.</p>
+<h2 id="configuration-reload"><a class="header" href="#configuration-reload">Configuration Reload</a></h2>
+<p>The module follows the current <code>Config.load()</code> identity-based pattern:</p>
+<ul>
+<li><code>HmacConfig.load()</code> returns a new immutable config after its mapped config is
+cleared and reloaded;</li>
+<li><code>HmacRuntime.load()</code> compiles and atomically publishes resolved profiles and
+replay providers for that config identity; and</li>
+<li>the interceptor attaches the chosen runtime to the request so in-flight work
+continues consistently after another reload.</li>
+</ul>
+<p>Invalid newly loaded HMAC configuration fails closed for affected new requests
+and does not alter in-flight requests. Error logs identify the profile and
+field, but never the selector value, environment value, signature, or body.</p>
+<p>Secret-only rotation changes <code>hmac.yml</code> and reloads the HMAC module. Adding a
+new protected route should be staged:</p>
+<ol>
+<li>deploy and restart once with the HMAC handler/interceptor wiring present;</li>
+<li>add the profile and request-injection prefix, then reload those modules; and</li>
+<li>add <code>hmacProfile</code> to the Unified Security rule and reload Unified Security.</li>
+</ol>
+<p>Disabling reverses that order: remove the Unified HMAC requirement first, then
+remove unused buffering/profile configuration. A request that observes a mixed
+configuration during staged reload either validates against one pinned runtime
+or fails closed; it cannot proceed with partial HMAC evidence.</p>
+<h2 id="failure-contract"><a class="header" href="#failure-contract">Failure Contract</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Condition</th><th style="text-align: right">HTTP status</th><th>Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td>Method not allowed by profile</td><td style="text-align: right"><code>405</code></td><td>Reject without replay reservation or callee invocation</td></tr>
+<tr><td>Missing/malformed signature, unknown selector, or mismatch</td><td style="text-align: right"><code>401</code></td><td>Generic invalid webhook authentication response</td></tr>
+<tr><td>Missing/malformed replay ID when enabled</td><td style="text-align: right"><code>401</code></td><td>Reject without reservation or callee invocation</td></tr>
+<tr><td>Unsupported <code>Content-Encoding</code></td><td style="text-align: right"><code>415</code></td><td>Reject without verification or forwarding</td></tr>
+<tr><td>Body exceeds exact profile limit or request-injection limit</td><td style="text-align: right"><code>413</code></td><td>Reject and do not invoke the callee</td></tr>
+<tr><td>Duplicate replay ID</td><td style="text-align: right"><code>200</code></td><td>Empty local response; do not invoke Unified Security or the callee</td></tr>
+<tr><td>Configured replay store unavailable/full</td><td style="text-align: right"><code>503</code></td><td>Fail closed; do not invoke the callee</td></tr>
+<tr><td>Missing/mismatched HMAC evidence or invalid chain wiring</td><td style="text-align: right"><code>503</code></td><td>Fail closed as server configuration error</td></tr>
+<tr><td>Buffered body changed after verification</td><td style="text-align: right"><code>500</code></td><td>Reject as incompatible middleware configuration</td></tr>
+<tr><td>Optional JWT/API key fails</td><td style="text-align: right">Existing Unified Security status</td><td>Release reservation on completion; do not invoke the callee</td></tr>
+<tr><td>Callee returns non-<code>2xx</code></td><td style="text-align: right">Callee status</td><td>Forward response and release reservation asynchronously</td></tr>
+<tr><td>Callee/handler throws</td><td style="text-align: right">Existing error mapping</td><td>Release reservation from completion handling</td></tr>
+</tbody>
+</table>
+</div>
+<p>Authentication error responses do not reveal whether a selector exists, which
+secret matched, or whether active versus previous material was used.</p>
+<h2 id="observability"><a class="header" href="#observability">Observability</a></h2>
+<p>Recommended metrics are:</p>
+<ul>
+<li><code>hmac_webhook_requests_total{profile,outcome}</code> where outcome is <code>accepted</code>,
+<code>duplicate</code>, <code>invalid</code>, <code>too_large</code>, <code>unsupported_encoding</code>,
+<code>store_unavailable</code>, or <code>chain_error</code>;</li>
+<li><code>hmac_webhook_verification_duration_seconds{profile}</code>;</li>
+<li><code>hmac_webhook_body_bytes{profile}</code>;</li>
+<li><code>hmac_replay_operations_total{store_type,operation,outcome}</code>; and</li>
+<li><code>hmac_replay_local_entries</code>.</li>
+</ul>
+<p>Logs may include the profile, matched prefix, correlation ID, store type, final
+status, and an optional one-way truncated hash of the replay tuple. They must
+not include the body, signature, secret, raw selector, replay ID, JWT, or API
+key. Selector and replay ID must not be metric labels.</p>
+<p>Startup and reload output identifies local versus distributed replay scope. A
+local store should produce a warning when the deployment declares more than one
+instance.</p>
+<h2 id="validation-plan"><a class="header" href="#validation-plan">Validation Plan</a></h2>
+<h3 id="compatibility-and-configuration"><a class="header" href="#compatibility-and-configuration">Compatibility and Configuration</a></h3>
+<ul>
+<li>Run all existing Unified Security tests without changing legacy fixtures.</li>
+<li>Prove the current first-match behavior is unchanged for non-HMAC rules.</li>
+<li>Accept HMAC-only, HMAC-plus-JWT, and HMAC-plus-API-key configurations.</li>
+<li>Reject unsupported HMAC factor combinations, unknown profiles, shadowed HMAC
+prefixes, anonymous overlap, missing request-injection coverage, transformer
+overlap, and wrong interceptor order.</li>
+<li>Prove missing handler/interceptor wiring fails closed rather than bypassing
+HMAC.</li>
+<li>Prove an interceptor error cannot continue through the asynchronous body-read
+branch to Unified Security or the callee.</li>
+<li>Prove an in-flight request continues with its pinned runtime during reload.</li>
+<li>Prove missing/empty environment variables fail without exposing values.</li>
+</ul>
+<h3 id="cryptography-and-raw-bytes"><a class="header" href="#cryptography-and-raw-bytes">Cryptography and Raw Bytes</a></h3>
+<ul>
+<li>Use GitHub’s published secret/payload/signature test vector.</li>
+<li>Test non-ASCII UTF-8 payload bytes, whitespace-only differences, empty bodies,
+invalid hex/base64, wrong prefixes, wrong decoded lengths, and duplicate
+signature headers.</li>
+<li>Split the same body across different Undertow buffer boundaries and get the
+same HMAC result.</li>
+<li>Verify active and previous secrets while never reporting which matched.</li>
+<li>Prove logically equivalent JSON with different bytes does not validate.</li>
+<li>Prove a request body parser may attach parsed data without changing forwarded
+bytes.</li>
+<li>Prove a body mutation after verification is detected before replay reservation
+or callee invocation.</li>
+</ul>
+<h3 id="authentication-composition"><a class="header" href="#authentication-composition">Authentication Composition</a></h3>
+<ul>
+<li>HMAC-only requires valid HMAC evidence.</li>
+<li>HMAC plus JWT requires both factors.</li>
+<li>HMAC plus API key requires both factors.</li>
+<li>Valid HMAC cannot compensate for missing/invalid JWT or API key.</li>
+<li>Valid JWT/API key cannot compensate for invalid HMAC.</li>
+<li>HMAC rules cannot bypass through <code>anonymousPrefixes</code>.</li>
+<li>A duplicate returns <code>200</code> without invoking the callee.</li>
+</ul>
+<h3 id="body-and-handler-integration"><a class="header" href="#body-and-handler-integration">Body and Handler Integration</a></h3>
+<ul>
+<li>Accept exactly 16 MiB and reject 16 MiB plus one byte.</li>
+<li>Prove a body that fills the last configured buffer is accepted only after EOF
+is observed, while any unread suffix produces <code>413</code> and is never forwarded.</li>
+<li>Test <code>Content-Length</code> and chunked requests over HTTP/1.1 and HTTP/2.</li>
+<li>Reject non-identity content encoding.</li>
+<li>Use a counting fake callee to prove no request arrives for invalid HMAC,
+duplicate ID, store failure, oversized body, incompatible transformation, or
+missing authentication evidence.</li>
+<li>Prove the fake callee receives the exact authenticated bytes and expected
+end-to-end application headers.</li>
+<li>Prove distributed reservation and chain continuation do not block the
+Undertow I/O thread.</li>
+</ul>
+<h3 id="replay"><a class="header" href="#replay">Replay</a></h3>
+<ul>
+<li>Race many reservations for one key; exactly one wins in the local and Redis
+implementations.</li>
+<li>Keep a reservation after <code>2xx</code>.</li>
+<li>Release after Unified Security failure, non-<code>2xx</code>, and handler/proxy failure.</li>
+<li>Prove owner-checked release cannot delete a newer reservation.</li>
+<li>Fail closed on local capacity exhaustion and Redis outage.</li>
+<li>Confirm a JVM restart loses local state and does not lose distributed state.</li>
+<li>Confirm operator removal permits intentional redelivery.</li>
+<li>Confirm controller fan-out removes local entries on every selected instance.</li>
+</ul>
+<h3 id="github-to-jenkins-qualification"><a class="header" href="#github-to-jenkins-qualification">GitHub-to-Jenkins Qualification</a></h3>
+<ul>
+<li>Configure one GitHub hook ID with an active secret and trigger one Jenkins
+build.</li>
+<li>Confirm Jenkins receives the original body and GitHub application headers.</li>
+<li>Send the same delivery again and confirm an empty <code>200</code> with no second build.</li>
+<li>Make Jenkins return failure, wait for release, and redeliver successfully.</li>
+<li>Remove the replay entry administratively and perform an intentional GitHub
+redelivery.</li>
+<li>Rotate active/previous secret references through module reload.</li>
+<li>No other provider-specific integration test is required.</li>
+</ul>
+<h2 id="implementation-phases"><a class="header" href="#implementation-phases">Implementation Phases</a></h2>
+<h3 id="phase-0-prove-the-maintenance-mode-integration-points"><a class="header" href="#phase-0-prove-the-maintenance-mode-integration-points">Phase 0: Prove the Maintenance-Mode Integration Points</a></h3>
+<ul>
+<li>Build a focused fixture around <code>RequestInterceptorInjectionHandler</code> with a
+counting downstream handler.</li>
+<li>Prove the first interceptor sees the exact pooled bytes without advancing
+buffer positions.</li>
+<li>Add the opt-in exact request-injection limit and prove the handler cannot
+authenticate only a full-buffer prefix while unread bytes remain.</li>
+<li>Prove a following <code>HmacHandler</code> can await an asynchronous reservation and
+resume the chain without blocking an I/O thread.</li>
+<li>Prove an exchange completion listener observes the final application/proxy
+status and releases failures.</li>
+<li>Prove body fingerprint revalidation detects <code>RequestTransformerInterceptor</code>
+mutation.</li>
+</ul>
+<p>If these assertions fail, stop and choose a dedicated buffered HMAC handler.
+Changing the general <code>RequestInterceptor</code> contract is not the fallback for the
+maintenance branch.</p>
+<h3 id="phase-1-configuration-and-verification-core"><a class="header" href="#phase-1-configuration-and-verification-core">Phase 1: Configuration and Verification Core</a></h3>
+<ul>
+<li>Add <code>hmac-config</code> and <code>hmac</code> modules.</li>
+<li>Add <code>hmacProfile</code> to <code>UnifiedPathPrefixAuth</code> and its config schema.</li>
+<li>Implement profile validation, environment resolution, immutable runtime
+loading, raw-buffer HMAC verification, and redacted representations.</li>
+<li>Add focused config, crypto, byte-boundary, and reload tests.</li>
+</ul>
+<h3 id="phase-2-replay-and-administration"><a class="header" href="#phase-2-replay-and-administration">Phase 2: Replay and Administration</a></h3>
+<ul>
+<li>Add the asynchronous <code>WebhookReplayStore</code> SPI and bounded local provider.</li>
+<li>Add an optional Redis provider using atomic reserve and compare-and-delete.</li>
+<li>Add the protected replay-removal admin handler.</li>
+<li>Add concurrency, outage, capacity, release, and operator-removal tests.</li>
+</ul>
+<h3 id="phase-3-unified-security-and-handler-integration"><a class="header" href="#phase-3-unified-security-and-handler-integration">Phase 3: Unified Security and Handler Integration</a></h3>
+<ul>
+<li>Add HMAC evidence attachment/checking to Unified Security without changing
+legacy branches.</li>
+<li>Add <code>HmacRequestInterceptor</code> and <code>HmacHandler</code> wiring validation.</li>
+<li>Add completion-based reservation outcome handling, metrics, and redacted
+logging.</li>
+<li>Add chain-misconfiguration and exact-forwarding integration tests.</li>
+</ul>
+<h3 id="phase-4-qualification"><a class="header" href="#phase-4-qualification">Phase 4: Qualification</a></h3>
+<ul>
+<li>Run affected <code>light-4j</code> module tests and existing Unified Security regression
+tests.</li>
+<li>Run the HTTP/1.1 and HTTP/2 counting-callee integration matrix.</li>
+<li>Qualify the distributed store across at least two Java instances.</li>
+<li>Complete one GitHub-to-Jenkins end-to-end and rotation exercise.</li>
+<li>Reuse the same raw request fixtures in the Rust qualification suite.</li>
+</ul>
+<h2 id="implementation-readiness"><a class="header" href="#implementation-readiness">Implementation Readiness</a></h2>
+<p>No remaining product decision blocks Phase 0 or the verification core. Replay
+retention, local fallback, duplicate response, failure release, operator
+redelivery, secret selection, rotation, and authentication composition all have
+defined behavior.</p>
+<p>The Phase 0 Undertow proof is an engineering gate rather than a design question.
+The only non-blocking packaging choice is whether the optional Redis adapter is
+published from <code>light-4j</code> or next to reusable distributed providers in
+<code>light-session-4j</code>; the replay SPI and wire behavior are the same either way.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sidecar-handler"><a class="header" href="#sidecar-handler">Sidecar Handler</a></h1>
 <p>The <code>sidecar</code> module provides a set of middleware handlers designed to operate in a sidecar or gateway environment. It enables the separation of cross-cutting concerns from business logic, allowing the light-sidecar to act as a micro-gateway for both incoming (ingress) and outgoing (egress) traffic.</p>
