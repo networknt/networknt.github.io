@@ -35,7 +35,7 @@
             const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../../searchindex-07360730.js";
+            window.path_to_searchindex_js = "../../searchindex-61adc2e4.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-2dba6721.js"></script>
@@ -177,8 +177,9 @@
                         <h1 id="hmac-webhook-authentication-for-java"><a class="header" href="#hmac-webhook-authentication-for-java">HMAC Webhook Authentication for Java</a></h1>
 <p>Status: Implementation complete through Phase 4 local qualification for
 <code>light-4j</code>. Release qualification still requires a deployed GitHub-to-Jenkins
-environment and the planned Rust implementation; controller fan-out remains an
-optional external integration. The first provider profile is GitHub.</p>
+environment and cross-runtime acceptance against the implemented Rust version;
+controller fan-out remains an optional external integration. The first provider
+profile is GitHub.</p>
 <p>Tracking issue: <a href="https://github.com/networknt/light-4j/issues/2772">networknt/light-4j#2772</a></p>
 <p>Companion design: <code>light-fabric/docs/src/design/hmac-webhook-authentication.md</code>
 contains the Rust implementation design. The two implementations share an
@@ -1212,16 +1213,20 @@ and suppresses a duplicate without invoking the callee.</p>
 <p>The disposable-container default is the portable <code>redis:7-alpine</code> image.
 Environments that require a registry mirror can set
 <code>HMAC_PHASE4_REDIS_IMAGE</code> without changing the gate.</p>
-<p>The language-neutral fixture
+<p>The Java language-neutral fixture
 <code>hmac/src/test/resources/qualification/hmac-webhook-v1.properties</code> stores the
 raw request body and public test secret as base64 plus the expected GitHub
 signature and header contract. Java validates this fixture in
-<code>HmacQualificationFixtureTest</code>; the Rust suite must consume this same versioned
-fixture contract when its HMAC implementation exists.</p>
-<p>The local gate does not claim the two external acceptance items. No Jenkins or
-GitHub webhook target is part of the local workspace deployment, and the
-companion <code>light-fabric</code> HMAC middleware remains a design rather than an
-executable Rust suite. Before release, run one real GitHub-to-Jenkins delivery,
+<code>HmacQualificationFixtureTest</code>; the Rust suite consumes a JSON mirror of this
+same version-1 contract. The repositories do not load one physical fixture
+file, so cross-runtime release qualification must also compare their version-1
+vectors explicitly.</p>
+<p>The local gate does not claim the external acceptance items. No Jenkins or
+GitHub webhook target is part of the local workspace deployment. The companion
+<code>light-fabric</code> HMAC middleware is implemented through Phase 4 local
+qualification, while its production HTTP/2 over TLS, multi-process Redis, and
+deployed GitHub-to-Jenkins checks remain release gates. Before release, run one
+real GitHub-to-Jenkins delivery,
 duplicate, non-<code>2xx</code> redelivery, and current/previous-secret rotation exercise,
 then run the version-1 fixture through the Rust suite. Record those environment
 results separately from the repeatable local gate.</p>
