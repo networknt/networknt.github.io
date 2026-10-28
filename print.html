@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-9f04483b.js";
+            window.path_to_searchindex_js = "searchindex-da7b1238.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fc824392.js"></script>
@@ -13446,7 +13446,7 @@ docker-compose up
 <h1 id="partner-checkmarx-scan-assessment--2026-10-28"><a class="header" href="#partner-checkmarx-scan-assessment--2026-10-28">Partner Checkmarx scan assessment — 2026-10-28</a></h1>
 <h2 id="scope-and-conclusion"><a class="header" href="#scope-and-conclusion">Scope and conclusion</a></h2>
 <p>Reviewed <code>ghs_checkmarx_sanitized.xlsx</code>, sheet <code>ghs_checkmarx_sanitized</code>: <strong>118 findings, worksheet rows 2–119, across 13 repository names</strong>. Row numbers below are physical Excel rows (row 1 is the header), not scanner result ordinals. Workbook SHA-256: <code>7aa8ea5a4f4ad630f156db53d3071a1f3ed019c054c54364aa64bbb34228084d</code>.</p>
-<p>This is a source-based assessment, not penetration testing or certification of the partner deployment. No application code, deployment, database or workbook was changed. The workbook supplies source/sink locations and comments, but no scanned commit, dependency lock/artifact, effective middleware chain, public response captures or full taint path. Verdicts apply to the reviewed local revisions below; historical and deployed closure needs the named evidence. Scanner severity and existing Result State are inputs, not independent proof.</p>
+<p>This is a source-based assessment, not penetration testing or certification of the partner deployment. During the initial assessment, no application code, deployment, database or workbook was changed. Subsequent source fixes are linked in the remediation follow-up below. The workbook supplies source/sink locations and comments, but no scanned commit, dependency lock/artifact, effective middleware chain, public response captures or full taint path. Verdicts apply to the reviewed local revisions below; historical and deployed closure needs the named evidence. Scanner severity and existing Result State are inputs, not independent proof.</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -13463,6 +13463,24 @@ docker-compose up
 </table>
 </div>
 <p>The four confirmed rows represent two root causes: DOM XSS in two demo pages (rows 34–35), and OAuth response logging at two sinks (106–107). There are also important conditional issues: legacy CBC, rendezvous channel secrecy, missing public HSTS and session identifier semantics. Do not dismiss conditional findings as false alarms.</p>
+<h2 id="merged-remediation-follow-up--2026-10-28"><a class="header" href="#merged-remediation-follow-up--2026-10-28">Merged remediation follow-up — 2026-10-28</a></h2>
+<p>All four confirmed findings now have merged source fixes on both <code>master</code> and <code>2.x</code>. GitHub merge and issue states were verified on 2026-10-28: all four PRs are merged and all four issues are closed. Each repository’s pair of PRs resolves both of its reported findings.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: right">Excel row</th><th>Finding</th><th>Resolved issue</th><th>Merged master PR</th><th>Merged 2.x PR</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: right">34</td><td>Rendezvous demo DOM XSS (A12)</td><td><a href="https://github.com/networknt/light-gateway/issues/258">light-gateway #258</a></td><td><a href="https://github.com/networknt/light-gateway/pull/260">#260</a></td><td><a href="https://github.com/networknt/light-gateway/pull/261">#261</a></td></tr>
+<tr><td style="text-align: right">35</td><td>Gateway demo DOM XSS (A12)</td><td><a href="https://github.com/networknt/light-gateway/issues/259">light-gateway #259</a></td><td><a href="https://github.com/networknt/light-gateway/pull/260">#260</a></td><td><a href="https://github.com/networknt/light-gateway/pull/261">#261</a></td></tr>
+<tr><td style="text-align: right">106</td><td>OAuth token response logging (A27)</td><td><a href="https://github.com/networknt/http-client/issues/60">http-client #60</a></td><td><a href="https://github.com/networknt/http-client/pull/62">#62</a></td><td><a href="https://github.com/networknt/http-client/pull/63">#63</a></td></tr>
+<tr><td style="text-align: right">107</td><td>OAuth introspection response logging (A27)</td><td><a href="https://github.com/networknt/http-client/issues/61">http-client #61</a></td><td><a href="https://github.com/networknt/http-client/pull/62">#62</a></td><td><a href="https://github.com/networknt/http-client/pull/63">#63</a></td></tr>
+</tbody>
+</table>
+</div>
+<p>The <code>light-gateway</code> fixes replace unsafe browser HTML rendering with text nodes; the reviewed follow-up also hardens the third demo and query-value encoding. The <code>http-client</code> fixes remove credential/provider payloads from request, response, status and exception logging, including the introspection sink. Regression coverage and validation results are recorded in the linked PRs.</p>
+<p>Merge commits: <code>light-gateway</code> master <code>122330692c8ff991b6cb9886d9221cd932320895</code>, 2.x <code>3f299c82d3eca1d8657bc97e5281e99e5a9278cc</code>; <code>http-client</code> master <code>fb95cb472b6ce382679efa344037e2ad2cae9a46</code>, 2.x <code>35d1364ea01fb9ac0779d0bc3b68b56d312ac356</code>.</p>
+<p>The original assessment verdicts, counts and source baseline below are retained as historical evidence. Merged source remediation does not establish that the partner has deployed the repaired artifacts or rerun its scan; those remain deployment/partner closure checks. The separate MRAS logging and base-decryptor concerns are not resolved by these four PRs.</p>
 <h2 id="evidence-baseline"><a class="header" href="#evidence-baseline">Evidence baseline</a></h2>
 <p>All eleven available code repositories were clean when inspected. The documentation repository was also clean before this work. Source references in the appendix are pinned to these commits; they point to the <em>reported</em> file and line, which can have drifted. Detailed assessments name current symbols/lines.</p>
 <div class="table-wrapper">
@@ -13535,7 +13553,8 @@ docker-compose up
 <p>All three pages construct the destination from window.location.protocol and window.location.host with a fixed <code>/chat</code> path. userId/model are interpolated after <code>?</code>; characters in those values can change query parameters but cannot replace the URL’s authority with an attacker host. No attacker-selected WebSocket origin is established. Use URL/URLSearchParams for query encoding and require server-side authorization of user/model selection. The use of a UI-supplied userId is not proof of an authenticated identity and must never substitute for backend authentication.</p>
 <p><a id="a12"></a></p>
 <h3 id="a12-dom-xss-in-gateway-demo-pages"><a class="header" href="#a12-dom-xss-in-gateway-demo-pages">A12: DOM XSS in Gateway demo pages</a></h3>
-<p><strong>Confirmed — Excel rows 34, 35.</strong></p>
+<p><strong>Confirmed at assessment; source fixes merged — Excel rows 34, 35.</strong></p>
+<p>Resolved through <a href="https://github.com/networknt/light-gateway/issues/258">issue #258</a> and <a href="https://github.com/networknt/light-gateway/issues/259">issue #259</a> by <a href="https://github.com/networknt/light-gateway/pull/260">master PR #260</a> and <a href="https://github.com/networknt/light-gateway/pull/261">2.x PR #261</a>; see the row-specific issue links in the remediation table above.</p>
 <p>Both <code>config/llmchat-rendezvous/public/index.html:155</code> and <code>config/llmchat-gateway/public/index.html:91</code> interpolate untrusted text directly into div.innerHTML in log(). WebSocket event.data and, in the rendezvous page, backend callback response text reach that sink; user-entered text reaches it too. A message containing an image element with an event-handler attribute is parsed as HTML, rather than displayed as text. Exploitation against other users requires influence over a message or callback they receive; deployment exposure and CSP affect impact. This is a real source-level defect even though these are demo assets. Replace text interpolation with textContent/createTextNode, keeping a separately created strong element for the fixed role. The ai-gateway demo already shows the createTextNode pattern. Test malicious-looking messages as literal text before serving these demos to users.</p>
 <p><a id="a13"></a></p>
 <h3 id="a13-browser-storage-of-chat-session-id"><a class="header" href="#a13-browser-storage-of-chat-session-id">A13: Browser storage of chat session ID</a></h3>
@@ -13596,7 +13615,8 @@ docker-compose up
 <p>EnvironmentBundleArchive:625–640 loads key bytes from a supplied Path with Files.readString, strips PEM BEGIN/END delimiters and decodes Base64. PUBLIC KEY, PRIVATE KEY and dash delimiters describe the PEM format; they are not cryptographic key bytes. Preserve external key files and permissions; no hardcoded signing key is established by these six results.</p>
 <p><a id="a27"></a></p>
 <h3 id="a27-oauth-response-logging"><a class="header" href="#a27-oauth-response-logging">A27: OAuth response logging</a></h3>
-<p><strong>Confirmed — Excel rows 106, 107.</strong></p>
+<p><strong>Confirmed at assessment; source fixes merged — Excel rows 106, 107.</strong></p>
+<p>Resolved through <a href="https://github.com/networknt/http-client/issues/60">issue #60</a> and <a href="https://github.com/networknt/http-client/issues/61">issue #61</a> by <a href="https://github.com/networknt/http-client/pull/62">master PR #62</a> and <a href="https://github.com/networknt/http-client/pull/63">2.x PR #63</a>.</p>
 <p>OauthHelper:670 traces the complete introspection body, which may include identity/claim data. At 836 it traces the full token responseBody before mapping it; successful responses can contain access and refresh tokens. This is a real disclosure when TRACE logging is enabled and accessible to a less-trusted reader. The scanner’s specific keystore-password-to-body flow is unsupported: using a password to initialize TLS does not imply the remote response contains it. Confirm the logging defect on the actual body content, not that taint inference. Remove full-body logging and allowlist safe metadata; similarly review token request form logging at 827–828 because it serializes params. A low log level reduces exposure but is not a code fix. Test synthetic tokens/client secrets across success and error paths before closure.</p>
 <p><a id="a28"></a></p>
 <h3 id="a28-spa-jwt-log-forging"><a class="header" href="#a28-spa-jwt-log-forging">A28: SPA JWT log forging</a></h3>
@@ -13607,7 +13627,7 @@ docker-compose up
 <p><strong>MRAS partial secret logging:</strong> MrasHandler current lines 558 and 576 trace the first four characters of keystore/key/truststore passwords. This is a real disclosure when TRACE is enabled, beyond the heap-retention category reported in rows 51–53. Remove secret fragments from logs; substring truncation is not masking. Also avoid using this trace path with short passwords because substring can throw. No production credentials were accessed to establish this.</p>
 <h2 id="recommended-closure-sequence"><a class="header" href="#recommended-closure-sequence">Recommended closure sequence</a></h2>
 <ol>
-<li>Fix Gateway text rendering and OAuth body/form logging; remove MRAS password-prefix logs. Validate with synthetic payloads and canary secrets. Restrict exposure of the affected demos until fixed.</li>
+<li>Deploy and verify the merged Gateway text-rendering and OAuth logging fixes linked above, then obtain partner scan closure. Separately remove MRAS password-prefix logs and validate with synthetic canary secrets; that concern remains outside these PRs.</li>
 <li>Inventory the configured decryptor and ciphertext formats. Replace fixed-default master secrets and regenerate legacy CBC values as authenticated GCM values through a reviewed compatibility migration.</li>
 <li>Verify public HSTS using HTTPS response captures and effective application/edge configuration. Apply existing HeaderHandler configuration where application-level policy requires it; cover normal, error and favicon responses.</li>
 <li>Establish whether stored session IDs and rendezvous channel IDs are capabilities; verify owner binding on reconnect and backend admission. Use cryptographic channel generation regardless. Confirm snapshot UUID validation and deployed deserialization filters/customizations.</li>
